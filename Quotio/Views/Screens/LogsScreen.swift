@@ -29,35 +29,35 @@ struct LogsScreen: View {
         Group {
             if !viewModel.proxyManager.proxyStatus.running {
                 ContentUnavailableView {
-                    Label("Proxy Not Running", systemImage: "doc.text")
+                    Label("empty.proxyNotRunning".localized(), systemImage: "doc.text")
                 } description: {
-                    Text("Start the proxy to view logs")
+                    Text("logs.startProxy".localized())
                 }
             } else if filteredLogs.isEmpty {
                 ContentUnavailableView {
-                    Label("No Logs", systemImage: "doc.text")
+                    Label("logs.noLogs".localized(), systemImage: "doc.text")
                 } description: {
-                    Text("Logs will appear here as requests are processed")
+                    Text("logs.logsWillAppear".localized())
                 }
             } else {
                 logList
             }
         }
-        .navigationTitle("Logs")
-        .searchable(text: $searchText, prompt: "Search logs...")
+        .navigationTitle("nav.logs".localized())
+        .searchable(text: $searchText, prompt: "logs.searchLogs".localized())
         .toolbar {
             ToolbarItemGroup {
                 Picker("Filter", selection: $filterLevel) {
-                    Text("All").tag(nil as LogEntry.LogLevel?)
+                    Text("logs.all".localized()).tag(nil as LogEntry.LogLevel?)
                     Divider()
-                    Text("Info").tag(LogEntry.LogLevel.info as LogEntry.LogLevel?)
-                    Text("Warn").tag(LogEntry.LogLevel.warn as LogEntry.LogLevel?)
-                    Text("Error").tag(LogEntry.LogLevel.error as LogEntry.LogLevel?)
+                    Text("logs.info".localized()).tag(LogEntry.LogLevel.info as LogEntry.LogLevel?)
+                    Text("logs.warn".localized()).tag(LogEntry.LogLevel.warn as LogEntry.LogLevel?)
+                    Text("logs.error".localized()).tag(LogEntry.LogLevel.error as LogEntry.LogLevel?)
                 }
                 .pickerStyle(.menu)
                 
                 Toggle(isOn: $autoScroll) {
-                    Label("Auto-scroll", systemImage: "arrow.down.to.line")
+                    Label("logs.autoScroll".localized(), systemImage: "arrow.down.to.line")
                 }
                 
                 Button {

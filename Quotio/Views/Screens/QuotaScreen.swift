@@ -33,15 +33,15 @@ struct QuotaScreen: View {
         Group {
             if !viewModel.proxyManager.proxyStatus.running {
                 ContentUnavailableView(
-                    "Proxy Not Running",
+                    "empty.proxyNotRunning".localized(),
                     systemImage: "bolt.slash",
-                    description: Text("Start the proxy to view quota information")
+                    description: Text("empty.startProxyToView".localized())
                 )
             } else if viewModel.authFiles.isEmpty {
                 ContentUnavailableView(
-                    "No Accounts",
+                    "empty.noAccounts".localized(),
                     systemImage: "person.crop.circle.badge.questionmark",
-                    description: Text("Add provider accounts to view quota")
+                    description: Text("empty.addProviderAccounts".localized())
                 )
             } else {
                 ScrollView {
@@ -67,7 +67,7 @@ struct QuotaScreen: View {
                                         Text("Antigravity")
                                             .font(.headline)
                                         Spacer()
-                                        Text("\(antigravityAccounts.count) accounts")
+                                        Text("\(antigravityAccounts.count) " + "quota.accounts".localized())
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }
@@ -88,7 +88,7 @@ struct QuotaScreen: View {
                 }
             }
         }
-        .navigationTitle("Quota")
+        .navigationTitle("nav.quota".localized())
     }
 }
 
@@ -213,9 +213,9 @@ private struct SummaryCard: View {
             VStack(spacing: 12) {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Overall Status")
+                        Text("quota.overallStatus".localized())
                             .font(.headline)
-                        Text("\(providerCount) providers, \(totalAccounts) accounts")
+                        Text("\(providerCount) " + "quota.providers".localized() + ", \(totalAccounts) " + "quota.accounts".localized())
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -227,7 +227,7 @@ private struct SummaryCard: View {
                             .font(.title2)
                             .fontWeight(.semibold)
                             .foregroundStyle(totalReady > 0 ? .green : .secondary)
-                        Text("ready")
+                        Text("status.ready".localized())
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -239,7 +239,7 @@ private struct SummaryCard: View {
                     height: 12
                 )
                 
-                Text(verbatim: "\(Int(readyPercent))% accounts ready")
+                Text("\(Int(readyPercent))% " + "quota.accountsReady".localized())
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

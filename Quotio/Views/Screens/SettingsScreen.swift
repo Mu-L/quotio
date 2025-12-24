@@ -22,9 +22,9 @@ struct SettingsScreen: View {
             // Proxy Server
             Section {
                 HStack {
-                    Text("Port")
+                    Text("settings.port".localized())
                     Spacer()
-                    TextField("Port", text: $portText)
+                    TextField("settings.port".localized(), text: $portText)
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 100)
                         .onChange(of: portText) { _, newValue in
@@ -34,16 +34,16 @@ struct SettingsScreen: View {
                         }
                 }
                 
-                LabeledContent("Status") {
+                LabeledContent("settings.status".localized()) {
                     HStack(spacing: 6) {
                         Circle()
                             .fill(viewModel.proxyManager.proxyStatus.running ? .green : .gray)
                             .frame(width: 8, height: 8)
-                        Text(viewModel.proxyManager.proxyStatus.running ? "Running" : "Stopped")
+                        Text(viewModel.proxyManager.proxyStatus.running ? "status.running".localized() : "status.stopped".localized())
                     }
                 }
                 
-                LabeledContent("Endpoint") {
+                LabeledContent("settings.endpoint".localized()) {
                     HStack {
                         Text(viewModel.proxyManager.proxyStatus.endpoint)
                             .font(.system(.body, design: .monospaced))
@@ -58,66 +58,66 @@ struct SettingsScreen: View {
                     }
                 }
                 
-                Toggle("Auto-start proxy on launch", isOn: $autoStartProxy)
+                Toggle("settings.autoStartProxy".localized(), isOn: $autoStartProxy)
             } header: {
-                Label("Proxy Server", systemImage: "server.rack")
+                Label("settings.proxyServer".localized(), systemImage: "server.rack")
             } footer: {
-                Text("Restart proxy after changing port")
+                Text("settings.restartProxy".localized())
             }
             
             // Routing Strategy
             Section {
-                Picker("Strategy", selection: $routingStrategy) {
-                    Text("Round Robin").tag("round-robin")
-                    Text("Fill First").tag("fill-first")
+                Picker("settings.routingStrategy".localized(), selection: $routingStrategy) {
+                    Text("settings.roundRobin".localized()).tag("round-robin")
+                    Text("settings.fillFirst".localized()).tag("fill-first")
                 }
                 .pickerStyle(.segmented)
             } header: {
-                Label("Routing Strategy", systemImage: "arrow.triangle.branch")
+                Label("settings.routingStrategy".localized(), systemImage: "arrow.triangle.branch")
             } footer: {
                 Text(routingStrategy == "round-robin"
-                     ? "Distributes requests evenly across all accounts"
-                     : "Uses one account until quota exhausted, then moves to next")
+                     ? "settings.roundRobinDesc".localized()
+                     : "settings.fillFirstDesc".localized())
             }
             
             // Quota Exceeded Behavior
             Section {
-                Toggle("Auto-switch to another account", isOn: $switchProject)
-                Toggle("Auto-switch to preview model", isOn: $switchPreviewModel)
+                Toggle("settings.autoSwitchAccount".localized(), isOn: $switchProject)
+                Toggle("settings.autoSwitchPreview".localized(), isOn: $switchPreviewModel)
             } header: {
-                Label("Quota Exceeded Behavior", systemImage: "exclamationmark.triangle")
+                Label("settings.quotaExceededBehavior".localized(), systemImage: "exclamationmark.triangle")
             } footer: {
-                Text("When quota is exceeded, automatically try alternative accounts or models")
+                Text("settings.quotaExceededHelp".localized())
             }
             
             // Retry Configuration
             Section {
-                Stepper("Max retries: \(requestRetry)", value: $requestRetry, in: 0...10)
+                Stepper("settings.maxRetries".localized() + ": \(requestRetry)", value: $requestRetry, in: 0...10)
             } header: {
-                Label("Retry Configuration", systemImage: "arrow.clockwise")
+                Label("settings.retryConfiguration".localized(), systemImage: "arrow.clockwise")
             } footer: {
-                Text("Number of times to retry failed requests (403, 408, 500, 502, 503, 504)")
+                Text("settings.retryHelp".localized())
             }
             
             // Paths
             Section {
-                LabeledContent("Binary") {
+                LabeledContent("settings.binary".localized()) {
                     PathLabel(path: viewModel.proxyManager.binaryPath)
                 }
                 
-                LabeledContent("Config") {
+                LabeledContent("settings.config".localized()) {
                     PathLabel(path: viewModel.proxyManager.configPath)
                 }
                 
-                LabeledContent("Auth Dir") {
+                LabeledContent("settings.authDir".localized()) {
                     PathLabel(path: viewModel.proxyManager.authDir)
                 }
             } header: {
-                Label("Paths", systemImage: "folder")
+                Label("settings.paths".localized(), systemImage: "folder")
             }
         }
         .formStyle(.grouped)
-        .navigationTitle("Settings")
+        .navigationTitle("nav.settings".localized())
         .onAppear {
             portText = String(viewModel.proxyManager.port)
         }
@@ -154,12 +154,12 @@ struct AppSettingsView: View {
         TabView {
             GeneralSettingsTab()
                 .tabItem {
-                    Label("General", systemImage: "gearshape")
+                    Label("settings.general".localized(), systemImage: "gearshape")
                 }
             
             AboutTab()
                 .tabItem {
-                    Label("About", systemImage: "info.circle")
+                    Label("settings.about".localized(), systemImage: "info.circle")
                 }
         }
         .frame(width: 450, height: 300)
@@ -172,9 +172,11 @@ struct GeneralSettingsTab: View {
     @AppStorage("autoStartProxy") private var autoStartProxy = false
     
     var body: some View {
+        @Bindable var lang = LanguageManager.shared
+        
         Form {
             Section {
-                Toggle("Launch at login", isOn: $launchAtLogin)
+                Toggle("settings.launchAtLogin".localized(), isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, newValue in
                         do {
                             if newValue {
@@ -187,15 +189,36 @@ struct GeneralSettingsTab: View {
                         }
                     }
                 
-                Toggle("Auto-start proxy on launch", isOn: $autoStartProxy)
+                Toggle("settings.autoStartProxy".localized(), isOn: $autoStartProxy)
             } header: {
-                Label("Startup", systemImage: "power")
+                Label("settings.startup".localized(), systemImage: "power")
             }
             
             Section {
-                Toggle("Show in Dock", isOn: $showInDock)
+                Toggle("settings.showInDock".localized(), isOn: $showInDock)
             } header: {
-                Label("Appearance", systemImage: "macwindow")
+                Label("settings.appearance".localized(), systemImage: "macwindow")
+            }
+            
+            Section {
+                Picker(selection: Binding(
+                    get: { lang.currentLanguage },
+                    set: { lang.currentLanguage = $0 }
+                )) {
+                    ForEach(AppLanguage.allCases) { language in
+                        HStack {
+                            Text(language.flag)
+                            Text(language.displayName)
+                        }
+                        .tag(language)
+                    }
+                } label: {
+                    Label("settings.language".localized(), systemImage: "globe")
+                }
+            } header: {
+                Label("settings.language".localized(), systemImage: "globe")
+            } footer: {
+                Text("settings.restartForEffect".localized())
             }
         }
         .formStyle(.grouped)

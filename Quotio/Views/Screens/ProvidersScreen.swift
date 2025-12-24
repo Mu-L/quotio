@@ -16,16 +16,16 @@ struct ProvidersScreen: View {
             if !viewModel.proxyManager.proxyStatus.running {
                 Section {
                     ContentUnavailableView {
-                        Label("Proxy Not Running", systemImage: "exclamationmark.triangle")
+                        Label("empty.proxyNotRunning".localized(), systemImage: "exclamationmark.triangle")
                     } description: {
-                        Text("Start the proxy first to manage providers")
+                        Text("providers.startProxyFirst".localized())
                     }
                 }
             } else {
                 // Connected Accounts
                 Section {
                     if viewModel.authFiles.isEmpty {
-                        Text("No accounts connected yet")
+                        Text("providers.noAccountsYet".localized())
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(viewModel.authFiles, id: \.id) { file in
@@ -34,13 +34,13 @@ struct ProvidersScreen: View {
                                     Button(role: .destructive) {
                                         Task { await viewModel.deleteAuthFile(file) }
                                     } label: {
-                                        Label("Delete", systemImage: "trash")
+                                        Label("action.delete".localized(), systemImage: "trash")
                                     }
                                 }
                         }
                     }
                 } header: {
-                    Label("Connected Accounts (\(viewModel.authFiles.count))", systemImage: "checkmark.seal.fill")
+                    Label("providers.connectedAccounts".localized() + " (\(viewModel.authFiles.count))", systemImage: "checkmark.seal.fill")
                 }
                 
                 // Add Provider
@@ -74,11 +74,11 @@ struct ProvidersScreen: View {
                         .buttonStyle(.plain)
                     }
                 } header: {
-                    Label("Add Provider", systemImage: "plus.circle.fill")
+                    Label("providers.addProvider".localized(), systemImage: "plus.circle.fill")
                 }
             }
         }
-        .navigationTitle("Providers")
+        .navigationTitle("nav.providers".localized())
         .sheet(isPresented: $showingOAuthSheet) {
             if let provider = selectedProvider {
                 OAuthSheet(provider: provider, projectId: $projectId) {
@@ -124,7 +124,7 @@ struct AuthFileRow: View {
             Spacer()
             
             if file.disabled {
-                Text("Disabled")
+                Text("providers.disabled".localized())
                     .font(.caption2)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -147,15 +147,15 @@ struct OAuthSheet: View {
         VStack(spacing: 24) {
             ProviderIcon(provider: provider, size: 48)
             
-            Text("Connect \(provider.displayName)")
+            Text("providers.connect".localized() + " \(provider.displayName)")
                 .font(.title2)
                 .fontWeight(.bold)
             
-            Text("Authenticate with your \(provider.displayName) account")
+            Text(provider.displayName)
                 .foregroundStyle(.secondary)
             
             if provider == .gemini {
-                TextField("Project ID (optional)", text: $projectId)
+                TextField("providers.projectIdOptional".localized(), text: $projectId)
                     .textFieldStyle(.roundedBorder)
                     .frame(maxWidth: 300)
             }
@@ -163,25 +163,25 @@ struct OAuthSheet: View {
             if let state = viewModel.oauthState, state.provider == provider {
                 switch state.status {
                 case .waiting, .polling:
-                    ProgressView("Waiting for authentication...")
+                    ProgressView("providers.waitingAuth".localized())
                     
                 case .success:
-                    Label("Connected successfully!", systemImage: "checkmark.circle.fill")
+                    Label("providers.connectedSuccess".localized(), systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.green)
                     
                 case .error:
-                    Label(state.error ?? "Authentication failed", systemImage: "xmark.circle.fill")
+                    Label(state.error ?? "providers.authFailed".localized(), systemImage: "xmark.circle.fill")
                         .foregroundStyle(.red)
                 }
             }
             
             HStack(spacing: 16) {
-                Button("Cancel", role: .cancel) {
+                Button("providers.cancel".localized(), role: .cancel) {
                     onDismiss()
                 }
                 .buttonStyle(.bordered)
                 
-                Button("Authenticate") {
+                Button("providers.authenticate".localized()) {
                     Task {
                         await viewModel.startOAuth(for: provider, projectId: projectId.isEmpty ? nil : projectId)
                     }

@@ -23,7 +23,7 @@ struct DashboardScreen: View {
             }
             .padding(24)
         }
-        .navigationTitle("Dashboard")
+        .navigationTitle("nav.dashboard".localized())
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -40,16 +40,16 @@ struct DashboardScreen: View {
     
     private var installBinarySection: some View {
         ContentUnavailableView {
-            Label("CLIProxyAPI Not Installed", systemImage: "arrow.down.circle")
+            Label("dashboard.cliNotInstalled".localized(), systemImage: "arrow.down.circle")
         } description: {
-            Text("Click the button below to automatically download and install")
+            Text("dashboard.clickToInstall".localized())
         } actions: {
             if viewModel.proxyManager.isDownloading {
                 ProgressView(value: viewModel.proxyManager.downloadProgress)
                     .progressViewStyle(.linear)
                     .frame(width: 200)
             } else {
-                Button("Install CLIProxyAPI") {
+                Button("dashboard.installCLI".localized()) {
                     Task {
                         do {
                             try await viewModel.proxyManager.downloadAndInstallBinary()
@@ -74,11 +74,11 @@ struct DashboardScreen: View {
     
     private var startProxySection: some View {
         ContentUnavailableView {
-            Label("Proxy Not Running", systemImage: "power")
+            Label("empty.proxyNotRunning".localized(), systemImage: "power")
         } description: {
-            Text("Start the proxy server to begin")
+            Text("dashboard.startToBegin".localized())
         } actions: {
-            Button("Start Proxy") {
+            Button("action.startProxy".localized()) {
                 Task { await viewModel.startProxy() }
             }
             .buttonStyle(.borderedProminent)
@@ -92,33 +92,33 @@ struct DashboardScreen: View {
     private var kpiSection: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 16)], spacing: 16) {
             KPICard(
-                title: "Accounts",
+                title: "dashboard.accounts".localized(),
                 value: "\(viewModel.totalAccounts)",
-                subtitle: "\(viewModel.readyAccounts) ready",
+                subtitle: "\(viewModel.readyAccounts) " + "dashboard.ready".localized(),
                 icon: "person.2.fill",
                 color: .blue
             )
             
             KPICard(
-                title: "Requests",
+                title: "dashboard.requests".localized(),
                 value: "\(viewModel.usageStats?.usage?.totalRequests ?? 0)",
-                subtitle: "total",
+                subtitle: "dashboard.total".localized(),
                 icon: "arrow.up.arrow.down",
                 color: .green
             )
             
             KPICard(
-                title: "Tokens",
+                title: "dashboard.tokens".localized(),
                 value: (viewModel.usageStats?.usage?.totalTokens ?? 0).formattedCompact,
-                subtitle: "processed",
+                subtitle: "dashboard.processed".localized(),
                 icon: "text.word.spacing",
                 color: .purple
             )
             
             KPICard(
-                title: "Success Rate",
+                title: "dashboard.successRate".localized(),
                 value: String(format: "%.0f%%", viewModel.usageStats?.usage?.successRate ?? 0.0),
-                subtitle: "\(viewModel.usageStats?.usage?.failureCount ?? 0) failed",
+                subtitle: "\(viewModel.usageStats?.usage?.failureCount ?? 0) " + "dashboard.failed".localized(),
                 icon: "checkmark.circle.fill",
                 color: .orange
             )
@@ -148,7 +148,7 @@ struct DashboardScreen: View {
                 }
             }
         } label: {
-            Label("Providers", systemImage: "cpu")
+            Label("dashboard.providers".localized(), systemImage: "cpu")
         }
     }
     
@@ -171,7 +171,7 @@ struct DashboardScreen: View {
                 .buttonStyle(.bordered)
             }
         } label: {
-            Label("API Endpoint", systemImage: "link")
+            Label("dashboard.apiEndpoint".localized(), systemImage: "link")
         }
     }
 }

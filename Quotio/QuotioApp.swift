@@ -42,19 +42,19 @@ struct ContentView: View {
             // Sidebar - automatically gets Liquid Glass
             List(selection: $vm.currentPage) {
                 Section {
-                    Label("Dashboard", systemImage: "gauge.with.dots.needle.33percent")
+                    Label("nav.dashboard".localized(), systemImage: "gauge.with.dots.needle.33percent")
                         .tag(NavigationPage.dashboard)
                     
-                    Label("Quota", systemImage: "chart.bar.fill")
+                    Label("nav.quota".localized(), systemImage: "chart.bar.fill")
                         .tag(NavigationPage.quota)
                     
-                    Label("Providers", systemImage: "person.2.badge.key")
+                    Label("nav.providers".localized(), systemImage: "person.2.badge.key")
                         .tag(NavigationPage.providers)
                     
-                    Label("Logs", systemImage: "doc.text")
+                    Label("nav.logs".localized(), systemImage: "doc.text")
                         .tag(NavigationPage.logs)
                     
-                    Label("Settings", systemImage: "gearshape")
+                    Label("nav.settings".localized(), systemImage: "gearshape")
                         .tag(NavigationPage.settings)
                 }
                 
@@ -65,7 +65,7 @@ struct ContentView: View {
                             .fill(viewModel.proxyManager.proxyStatus.running ? .green : .gray)
                             .frame(width: 8, height: 8)
                         
-                        Text(viewModel.proxyManager.proxyStatus.running ? "Running" : "Stopped")
+                        Text(viewModel.proxyManager.proxyStatus.running ? "status.running".localized() : "status.stopped".localized())
                             .font(.caption)
                         
                         Spacer()
@@ -88,7 +88,7 @@ struct ContentView: View {
                         } label: {
                             Image(systemName: viewModel.proxyManager.proxyStatus.running ? "stop.fill" : "play.fill")
                         }
-                        .help(viewModel.proxyManager.proxyStatus.running ? "Stop Proxy" : "Start Proxy")
+                        .help(viewModel.proxyManager.proxyStatus.running ? "action.stopProxy".localized() : "action.startProxy".localized())
                     }
                 }
             }
