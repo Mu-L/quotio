@@ -51,9 +51,15 @@ final class CLIProxyManager {
         self.binaryPath = quotioDir.appendingPathComponent("CLIProxyAPI").path
         self.configPath = quotioDir.appendingPathComponent("config.yaml").path
         self.authDir = homeDir.appendingPathComponent(".cli-proxy-api").path
-        self.managementKey = UserDefaults.standard.string(forKey: "managementKey") ?? UUID().uuidString
         
-        UserDefaults.standard.set(managementKey, forKey: "managementKey")
+        // Always use key from UserDefaults, generate new if not exists
+        // Never read from config because CLIProxyAPI hashes the key on startup
+        if let savedKey = UserDefaults.standard.string(forKey: "managementKey"), !savedKey.hasPrefix("$2a$") {
+            self.managementKey = savedKey
+        } else {
+            self.managementKey = UUID().uuidString
+            UserDefaults.standard.set(managementKey, forKey: "managementKey")
+        }
         
         let savedPort = UserDefaults.standard.integer(forKey: "proxyPort")
         if savedPort > 0 && savedPort < 65536 {
@@ -63,7 +69,6 @@ final class CLIProxyManager {
         try? FileManager.default.createDirectory(atPath: authDir, withIntermediateDirectories: true)
         
         ensureConfigExists()
-        syncSecretKeyInConfig()
     }
     
     private func updateConfigPort(_ newPort: UInt16) {
@@ -113,7 +118,10 @@ final class CLIProxyManager {
         guard FileManager.default.fileExists(atPath: configPath),
               var content = try? String(contentsOfFile: configPath, encoding: .utf8) else { return }
         
-        if let range = content.range(of: #"secret-key:\s*\"[^\"]*\""#, options: .regularExpression) {
+        if let range = content.range(of: #"secret-key:\s*\".*\""#, options: .regularExpression) {
+            content.replaceSubrange(range, with: "secret-key: \"\(managementKey)\"")
+            try? content.write(toFile: configPath, atomically: true, encoding: .utf8)
+        } else if let range = content.range(of: #"secret-key:\s*[^\n]+"#, options: .regularExpression) {
             content.replaceSubrange(range, with: "secret-key: \"\(managementKey)\"")
             try? content.write(toFile: configPath, atomically: true, encoding: .utf8)
         }
@@ -337,6 +345,8 @@ final class CLIProxyManager {
         lastError = nil
         
         defer { isStarting = false }
+        
+        syncSecretKeyInConfig()
         
         let process = Process()
         process.executableURL = URL(fileURLWithPath: binaryPath)

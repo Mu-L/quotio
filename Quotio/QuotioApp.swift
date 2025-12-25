@@ -39,11 +39,6 @@ struct QuotioApp: App {
             )
         }
         .menuBarExtraStyle(.window)
-        
-        Settings {
-            AppSettingsView()
-                .environment(viewModel)
-        }
         #endif
     }
 }
@@ -93,6 +88,9 @@ struct ContentView: View {
                     
                     Label("nav.settings".localized(), systemImage: "gearshape")
                         .tag(NavigationPage.settings)
+                    
+                    Label("nav.about".localized(), systemImage: "info.circle")
+                        .tag(NavigationPage.about)
                 }
                 
                 Section {
@@ -146,6 +144,8 @@ struct ContentView: View {
                 LogsScreen()
             case .settings:
                 SettingsScreen()
+            case .about:
+                AboutScreen()
             }
         }
     }

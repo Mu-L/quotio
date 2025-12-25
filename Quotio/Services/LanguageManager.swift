@@ -56,6 +56,7 @@ struct LocalizedStrings {
         "nav.apiKeys": [.english: "API Keys", .vietnamese: "Khóa API"],
         "nav.logs": [.english: "Logs", .vietnamese: "Nhật ký"],
         "nav.settings": [.english: "Settings", .vietnamese: "Cài đặt"],
+        "nav.about": [.english: "About", .vietnamese: "Giới thiệu"],
         
         // Status
         "status.running": [.english: "Running", .vietnamese: "Đang chạy"],
@@ -315,6 +316,15 @@ struct LocalizedStrings {
         "action.done": [.english: "Done", .vietnamese: "Xong"],
         "action.cancel": [.english: "Cancel", .vietnamese: "Hủy"],
         "agents.saveConfig": [.english: "Save Config", .vietnamese: "Lưu cấu hình"],
+        
+        // About Screen
+        "about.tagline": [.english: "Your AI Coding Command Center", .vietnamese: "Trung tâm điều khiển AI Coding của bạn"],
+        "about.description": [.english: "Quotio is a native macOS application for managing CLIProxyAPI - a local proxy server that powers your AI coding agents. Manage multiple AI accounts, track quotas, and configure CLI tools in one place.", .vietnamese: "Quotio là ứng dụng macOS để quản lý CLIProxyAPI - máy chủ proxy cục bộ hỗ trợ các AI coding agent. Quản lý nhiều tài khoản AI, theo dõi hạn mức và cấu hình các công cụ CLI tại một nơi."],
+        "about.multiAccount": [.english: "Multi-Account", .vietnamese: "Đa tài khoản"],
+        "about.quotaTracking": [.english: "Quota Tracking", .vietnamese: "Theo dõi quota"],
+        "about.agentConfig": [.english: "Agent Config", .vietnamese: "Cấu hình Agent"],
+        "about.buyMeCoffee": [.english: "Buy Me a Coffee", .vietnamese: "Mua cho tôi ly cà phê"],
+        "about.madeWith": [.english: "Made with ❤️ in Vietnam", .vietnamese: "Được tạo với ❤️ tại Việt Nam"],
     ]
     
     static func get(_ key: String, language: AppLanguage) -> String {

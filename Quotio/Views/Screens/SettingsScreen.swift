@@ -9,6 +9,8 @@ import ServiceManagement
 struct SettingsScreen: View {
     @Environment(QuotaViewModel.self) private var viewModel
     
+    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @AppStorage("showInDock") private var showInDock = true
     @AppStorage("autoStartProxy") private var autoStartProxy = false
     @AppStorage("routingStrategy") private var routingStrategy = "round-robin"
     @AppStorage("requestRetry") private var requestRetry = 3
@@ -18,7 +20,51 @@ struct SettingsScreen: View {
     @State private var portText: String = ""
     
     var body: some View {
+        @Bindable var lang = LanguageManager.shared
+        
         Form {
+            // General Settings
+            Section {
+                Toggle("settings.launchAtLogin".localized(), isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { _, newValue in
+                        do {
+                            if newValue {
+                                try SMAppService.mainApp.register()
+                            } else {
+                                try SMAppService.mainApp.unregister()
+                            }
+                        } catch {
+                            launchAtLogin = !newValue
+                        }
+                    }
+                
+                Toggle("settings.showInDock".localized(), isOn: $showInDock)
+            } header: {
+                Label("settings.general".localized(), systemImage: "gearshape")
+            }
+            
+            // Language
+            Section {
+                Picker(selection: Binding(
+                    get: { lang.currentLanguage },
+                    set: { lang.currentLanguage = $0 }
+                )) {
+                    ForEach(AppLanguage.allCases) { language in
+                        HStack {
+                            Text(language.flag)
+                            Text(language.displayName)
+                        }
+                        .tag(language)
+                    }
+                } label: {
+                    Text("settings.language".localized())
+                }
+            } header: {
+                Label("settings.language".localized(), systemImage: "globe")
+            } footer: {
+                Text("settings.restartForEffect".localized())
+            }
+            
             // Proxy Server
             Section {
                 HStack {
@@ -212,7 +258,7 @@ struct NotificationSettingsSection: View {
     }
 }
 
-// MARK: - App Settings View
+// MARK: - App Settings View (Legacy - kept for compatibility)
 
 struct AppSettingsView: View {
     var body: some View {
@@ -313,5 +359,148 @@ struct AboutTab: View {
                 .buttonStyle(.bordered)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - About Screen (New Full-Page Version)
+
+struct AboutScreen: View {
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+    }
+    
+    private var buildNumber: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+    }
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 32) {
+                // App Icon and Title
+                VStack(spacing: 16) {
+                    if let appIcon = NSApp.applicationIconImage {
+                        Image(nsImage: appIcon)
+                            .resizable()
+                            .frame(width: 128, height: 128)
+                            .clipShape(RoundedRectangle(cornerRadius: 24))
+                            .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
+                    }
+                    
+                    VStack(spacing: 8) {
+                        Text("Quotio")
+                            .font(.largeTitle)
+                            .fontWeight(.bold)
+                        
+                        Text("about.tagline".localized())
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                        
+                        Text("Version \(appVersion) (\(buildNumber))")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .padding(.top, 40)
+                
+                // Description
+                Text("about.description".localized())
+                    .font(.body)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: 500)
+                    .padding(.horizontal)
+                
+                // Feature Badges
+                HStack(spacing: 16) {
+                    FeatureBadge(
+                        icon: "person.2.fill",
+                        title: "about.multiAccount".localized(),
+                        color: .blue
+                    )
+                    
+                    FeatureBadge(
+                        icon: "chart.bar.fill",
+                        title: "about.quotaTracking".localized(),
+                        color: .green
+                    )
+                    
+                    FeatureBadge(
+                        icon: "terminal.fill",
+                        title: "about.agentConfig".localized(),
+                        color: .purple
+                    )
+                }
+                .padding(.vertical, 8)
+                
+                Divider()
+                    .frame(maxWidth: 400)
+                
+                // Links
+                VStack(spacing: 12) {
+                    Link(destination: URL(string: "https://github.com/nguyenphutrong/quotio")!) {
+                        HStack {
+                            Image(systemName: "link")
+                            Text("GitHub: Quotio")
+                        }
+                        .frame(width: 200)
+                    }
+                    .buttonStyle(.bordered)
+                    
+                    Link(destination: URL(string: "https://github.com/router-for-me/CLIProxyAPI")!) {
+                        HStack {
+                            Image(systemName: "link")
+                            Text("GitHub: CLIProxyAPI")
+                        }
+                        .frame(width: 200)
+                    }
+                    .buttonStyle(.bordered)
+                    
+                    Link(destination: URL(string: "https://buymeacoffee.com/trongnguyen")!) {
+                        HStack {
+                            Image(systemName: "cup.and.saucer.fill")
+                            Text("about.buyMeCoffee".localized())
+                        }
+                        .frame(width: 200)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.orange)
+                }
+                
+                Spacer(minLength: 40)
+                
+                // Credits
+                Text("about.madeWith".localized())
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .padding(.bottom, 24)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .navigationTitle("nav.about".localized())
+    }
+}
+
+// MARK: - Feature Badge
+
+struct FeatureBadge: View {
+    let icon: String
+    let title: String
+    let color: Color
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundStyle(color)
+                .frame(width: 44, height: 44)
+                .background(color.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            
+            Text(title)
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundStyle(.primary)
+        }
+        .frame(width: 100)
     }
 }
