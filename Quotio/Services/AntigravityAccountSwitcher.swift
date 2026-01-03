@@ -33,6 +33,7 @@ final class AntigravityAccountSwitcher {
         return service
     }
     private let processManager = AntigravityProcessManager.shared
+    private let quotaFetcher = AntigravityQuotaFetcher()
     
     // MARK: - State
     
@@ -122,7 +123,7 @@ final class AntigravityAccountSwitcher {
         // Read auth file
         let url = URL(fileURLWithPath: (authFilePath as NSString).expandingTildeInPath)
         guard let data = try? Data(contentsOf: url),
-              let authFile = try? JSONDecoder().decode(AntigravityAuthFile.self, from: data) else {
+              var authFile = try? JSONDecoder().decode(AntigravityAuthFile.self, from: data) else {
             switchState = .failed(message: "Failed to read auth file")
             return
         }
@@ -130,30 +131,57 @@ final class AntigravityAccountSwitcher {
         let wasIDERunning = processManager.isRunning()
         
         do {
-            // Step 1: Close IDE if running
+            // Step 0: Ensure token is fresh (auto-refresh if needed)
+            if authFile.isExpired, let refreshToken = authFile.refreshToken {
+                logger.info("Token expired, attempting refresh...")
+                do {
+                    let freshToken = try await quotaFetcher.refreshAccessToken(refreshToken: refreshToken)
+                    authFile.accessToken = freshToken
+                    
+                    // Update expiry time (default to 1 hour from refresh)
+                    authFile.expired = ISO8601DateFormatter().string(from: Date().addingTimeInterval(3600))
+                    
+                    // Save updated auth file
+                    let encoder = JSONEncoder()
+                    encoder.outputFormatting = .prettyPrinted
+                    if let updatedData = try? encoder.encode(authFile) {
+                        try updatedData.write(to: url)
+                    }
+                    logger.info("Token refreshed successfully")
+                } catch {
+                    logger.error("Token refresh failed: \(error.localizedDescription)")
+                    switchState = .failed(message: "Token refresh failed: \(error.localizedDescription)")
+                    return
+                }
+            }
+            
+            // Step 1: Close IDE if running and clear any helper processes
             if wasIDERunning {
                 switchState = .switching(progress: .closingIDE)
                 logger.info("Terminating IDE before account switch")
-                _ = await processManager.terminate()
-                
-                // Wait for ALL processes (main app + helpers) to fully terminate
-                // Helpers can hold database locks even after main app exits
-                let allDead = await processManager.waitForAllProcessesDead(timeout: 5.0)
-                if !allDead {
-                    logger.error("IDE processes still running after 5s timeout")
-                    throw SwitchError.ideProcessStillRunning
-                }
-                logger.debug("All IDE processes terminated")
-                
-                // Clean up WAL files to release database locks
-                await databaseService.cleanupWALFiles()
-                
-                // Brief delay for filesystem sync after WAL cleanup
-                try? await Task.sleep(nanoseconds: 500_000_000) // 500ms
             }
+            
+            // Always terminate all processes (main app + helpers) to release database locks
+            _ = await processManager.terminateAllProcesses()
+            
+            // Verify all processes are dead
+            let allDead = await processManager.waitForAllProcessesDead(timeout: 5.0)
+            if !allDead {
+                logger.warning("Some IDE processes may still be running after timeout")
+            } else {
+                logger.debug("All IDE processes terminated")
+            }
+            
+            // Clean up WAL files to release database locks
+            await databaseService.cleanupWALFiles()
+            
+            // Wait for SQLite WAL to flush and release database lock
+            let settleDelay: UInt64 = wasIDERunning ? 2_000_000_000 : 500_000_000
+            try? await Task.sleep(nanoseconds: settleDelay)
             
             // Step 2: Create backup
             switchState = .switching(progress: .creatingBackup)
+            logger.debug("Creating database backup")
             try await databaseService.createBackup()
             
             // Step 3: Inject token with retry logic
@@ -202,6 +230,7 @@ final class AntigravityAccountSwitcher {
             // Step 4: Restart IDE if it was running and user wants it
             if wasIDERunning && shouldRestartIDE {
                 switchState = .switching(progress: .restartingIDE)
+                logger.info("Restarting IDE")
                 try await processManager.launch()
             }
             
@@ -219,16 +248,19 @@ final class AntigravityAccountSwitcher {
                 .replacingOccurrences(of: "antigravity-", with: "")
                 .replacingOccurrences(of: ".json", with: "")
             
+            logger.info("Account switch completed successfully to \(authFile.email)")
             switchState = .success(accountId: accountId)
             
         } catch {
+            logger.error("Account switch failed: \(error.localizedDescription)")
             // Attempt rollback
             if await databaseService.backupExists() {
                 do {
                     try await databaseService.restoreFromBackup()
+                    logger.info("Rollback from backup succeeded")
                 } catch {
                     // Rollback also failed - this is bad
-                    print("[AntigravityAccountSwitcher] Rollback failed: \(error)")
+                    logger.error("Rollback failed: \(error.localizedDescription)")
                 }
             }
             
