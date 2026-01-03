@@ -28,3 +28,4 @@ DerivedData/
 Config/Local.xcconfig
 
 plans/
+.context/

@@ -8,6 +8,9 @@
 
 import Foundation
 import AppKit
+import OSLog
+
+private let logger = Logger(subsystem: "proseek.io.vn.Quotio", category: "AntigravityProcessManager")
 
 /// Manages Antigravity IDE process lifecycle
 @MainActor
@@ -78,6 +81,45 @@ final class AntigravityProcessManager {
         
         // Kill any orphaned helper processes that may still hold database locks
         await killHelperProcesses()
+        
+        return false
+    }
+    
+    /// Check if any Antigravity helper processes are still running
+    /// These helpers can hold database locks even after main app terminates
+    private func areHelperProcessesRunning() -> Bool {
+        let pgrep = Process()
+        pgrep.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
+        pgrep.arguments = ["-f", "Antigravity Helper"]
+        pgrep.standardOutput = FileHandle.nullDevice
+        pgrep.standardError = FileHandle.nullDevice
+        
+        do {
+            try pgrep.run()
+            pgrep.waitUntilExit()
+            // pgrep returns 0 if processes found, 1 if not found
+            return pgrep.terminationStatus == 0
+        } catch {
+            return false
+        }
+    }
+    
+    /// Wait for all Antigravity processes (main app + helpers) to fully terminate
+    /// - Parameter timeout: Maximum time to wait in seconds
+    /// - Returns: true if all processes terminated, false if timeout reached
+    func waitForAllProcessesDead(timeout: TimeInterval) async -> Bool {
+        let startTime = Date()
+        
+        while Date().timeIntervalSince(startTime) < timeout {
+            let mainRunning = isRunning()
+            let helpersRunning = areHelperProcessesRunning()
+            
+            if !mainRunning && !helpersRunning {
+                return true
+            }
+            
+            try? await Task.sleep(nanoseconds: 200_000_000) // 200ms polling
+        }
         
         return false
     }

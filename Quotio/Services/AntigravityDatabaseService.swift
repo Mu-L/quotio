@@ -7,6 +7,9 @@
 //
 
 import Foundation
+import OSLog
+
+private let logger = Logger(subsystem: "proseek.io.vn.Quotio", category: "AntigravityDatabaseService")
 
 /// Service for interacting with Antigravity IDE's state database
 actor AntigravityDatabaseService {
@@ -35,6 +38,7 @@ actor AntigravityDatabaseService {
         case backupFailed(Error)
         case restoreFailed(Error)
         case writeFailed(Error)
+        case databaseLocked
         case invalidData
         case timeout
         
@@ -50,6 +54,8 @@ actor AntigravityDatabaseService {
                 return "Failed to restore backup: \(error.localizedDescription)"
             case .writeFailed(let error):
                 return "Failed to write to database: \(error.localizedDescription)"
+            case .databaseLocked:
+                return "antigravity.error.databaseLocked".localizedStatic()
             case .invalidData:
                 return "Invalid data format in database"
             case .timeout:
@@ -74,11 +80,11 @@ actor AntigravityDatabaseService {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/sqlite3")
         
-        // Use -readonly flag for read operations
+        // Use -readonly flag for read operations, add busy_timeout for writes
         if readOnly {
             process.arguments = ["-readonly", Self.databasePath.path, sql]
         } else {
-            process.arguments = [Self.databasePath.path, sql]
+            process.arguments = [Self.databasePath.path, ".timeout 5000", sql]
         }
         
         let outputPipe = Pipe()
@@ -220,8 +226,28 @@ actor AntigravityDatabaseService {
     /// Remove WAL and SHM files to release database locks
     /// Should be called after IDE termination
     func cleanupWALFiles() async {
+        // Use WAL checkpoint instead of deleting files (safer for data integrity)
+        if databaseExists() {
+            let checkpointSQL = "PRAGMA wal_checkpoint(PASSIVE);"
+            _ = try? await executeSQLite(checkpointSQL, readOnly: false)
+        }
+        // Fallback: remove leftover WAL/SHM if checkpoint fails or wasn't complete
         try? FileManager.default.removeItem(at: Self.walPath)
         try? FileManager.default.removeItem(at: Self.shmPath)
+    }
+    
+    /// Probe database lock status before attempting writes
+    /// Returns true if database is writable, false if locked
+    func probeDatabaseLock() async -> Bool {
+        guard databaseExists() else { return false }
+        
+        let probeSQL = "BEGIN IMMEDIATE; ROLLBACK;"
+        do {
+            _ = try await executeSQLite(probeSQL, readOnly: false)
+            return true
+        } catch {
+            return false
+        }
     }
     
     // MARK: - Auth Status Operations

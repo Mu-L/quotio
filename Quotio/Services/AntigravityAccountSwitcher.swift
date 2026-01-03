@@ -7,6 +7,9 @@
 //
 
 import Foundation
+import OSLog
+
+private let logger = Logger(subsystem: "proseek.io.vn.Quotio", category: "AntigravityAccountSwitcher")
 
 /// Orchestrates Antigravity account switching with proper error handling and rollback
 @MainActor
@@ -42,6 +45,7 @@ final class AntigravityAccountSwitcher {
         case authFileNotFound(String)
         case tokenReadFailed(String)
         case ideRunningAndUserCancelled
+        case ideProcessStillRunning
         case databaseError(Error)
         case processError(Error)
         
@@ -53,6 +57,8 @@ final class AntigravityAccountSwitcher {
                 return "Failed to read token: \(reason)"
             case .ideRunningAndUserCancelled:
                 return "IDE is running and user cancelled the switch"
+            case .ideProcessStillRunning:
+                return "antigravity.error.ideStillRunning".localizedStatic()
             case .databaseError(let error):
                 return "Database error: \(error.localizedDescription)"
             case .processError(let error):
@@ -127,14 +133,23 @@ final class AntigravityAccountSwitcher {
             // Step 1: Close IDE if running
             if wasIDERunning {
                 switchState = .switching(progress: .closingIDE)
+                logger.info("Terminating IDE before account switch")
                 _ = await processManager.terminate()
+                
+                // Wait for ALL processes (main app + helpers) to fully terminate
+                // Helpers can hold database locks even after main app exits
+                let allDead = await processManager.waitForAllProcessesDead(timeout: 5.0)
+                if !allDead {
+                    logger.error("IDE processes still running after 5s timeout")
+                    throw SwitchError.ideProcessStillRunning
+                }
+                logger.debug("All IDE processes terminated")
                 
                 // Clean up WAL files to release database locks
                 await databaseService.cleanupWALFiles()
                 
-                // Wait for SQLite WAL to flush and release database lock
-                // 500ms is often not enough on slower machines
-                try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+                // Brief delay for filesystem sync after WAL cleanup
+                try? await Task.sleep(nanoseconds: 500_000_000) // 500ms
             }
             
             // Step 2: Create backup
@@ -154,22 +169,28 @@ final class AntigravityAccountSwitcher {
                 expiry = Int64(Date().timeIntervalSince1970) + 3600
             }
             
-            // Retry up to 3 times with increasing delays (database may still be locked)
+            // Retry with exponential backoff + jitter (database may still be locked)
             var lastError: Error?
-            for attempt in 1...3 {
+            let maxAttempts = 4
+            for attempt in 1...maxAttempts {
                 do {
+                    logger.debug("Token injection attempt \(attempt)/\(maxAttempts)")
                     try await databaseService.injectToken(
                         accessToken: authFile.accessToken,
                         refreshToken: authFile.refreshToken ?? "",
                         expiry: expiry
                     )
                     lastError = nil
+                    logger.info("Token injection succeeded on attempt \(attempt)")
                     break
                 } catch {
                     lastError = error
-                    if attempt < 3 {
-                        // Wait before retry: 1s, 2s
-                        try? await Task.sleep(nanoseconds: UInt64(attempt) * 1_000_000_000)
+                    logger.warning("Token injection attempt \(attempt) failed: \(error.localizedDescription)")
+                    if attempt < maxAttempts {
+                        // Exponential backoff: 1s, 2s, 4s + random jitter (0-500ms)
+                        let baseDelay = UInt64(1 << (attempt - 1)) * 1_000_000_000
+                        let jitter = UInt64.random(in: 0...500_000_000)
+                        try? await Task.sleep(nanoseconds: baseDelay + jitter)
                     }
                 }
             }

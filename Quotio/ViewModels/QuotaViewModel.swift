@@ -563,6 +563,9 @@ final class QuotaViewModel {
     }
     
     private func refreshAntigravityQuotasInternal() async {
+        // Skip DB reads while account switch is in progress to avoid lock contention
+        guard !antigravitySwitcher.switchState.isInProgress else { return }
+        
         // Fetch both quotas and subscriptions in one call (avoids duplicate API calls)
         let (quotas, subscriptions) = await antigravityFetcher.fetchAllAntigravityData()
         
