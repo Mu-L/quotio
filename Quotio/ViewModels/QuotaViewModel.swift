@@ -159,7 +159,7 @@ final class QuotaViewModel {
         
         modeManager.setConnectionStatus(.connecting)
         
-        setupRemoteAPIClient(config: config, managementKey: managementKey)
+        await setupRemoteAPIClient(config: config, managementKey: managementKey)
         
         guard let client = apiClient else {
             modeManager.setConnectionStatus(.error("Failed to create API client"))
@@ -177,11 +177,9 @@ final class QuotaViewModel {
         }
     }
     
-    private func setupRemoteAPIClient(config: RemoteConnectionConfig, managementKey: String) {
+    private func setupRemoteAPIClient(config: RemoteConnectionConfig, managementKey: String) async {
         if let existingClient = apiClient {
-            Task {
-                await existingClient.invalidate()
-            }
+            await existingClient.invalidate()
         }
         
         apiClient = ManagementAPIClient(config: config, managementKey: managementKey)
