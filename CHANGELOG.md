@@ -7,25 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.4.3] - 2026-01-03
+### Changed
 
-## [0.4.3-beta-3] - 2026-01-03
+- **changelog**: clean up duplicates and add auto-squash for prereleases (fa1a273)
+
+## [0.4.4] - 2026-01-03
+
+### Fixed
+
+- **antigravity**: Fix account switch DB lock handling with SQLite3 busy timeout and immediate transactions (#88)
+
+## [0.4.3] - 2026-01-03
 
 ### Added
 
 - migrate to Swift 6 with strict concurrency (#83)
 
-## [0.4.3-beta-2] - 2026-01-03
-
 ### Fixed
 
 - **ci**: resolve bash regex parsing issue and add manual workflow trigger (651fd46)
-
 - **ci**: merge appcast entries to make beta releases visible to updater (33e28a8)
-
 - **antigravity**: fix Use in IDE hanging on macOS 15.5+ (#81)
-
-## [0.4.3-beta-1] - 2026-01-03
 
 ## [0.4.2] - 2026-01-02
 
@@ -53,10 +55,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Build Scripts**: Improve reliability and error handling
 - **Localization Crash**: Fix duplicate dictionary key causing compiler error and app launch crash
 
-- **ci**: merge appcast entries to make beta releases visible to updater (33e28a8)
-
-- **antigravity**: fix Use in IDE hanging on macOS 15.5+ (#81)
-
 ## [0.4.1] - 2026-01-02
 
 ### Added
@@ -76,10 +74,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Menu Bar Loading Animation**: Use Timer with `.common` RunLoop mode for animation while menu is open (#66)
 - **Model Display Names**: Consistent naming across QuotaScreen and menu bar (#66)
 
-- **ci**: merge appcast entries to make beta releases visible to updater (33e28a8)
-
-- **antigravity**: fix Use in IDE hanging on macOS 15.5+ (#81)
-
 ## [0.4.0] - 2026-01-01
 
 ### Added
@@ -90,10 +84,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Proxy Idle Hang**: Prevent proxy process from hanging after extended idle periods (Issue #37, #53)
-
-- **ci**: merge appcast entries to make beta releases visible to updater (33e28a8)
-
-- **antigravity**: fix Use in IDE hanging on macOS 15.5+ (#81)
 
 ## [0.3.3] - 2025-12-31
 
@@ -110,10 +100,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **About Screen Icon**: Use observable for real-time icon updates when switching update channels (#56)
 - **Menu Bar Spacing**: Adjusted horizontal padding to match native macOS spacing (#50)
 
-- **ci**: merge appcast entries to make beta releases visible to updater (33e28a8)
-
-- **antigravity**: fix Use in IDE hanging on macOS 15.5+ (#81)
-
 ## [0.3.2] - 2025-12-30
 
 ### Added
@@ -123,10 +109,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Sparkle Update Loop**: Sync build number to match released version, preventing false update notifications
-
-- **ci**: merge appcast entries to make beta releases visible to updater (33e28a8)
-
-- **antigravity**: fix Use in IDE hanging on macOS 15.5+ (#81)
 
 ## [0.3.1] - 2025-12-30
 
@@ -163,10 +145,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Add version manager support: nvm, fnm, Volta, asdf, mise
 - **ForEach ID Collision**: Fix duplicate ID issue when Cursor and Trae share same email (#33)
 
-- **ci**: merge appcast entries to make beta releases visible to updater (33e28a8)
-
-- **antigravity**: fix Use in IDE hanging on macOS 15.5+ (#81)
-
 ## [0.3.0] - 2025-12-29
 
 ### Added
@@ -184,10 +162,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Cursor SQLite**: Use immutable mode to avoid WAL file lock errors
 
-- **ci**: merge appcast entries to make beta releases visible to updater (33e28a8)
-
-- **antigravity**: fix Use in IDE hanging on macOS 15.5+ (#81)
-
 ## [0.2.3] - 2025-12-28
 
 ### Fixed
@@ -195,23 +169,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Menu Bar Full-Screen Support**: Replace NSPopover with custom NSPanel to enable visibility in full-screen applications (#13)
 - **Menu Bar Auto-Focus**: Prevent auto-focus on buttons when panel opens (#13)
 
-- **ci**: merge appcast entries to make beta releases visible to updater (33e28a8)
-
-- **antigravity**: fix Use in IDE hanging on macOS 15.5+ (#81)
-
 ## [0.2.2] - 2025-12-27
-
-### Fixed
-
-- **Proxy Connection Leak**: Fix URLSession connection leak in ManagementAPIClient with proper lifecycle management (#11)
-- **Menu Bar Sync**: Fix menu bar not updating when accounts are removed or logged out (#11)
-- **Quota Calculation**: Filter out unknown percentages when calculating lowest quota for menu bar display (#8)
-- **ForEach Duplicate ID**: Add uniqueId field combining provider+email to prevent duplicate ID warnings (#11)
-- **Race Condition**: Avoid race condition in stopProxy by capturing client reference before invalidation (#11)
-
-- **ci**: merge appcast entries to make beta releases visible to updater (33e28a8)
-
-- **antigravity**: fix Use in IDE hanging on macOS 15.5+ (#81)
 
 ### Added
 
@@ -221,24 +179,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Increase auto-refresh interval from 5s to 15s to reduce connection pressure (#11)
 
+### Fixed
+
+- **Proxy Connection Leak**: Fix URLSession connection leak in ManagementAPIClient with proper lifecycle management (#11)
+- **Menu Bar Sync**: Fix menu bar not updating when accounts are removed or logged out (#11)
+- **Quota Calculation**: Filter out unknown percentages when calculating lowest quota for menu bar display (#8)
+- **ForEach Duplicate ID**: Add uniqueId field combining provider+email to prevent duplicate ID warnings (#11)
+- **Race Condition**: Avoid race condition in stopProxy by capturing client reference before invalidation (#11)
+
 ## [0.2.1] - 2025-12-27
 
 ### Added
 
 - **Appearance Settings**: New theme settings with System, Light, and Dark mode options
 
+### Changed
+
+- Updated and optimized app screenshots
+
 ### Fixed
 
 - **Claude Code Reconfigure**: Preserve existing settings.json configuration when reconfiguring Claude Code (#3)
 - **Dashboard UI**: Hide +Cursor button for non-manual-auth providers (#5)
-
-- **ci**: merge appcast entries to make beta releases visible to updater (33e28a8)
-
-- **antigravity**: fix Use in IDE hanging on macOS 15.5+ (#81)
-
-### Changed
-
-- Updated and optimized app screenshots
 
 ## [0.2.0] - 2025-12-27
 
@@ -263,21 +225,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cursor excluded from manual add options (quota tracking only)
 - Appcast generation with DMG files
 
-- **ci**: merge appcast entries to make beta releases visible to updater (33e28a8)
-
-- **antigravity**: fix Use in IDE hanging on macOS 15.5+ (#81)
-
 ## [0.1.3] - 2025-12-27
-
-### Fixed
-
-- Proxy process not terminating after running for a while
-- Orphan proxy processes remaining after app quit
-- Proxy still running when quitting app from menu bar
-
-- **ci**: merge appcast entries to make beta releases visible to updater (33e28a8)
-
-- **antigravity**: fix Use in IDE hanging on macOS 15.5+ (#81)
 
 ### Added
 
@@ -291,6 +239,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Menu bar now persists when main window is closed (app runs in background)
 - Improved build configuration with xcconfig support for dev/prod separation
+
+### Fixed
+
+- Proxy process not terminating after running for a while
+- Orphan proxy processes remaining after app quit
+- Proxy still running when quitting app from menu bar
 
 ## [0.1.0] - 2025-12-26
 
@@ -323,10 +277,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sheet state not resetting when reopening
 - Agent configurations persisting correctly on navigation
 - CLI agent configurations matching CLIProxyAPI documentation
-
-- **ci**: merge appcast entries to make beta releases visible to updater (33e28a8)
-
-- **antigravity**: fix Use in IDE hanging on macOS 15.5+ (#81)
 
 ## [0.0.1] - 2025-12-20
 
