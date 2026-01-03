@@ -19,6 +19,7 @@ final class QuotaViewModel {
     private let notificationManager = NotificationManager.shared
     private let modeManager = AppModeManager.shared
     private let refreshSettings = RefreshSettingsManager.shared
+    let connectionModeManager = ConnectionModeManager.shared
     
     /// Request tracker for monitoring API requests through ProxyBridge
     let requestTracker = RequestTracker.shared
@@ -106,16 +107,16 @@ final class QuotaViewModel {
     
     // MARK: - Mode-Aware Initialization
     
-    /// Initialize the app based on current mode
     func initialize() async {
-        if modeManager.isQuotaOnlyMode {
+        if connectionModeManager.isRemoteMode {
+            await initializeRemoteMode()
+        } else if modeManager.isQuotaOnlyMode {
             await initializeQuotaOnlyMode()
         } else {
             await initializeFullMode()
         }
     }
     
-    /// Initialize for Full Mode (with proxy)
     private func initializeFullMode() async {
         // Always refresh quotas directly first (works without proxy)
         await refreshQuotasUnified()
@@ -147,6 +148,49 @@ final class QuotaViewModel {
         
         // Start auto-refresh for quota-only mode
         startQuotaOnlyAutoRefresh()
+    }
+    
+    private func initializeRemoteMode() async {
+        guard connectionModeManager.hasValidRemoteConfig,
+              let config = connectionModeManager.remoteConfig,
+              let managementKey = connectionModeManager.remoteManagementKey else {
+            connectionModeManager.setConnectionStatus(.error("No valid remote configuration"))
+            return
+        }
+        
+        connectionModeManager.setConnectionStatus(.connecting)
+        
+        setupRemoteAPIClient(config: config, managementKey: managementKey)
+        
+        guard let client = apiClient else {
+            connectionModeManager.setConnectionStatus(.error("Failed to create API client"))
+            return
+        }
+        
+        let isConnected = await client.checkProxyResponding()
+        
+        if isConnected {
+            connectionModeManager.markConnected()
+            await refreshData()
+            startAutoRefresh()
+        } else {
+            connectionModeManager.setConnectionStatus(.error("Could not connect to remote server"))
+        }
+    }
+    
+    private func setupRemoteAPIClient(config: RemoteConnectionConfig, managementKey: String) {
+        if let existingClient = apiClient {
+            Task {
+                await existingClient.invalidate()
+            }
+        }
+        
+        apiClient = ManagementAPIClient(config: config, managementKey: managementKey)
+    }
+    
+    func reconnectRemote() async {
+        guard connectionModeManager.isRemoteMode else { return }
+        await initializeRemoteMode()
     }
     
     // MARK: - Direct Auth File Management (Quota-Only Mode)

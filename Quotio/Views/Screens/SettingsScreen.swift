@@ -30,6 +30,11 @@ struct SettingsScreen: View {
         Form {
             // App Mode
             AppModeSection()
+            
+            // Connection Mode (Local/Remote) - Only in Full Mode
+            if modeManager.isFullMode {
+                ConnectionModeSection()
+            }
 
             // General Settings
             Section {
@@ -403,6 +408,184 @@ private struct AppModeCard: View {
             Color.secondary.opacity(0.05)
         } else {
             Color.clear
+        }
+    }
+}
+
+// MARK: - Connection Mode Section
+
+struct ConnectionModeSection: View {
+    @Environment(QuotaViewModel.self) private var viewModel
+    @State private var showRemoteConfigSheet = false
+    @State private var isReconnecting = false
+    
+    private var manager: ConnectionModeManager { ConnectionModeManager.shared }
+    
+    var body: some View {
+        Section {
+            // Connection mode picker
+            connectionModePicker
+            
+            // Remote configuration (only visible when remote mode is active or configured)
+            if manager.connectionMode == .remote || manager.remoteConfig != nil {
+                remoteConfigRow
+            }
+            
+            // Connection status (only visible in remote mode)
+            if manager.isRemoteMode {
+                connectionStatusRow
+            }
+        } header: {
+            Label("settings.connectionMode.title".localized(), systemImage: "point.3.connected.trianglepath.dotted")
+        } footer: {
+            Text(manager.isRemoteMode
+                 ? "settings.connectionMode.remoteHelp".localized()
+                 : "settings.connectionMode.localHelp".localized())
+                .font(.caption)
+        }
+        .sheet(isPresented: $showRemoteConfigSheet) {
+            RemoteConnectionSheet(
+                existingConfig: manager.remoteConfig
+            ) { config, managementKey in
+                saveRemoteConfig(config, managementKey: managementKey)
+            }
+            .environment(viewModel)
+        }
+    }
+    
+    // MARK: - Connection Mode Picker
+    
+    private var connectionModePicker: some View {
+        Picker("settings.connectionMode".localized(), selection: Binding(
+            get: { manager.connectionMode },
+            set: { newMode in
+                if newMode == .remote && manager.remoteConfig == nil {
+                    // No remote config yet, show configuration sheet
+                    showRemoteConfigSheet = true
+                } else {
+                    switchMode(to: newMode)
+                }
+            }
+        )) {
+            Label("settings.connectionMode.local".localized(), systemImage: "laptopcomputer")
+                .tag(ConnectionMode.local)
+            Label("settings.connectionMode.remote".localized(), systemImage: "network")
+                .tag(ConnectionMode.remote)
+        }
+        .pickerStyle(.segmented)
+    }
+    
+    // MARK: - Remote Config Row
+    
+    private var remoteConfigRow: some View {
+        HStack {
+            if let config = manager.remoteConfig {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(config.displayName)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    Text(config.endpointURL)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            } else {
+                Text("settings.connectionMode.notConfigured".localized())
+                    .foregroundStyle(.secondary)
+            }
+            
+            Spacer()
+            
+            Button("settings.connectionMode.configure".localized()) {
+                showRemoteConfigSheet = true
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+    }
+    
+    // MARK: - Connection Status Row
+    
+    private var connectionStatusRow: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(statusColor)
+                .frame(width: 8, height: 8)
+            
+            Text(statusText)
+                .font(.subheadline)
+            
+            Spacer()
+            
+            if shouldShowReconnectButton {
+                Button {
+                    reconnect()
+                } label: {
+                    if isReconnecting {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Label("action.reconnect".localized(), systemImage: "arrow.clockwise")
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(isReconnecting)
+            }
+        }
+    }
+    
+    private var shouldShowReconnectButton: Bool {
+        switch manager.connectionStatus {
+        case .disconnected, .error:
+            return true
+        default:
+            return false
+        }
+    }
+    
+    private var statusColor: Color {
+        switch manager.connectionStatus {
+        case .connected: return .green
+        case .connecting: return .orange
+        case .disconnected: return .gray
+        case .error: return .red
+        }
+    }
+    
+    private var statusText: String {
+        switch manager.connectionStatus {
+        case .connected: return "status.connected".localized()
+        case .connecting: return "status.connecting".localized()
+        case .disconnected: return "status.disconnected".localized()
+        case .error(let message): return message
+        }
+    }
+    
+    // MARK: - Actions
+    
+    private func switchMode(to mode: ConnectionMode) {
+        manager.setMode(mode)
+        
+        Task {
+            await viewModel.initialize()
+        }
+    }
+    
+    private func saveRemoteConfig(_ config: RemoteConnectionConfig, managementKey: String) {
+        manager.switchToRemote(config: config, managementKey: managementKey)
+        
+        Task {
+            await viewModel.initialize()
+        }
+    }
+    
+    private func reconnect() {
+        isReconnecting = true
+        
+        Task {
+            await viewModel.reconnectRemote()
+            isReconnecting = false
         }
     }
 }
