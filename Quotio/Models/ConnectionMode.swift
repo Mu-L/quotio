@@ -231,11 +231,8 @@ enum RemoteURLValidator {
             return .missingHost
         }
         
-        // Disallow localhost - use Local mode instead
-        let localhostAliases = ["localhost", "127.0.0.1", "::1", "0.0.0.0"]
-        if localhostAliases.contains(host.lowercased()) {
-            return .localhostNotAllowed
-        }
+        // Note: localhost is now allowed for users running their own CLIProxyAPI
+        // (e.g., installed via Homebrew) without using the bundled binary
         
         return .valid
     }

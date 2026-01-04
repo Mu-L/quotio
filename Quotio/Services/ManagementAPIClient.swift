@@ -277,6 +277,99 @@ actor ManagementAPIClient {
         _ = try await makeRequest("/request-retry", method: "PUT", body: body)
     }
     
+    // MARK: - Remote Configuration Getters
+    
+    /// Fetch the full configuration from the remote server
+    func fetchConfig() async throws -> RemoteProxyConfig {
+        let data = try await makeRequest("/config")
+        return try JSONDecoder().decode(RemoteProxyConfig.self, from: data)
+    }
+    
+    /// Get debug mode status
+    func getDebug() async throws -> Bool {
+        let data = try await makeRequest("/debug")
+        let response = try JSONDecoder().decode(DebugResponse.self, from: data)
+        return response.debug
+    }
+    
+    /// Get proxy URL (upstream proxy)
+    func getProxyURL() async throws -> String {
+        let data = try await makeRequest("/proxy-url")
+        let response = try JSONDecoder().decode(ProxyURLResponse.self, from: data)
+        return response.proxyURL
+    }
+    
+    /// Set proxy URL (upstream proxy)
+    func setProxyURL(_ url: String) async throws {
+        let body = try JSONEncoder().encode(["value": url])
+        _ = try await makeRequest("/proxy-url", method: "PUT", body: body)
+    }
+    
+    /// Delete/clear proxy URL
+    func deleteProxyURL() async throws {
+        _ = try await makeRequest("/proxy-url", method: "DELETE")
+    }
+    
+    /// Get logging to file status
+    func getLoggingToFile() async throws -> Bool {
+        let data = try await makeRequest("/logging-to-file")
+        let response = try JSONDecoder().decode(LoggingToFileResponse.self, from: data)
+        return response.loggingToFile
+    }
+    
+    /// Set logging to file
+    func setLoggingToFile(_ enabled: Bool) async throws {
+        let body = try JSONEncoder().encode(["value": enabled])
+        _ = try await makeRequest("/logging-to-file", method: "PUT", body: body)
+    }
+    
+    /// Get request log status
+    func getRequestLog() async throws -> Bool {
+        let data = try await makeRequest("/request-log")
+        let response = try JSONDecoder().decode(RequestLogResponse.self, from: data)
+        return response.requestLog
+    }
+    
+    /// Set request log
+    func setRequestLog(_ enabled: Bool) async throws {
+        let body = try JSONEncoder().encode(["value": enabled])
+        _ = try await makeRequest("/request-log", method: "PUT", body: body)
+    }
+    
+    /// Get request retry count
+    func getRequestRetry() async throws -> Int {
+        let data = try await makeRequest("/request-retry")
+        let response = try JSONDecoder().decode(RequestRetryResponse.self, from: data)
+        return response.requestRetry
+    }
+    
+    /// Get max retry interval
+    func getMaxRetryInterval() async throws -> Int {
+        let data = try await makeRequest("/max-retry-interval")
+        let response = try JSONDecoder().decode(MaxRetryIntervalResponse.self, from: data)
+        return response.maxRetryInterval
+    }
+    
+    /// Set max retry interval
+    func setMaxRetryInterval(_ seconds: Int) async throws {
+        let body = try JSONEncoder().encode(["value": seconds])
+        _ = try await makeRequest("/max-retry-interval", method: "PUT", body: body)
+    }
+    
+    /// Get quota exceeded switch project status
+    func getQuotaExceededSwitchProject() async throws -> Bool {
+        let data = try await makeRequest("/quota-exceeded/switch-project")
+        let response = try JSONDecoder().decode(SwitchProjectResponse.self, from: data)
+        return response.switchProject
+    }
+    
+    /// Get quota exceeded switch preview model status
+    func getQuotaExceededSwitchPreviewModel() async throws -> Bool {
+        let data = try await makeRequest("/quota-exceeded/switch-preview-model")
+        let response = try JSONDecoder().decode(SwitchPreviewModelResponse.self, from: data)
+        return response.switchPreviewModel
+    }
+    
     func uploadVertexServiceAccount(jsonPath: String) async throws {
         let url = URL(fileURLWithPath: jsonPath)
         let fileData = try Data(contentsOf: url)
@@ -417,5 +510,99 @@ nonisolated enum APIError: LocalizedError {
         case .decodingError(let msg): return "Decoding error: \(msg)"
         case .connectionError(let msg): return "Connection error: \(msg)"
         }
+    }
+}
+
+// MARK: - Remote Configuration Response Types
+
+nonisolated struct RemoteProxyConfig: Codable, Sendable {
+    let debug: Bool?
+    let proxyURL: String?
+    let routingStrategy: String?
+    let requestRetry: Int?
+    let maxRetryInterval: Int?
+    let loggingToFile: Bool?
+    let requestLog: Bool?
+    let quotaExceeded: RemoteProxyQuotaExceededConfig?
+    
+    enum CodingKeys: String, CodingKey {
+        case debug
+        case proxyURL = "proxy-url"
+        case routingStrategy = "routing-strategy"
+        case requestRetry = "request-retry"
+        case maxRetryInterval = "max-retry-interval"
+        case loggingToFile = "logging-to-file"
+        case requestLog = "request-log"
+        case quotaExceeded = "quota-exceeded"
+    }
+}
+
+nonisolated struct RemoteProxyQuotaExceededConfig: Codable, Sendable {
+    let switchProject: Bool?
+    let switchPreviewModel: Bool?
+    
+    enum CodingKeys: String, CodingKey {
+        case switchProject = "switch-project"
+        case switchPreviewModel = "switch-preview-model"
+    }
+}
+
+nonisolated struct DebugResponse: Codable, Sendable {
+    let debug: Bool
+}
+
+nonisolated struct ProxyURLResponse: Codable, Sendable {
+    let proxyURL: String
+    
+    enum CodingKeys: String, CodingKey {
+        case proxyURL = "proxy-url"
+    }
+}
+
+nonisolated struct LoggingToFileResponse: Codable, Sendable {
+    let loggingToFile: Bool
+    
+    enum CodingKeys: String, CodingKey {
+        case loggingToFile = "logging-to-file"
+    }
+}
+
+nonisolated struct RequestLogResponse: Codable, Sendable {
+    let requestLog: Bool
+    
+    enum CodingKeys: String, CodingKey {
+        case requestLog = "request-log"
+    }
+}
+
+nonisolated struct RequestRetryResponse: Codable, Sendable {
+    let requestRetry: Int
+    
+    enum CodingKeys: String, CodingKey {
+        case requestRetry = "request-retry"
+    }
+}
+
+nonisolated struct MaxRetryIntervalResponse: Codable, Sendable {
+    let maxRetryInterval: Int
+    
+    enum CodingKeys: String, CodingKey {
+        case maxRetryInterval = "max-retry-interval"
+    }
+}
+
+nonisolated struct SwitchProjectResponse: Codable, Sendable {
+    let switchProject: Bool
+    
+    enum CodingKeys: String, CodingKey {
+        case switchProject = "switch-project"
+    }
+}
+
+nonisolated struct SwitchPreviewModelResponse: Codable, Sendable {
+    let switchPreviewModel: Bool
+    
+    enum CodingKeys: String, CodingKey {
+        case switchPreviewModel = "switch-preview-model"
     }
 }

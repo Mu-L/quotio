@@ -12,16 +12,6 @@ struct SettingsScreen: View {
     private let modeManager = OperatingModeManager.shared
     
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
-    @AppStorage("autoStartProxy") private var autoStartProxy = false
-    @AppStorage("routingStrategy") private var routingStrategy = "round-robin"
-    @AppStorage("requestRetry") private var requestRetry = 3
-    @AppStorage("switchProjectOnQuotaExceeded") private var switchProject = true
-    @AppStorage("switchPreviewModelOnQuotaExceeded") private var switchPreviewModel = true
-    @AppStorage("loggingToFile") private var loggingToFile = true
-    @AppStorage("proxyURL") private var proxyURL = ""
-    
-    @State private var portText: String = ""
-    @State private var proxyURLValidation: ProxyURLValidationResult = .empty
     
     var body: some View {
         @Bindable var lang = LanguageManager.shared
@@ -33,6 +23,7 @@ struct SettingsScreen: View {
             // Remote Server Configuration - Only in Remote Proxy Mode
             if modeManager.isRemoteProxyMode {
                 RemoteServerSection()
+                UnifiedProxySettingsSection()
             }
 
             // General Settings
@@ -79,128 +70,10 @@ struct SettingsScreen: View {
             // Privacy
             PrivacySettingsSection()
             
-            // Proxy Server - Only in Local Proxy Mode
+            // Local Proxy Server - Only in Local Proxy Mode
             if modeManager.isLocalProxyMode {
-                Section {
-                    HStack {
-                        Text("settings.port".localized())
-                        Spacer()
-                        TextField("settings.port".localized(), text: $portText)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 100)
-                            .onChange(of: portText) { _, newValue in
-                                if let port = UInt16(newValue), port > 0 {
-                                    viewModel.proxyManager.port = port
-                                }
-                            }
-                    }
-                    
-                    LabeledContent("settings.status".localized()) {
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(viewModel.proxyManager.proxyStatus.running ? .green : .gray)
-                                .frame(width: 8, height: 8)
-                            Text(viewModel.proxyManager.proxyStatus.running ? "status.running".localized() : "status.stopped".localized())
-                        }
-                    }
-                    
-                    LabeledContent("settings.endpoint".localized()) {
-                        Text(viewModel.proxyManager.proxyStatus.endpoint)
-                            .font(.system(.body, design: .monospaced))
-                            .textSelection(.enabled)
-                    }
-                    
-                    ManagementKeyRow()
-                    
-                    Toggle("settings.autoStartProxy".localized(), isOn: $autoStartProxy)
-                    
-                    VStack(alignment: .leading, spacing: 6) {
-                        LabeledContent("settings.upstreamProxy".localized()) {
-                            TextField("", text: $proxyURL)
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 220)
-                                .onChange(of: proxyURL) { _, newValue in
-                                    proxyURLValidation = ProxyURLValidator.validate(newValue)
-                                    applyProxyURLSettings()
-                                }
-                        }
-                        
-                        if proxyURLValidation != .valid && proxyURLValidation != .empty {
-                            HStack(spacing: 6) {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .foregroundStyle(.orange)
-                                Text((proxyURLValidation.localizationKey ?? "").localized())
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        } else {
-                            Text("settings.upstreamProxy.placeholder".localized())
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                } header: {
-                    Label("settings.proxyServer".localized(), systemImage: "server.rack")
-                } footer: {
-                    Text("settings.restartProxy".localized())
-                        .font(.caption)
-                }
-                
-                // Routing Strategy
-                Section {
-                    Picker("settings.routingStrategy".localized(), selection: $routingStrategy) {
-                        Text("settings.roundRobin".localized()).tag("round-robin")
-                        Text("settings.fillFirst".localized()).tag("fill-first")
-                    }
-                    .pickerStyle(.segmented)
-                    .onChange(of: routingStrategy) { _, newValue in
-                        viewModel.proxyManager.updateConfigRoutingStrategy(newValue)
-                    }
-                } header: {
-                    Label("settings.routingStrategy".localized(), systemImage: "arrow.triangle.branch")
-                } footer: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(routingStrategy == "round-robin"
-                             ? "settings.roundRobinDesc".localized()
-                             : "settings.fillFirstDesc".localized())
-                        Text("settings.restartProxy".localized())
-                    }
-                    .font(.caption)
-                }
-                
-                // Quota Exceeded Behavior
-                Section {
-                    Toggle("settings.autoSwitchAccount".localized(), isOn: $switchProject)
-                    Toggle("settings.autoSwitchPreview".localized(), isOn: $switchPreviewModel)
-                } header: {
-                    Label("settings.quotaExceededBehavior".localized(), systemImage: "exclamationmark.triangle")
-                } footer: {
-                    Text("settings.quotaExceededHelp".localized())
-                        .font(.caption)
-                }
-                
-                // Retry Configuration
-                Section {
-                    Stepper("settings.maxRetries".localized() + ": \(requestRetry)", value: $requestRetry, in: 0...10)
-                } header: {
-                    Label("settings.retryConfiguration".localized(), systemImage: "arrow.clockwise")
-                } footer: {
-                    Text("settings.retryHelp".localized())
-                        .font(.caption)
-                }
-                
-                // Logging
-                Section {
-                    Toggle("settings.loggingToFile".localized(), isOn: $loggingToFile)
-                        .onChange(of: loggingToFile) { _, newValue in
-                            viewModel.proxyManager.updateConfigLogging(enabled: newValue)
-                        }
-                } header: {
-                    Label("settings.logging".localized(), systemImage: "doc.text")
-                } footer: {
-                    Text("settings.loggingHelp".localized())
-                        .font(.caption)
-                }
+                LocalProxyServerSection()
+                UnifiedProxySettingsSection()
             }
             
             // Notifications
@@ -217,39 +90,11 @@ struct SettingsScreen: View {
             
             // Paths - Only in Local Proxy Mode
             if modeManager.isLocalProxyMode {
-                Section {
-                    LabeledContent("settings.binary".localized()) {
-                        PathLabel(path: viewModel.proxyManager.effectiveBinaryPath)
-                    }
-                    
-                    LabeledContent("settings.config".localized()) {
-                        PathLabel(path: viewModel.proxyManager.configPath)
-                    }
-                    
-                    LabeledContent("settings.authDir".localized()) {
-                        PathLabel(path: viewModel.proxyManager.authDir)
-                    }
-                } header: {
-                    Label("settings.paths".localized(), systemImage: "folder")
-                }
+                LocalPathsSection()
             }
         }
         .formStyle(.grouped)
         .navigationTitle("nav.settings".localized())
-        .onAppear {
-            portText = String(viewModel.proxyManager.port)
-            proxyURLValidation = ProxyURLValidator.validate(proxyURL)
-        }
-    }
-    
-    private func applyProxyURLSettings() {
-        guard viewModel.proxyManager.proxyStatus.running else { return }
-        
-        if proxyURLValidation == .valid {
-            viewModel.proxyManager.updateConfigProxyURL(ProxyURLValidator.sanitize(proxyURL))
-        } else {
-            viewModel.proxyManager.updateConfigProxyURL(nil)
-        }
     }
 }
 
@@ -330,8 +175,8 @@ struct OperatingModeSection: View {
             return
         }
         
-        // Confirm when switching FROM a proxy mode
-        if modeManager.isProxyMode && mode == .monitor {
+        // Confirm when switching FROM local proxy mode (stops the local proxy)
+        if modeManager.currentMode == .localProxy && (mode == .monitor || mode == .remoteProxy) {
             pendingMode = mode
             showModeChangeConfirmation = true
         } else {
@@ -487,6 +332,415 @@ struct RemoteServerSection: View {
         Task {
             await viewModel.reconnectRemote()
             isReconnecting = false
+        }
+    }
+}
+
+// MARK: - Unified Proxy Settings Section
+// Works for both Local Proxy and Remote Proxy modes
+// Uses ManagementAPIClient for hot-reload settings
+
+struct UnifiedProxySettingsSection: View {
+    @Environment(QuotaViewModel.self) private var viewModel
+    @State private var modeManager = OperatingModeManager.shared
+    
+    @State private var isLoading = true
+    @State private var loadError: String?
+    
+    @State private var proxyURL = ""
+    @State private var routingStrategy = "round-robin"
+    @State private var switchProject = true
+    @State private var switchPreviewModel = true
+    @State private var requestRetry = 3
+    @State private var maxRetryInterval = 30
+    @State private var loggingToFile = true
+    @State private var requestLog = false
+    @State private var debugMode = false
+    
+    @State private var proxyURLValidation: ProxyURLValidationResult = .empty
+    
+    /// Check if API is available (proxy running for local, or connected for remote)
+    private var isAPIAvailable: Bool {
+        if modeManager.isLocalProxyMode {
+            return viewModel.proxyManager.proxyStatus.running && viewModel.apiClient != nil
+        } else {
+            // For remote mode, check both connection status AND apiClient
+            // connectionStatus is observable, apiClient is not (@ObservationIgnored)
+            if case .connected = modeManager.connectionStatus {
+                return viewModel.apiClient != nil
+            }
+            return false
+        }
+    }
+    
+    /// Header title based on mode
+    private var sectionTitle: String {
+        modeManager.isLocalProxyMode 
+            ? "settings.proxySettings".localized()
+            : "settings.remoteProxySettings".localized()
+    }
+    
+    var body: some View {
+        if !isAPIAvailable {
+            // Show placeholder when API is not available
+            Section {
+                HStack {
+                    Image(systemName: "network.slash")
+                        .foregroundStyle(.secondary)
+                    Text(modeManager.isLocalProxyMode 
+                         ? "settings.proxy.startToConfigureAdvanced".localized()
+                         : "settings.remote.noConnection".localized())
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Label(sectionTitle, systemImage: "slider.horizontal.3")
+            }
+        } else if isLoading {
+            Section {
+                HStack {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Text("settings.remote.loading".localized())
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Label(sectionTitle, systemImage: "slider.horizontal.3")
+            }
+            .onAppear {
+                Task {
+                    await loadConfig()
+                }
+            }
+        } else if let error = loadError {
+            Section {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    Text(error)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("action.retry".localized()) {
+                        Task {
+                            await loadConfig()
+                        }
+                    }
+                }
+            } header: {
+                Label(sectionTitle, systemImage: "slider.horizontal.3")
+            }
+        } else {
+            upstreamProxySection
+            routingStrategySection
+            quotaExceededSection
+            retryConfigurationSection
+            loggingSection
+        }
+    }
+    
+    private var upstreamProxySection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 6) {
+                LabeledContent("settings.upstreamProxy".localized()) {
+                    TextField("", text: $proxyURL)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 220)
+                        .onChange(of: proxyURL) { _, newValue in
+                            proxyURLValidation = ProxyURLValidator.validate(newValue)
+                        }
+                        .onSubmit {
+                            Task { await saveProxyURL() }
+                        }
+                }
+                
+                if proxyURLValidation != .valid && proxyURLValidation != .empty {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Text((proxyURLValidation.localizationKey ?? "").localized())
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Text("settings.upstreamProxy.placeholder".localized())
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } header: {
+            Label("settings.upstreamProxy.title".localized(), systemImage: "network")
+        }
+    }
+    
+    private var routingStrategySection: some View {
+        Section {
+            Picker("settings.routingStrategy".localized(), selection: $routingStrategy) {
+                Text("settings.roundRobin".localized()).tag("round-robin")
+                Text("settings.fillFirst".localized()).tag("fill-first")
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: routingStrategy) { _, newValue in
+                Task { await saveRoutingStrategy(newValue) }
+            }
+        } header: {
+            Label("settings.routingStrategy".localized(), systemImage: "arrow.triangle.branch")
+        } footer: {
+            Text(routingStrategy == "round-robin"
+                 ? "settings.roundRobinDesc".localized()
+                 : "settings.fillFirstDesc".localized())
+            .font(.caption)
+        }
+    }
+    
+    private var quotaExceededSection: some View {
+        Section {
+            Toggle("settings.autoSwitchAccount".localized(), isOn: $switchProject)
+                .onChange(of: switchProject) { _, newValue in
+                    Task { await saveSwitchProject(newValue) }
+                }
+            Toggle("settings.autoSwitchPreview".localized(), isOn: $switchPreviewModel)
+                .onChange(of: switchPreviewModel) { _, newValue in
+                    Task { await saveSwitchPreviewModel(newValue) }
+                }
+        } header: {
+            Label("settings.quotaExceededBehavior".localized(), systemImage: "exclamationmark.triangle")
+        } footer: {
+            Text("settings.quotaExceededHelp".localized())
+                .font(.caption)
+        }
+    }
+    
+    private var retryConfigurationSection: some View {
+        Section {
+            Stepper("settings.maxRetries".localized() + ": \(requestRetry)", value: $requestRetry, in: 0...10)
+                .onChange(of: requestRetry) { _, newValue in
+                    Task { await saveRequestRetry(newValue) }
+                }
+            
+            Stepper("settings.maxRetryInterval".localized() + ": \(maxRetryInterval)s", value: $maxRetryInterval, in: 5...300, step: 5)
+                .onChange(of: maxRetryInterval) { _, newValue in
+                    Task { await saveMaxRetryInterval(newValue) }
+                }
+        } header: {
+            Label("settings.retryConfiguration".localized(), systemImage: "arrow.clockwise")
+        } footer: {
+            Text("settings.retryHelp".localized())
+                .font(.caption)
+        }
+    }
+    
+    private var loggingSection: some View {
+        Section {
+            Toggle("settings.loggingToFile".localized(), isOn: $loggingToFile)
+                .onChange(of: loggingToFile) { _, newValue in
+                    Task { await saveLoggingToFile(newValue) }
+                }
+            
+            Toggle("settings.requestLog".localized(), isOn: $requestLog)
+                .onChange(of: requestLog) { _, newValue in
+                    Task { await saveRequestLog(newValue) }
+                }
+            
+            Toggle("settings.debugMode".localized(), isOn: $debugMode)
+                .onChange(of: debugMode) { _, newValue in
+                    Task { await saveDebugMode(newValue) }
+                }
+        } header: {
+            Label("settings.logging".localized(), systemImage: "doc.text")
+        } footer: {
+            Text("settings.loggingHelp".localized())
+                .font(.caption)
+        }
+    }
+    
+    private func loadConfig() async {
+        isLoading = true
+        loadError = nil
+        
+        guard let apiClient = viewModel.apiClient else {
+            loadError = modeManager.isLocalProxyMode
+                ? "settings.proxy.startToConfigureAdvanced".localized()
+                : "settings.remote.noConnection".localized()
+            isLoading = false
+            return
+        }
+        
+        do {
+            let config = try await apiClient.fetchConfig()
+            proxyURL = config.proxyURL ?? ""
+            routingStrategy = config.routingStrategy ?? "round-robin"
+            requestRetry = config.requestRetry ?? 3
+            maxRetryInterval = config.maxRetryInterval ?? 30
+            loggingToFile = config.loggingToFile ?? true
+            requestLog = config.requestLog ?? false
+            debugMode = config.debug ?? false
+            switchProject = config.quotaExceeded?.switchProject ?? true
+            switchPreviewModel = config.quotaExceeded?.switchPreviewModel ?? true
+            proxyURLValidation = ProxyURLValidator.validate(proxyURL)
+            isLoading = false
+        } catch {
+            loadError = error.localizedDescription
+            isLoading = false
+        }
+    }
+    
+    private func saveProxyURL() async {
+        guard let apiClient = viewModel.apiClient else { return }
+        do {
+            if proxyURL.isEmpty {
+                try await apiClient.deleteProxyURL()
+            } else if proxyURLValidation == .valid {
+                try await apiClient.setProxyURL(ProxyURLValidator.sanitize(proxyURL))
+            }
+        } catch {
+            NSLog("[RemoteSettings] Failed to save proxy URL: \(error)")
+        }
+    }
+    
+    private func saveRoutingStrategy(_ strategy: String) async {
+        guard let apiClient = viewModel.apiClient else { return }
+        do {
+            try await apiClient.setRoutingStrategy(strategy)
+        } catch {
+            NSLog("[RemoteSettings] Failed to save routing strategy: \(error)")
+        }
+    }
+    
+    private func saveSwitchProject(_ enabled: Bool) async {
+        guard let apiClient = viewModel.apiClient else { return }
+        do {
+            try await apiClient.setQuotaExceededSwitchProject(enabled)
+        } catch {
+            NSLog("[RemoteSettings] Failed to save switch project: \(error)")
+        }
+    }
+    
+    private func saveSwitchPreviewModel(_ enabled: Bool) async {
+        guard let apiClient = viewModel.apiClient else { return }
+        do {
+            try await apiClient.setQuotaExceededSwitchPreviewModel(enabled)
+        } catch {
+            NSLog("[RemoteSettings] Failed to save switch preview model: \(error)")
+        }
+    }
+    
+    private func saveRequestRetry(_ count: Int) async {
+        guard let apiClient = viewModel.apiClient else { return }
+        do {
+            try await apiClient.setRequestRetry(count)
+        } catch {
+            NSLog("[RemoteSettings] Failed to save request retry: \(error)")
+        }
+    }
+    
+    private func saveMaxRetryInterval(_ seconds: Int) async {
+        guard let apiClient = viewModel.apiClient else { return }
+        do {
+            try await apiClient.setMaxRetryInterval(seconds)
+        } catch {
+            NSLog("[RemoteSettings] Failed to save max retry interval: \(error)")
+        }
+    }
+    
+    private func saveLoggingToFile(_ enabled: Bool) async {
+        guard let apiClient = viewModel.apiClient else { return }
+        do {
+            try await apiClient.setLoggingToFile(enabled)
+        } catch {
+            NSLog("[RemoteSettings] Failed to save logging to file: \(error)")
+        }
+    }
+    
+    private func saveRequestLog(_ enabled: Bool) async {
+        guard let apiClient = viewModel.apiClient else { return }
+        do {
+            try await apiClient.setRequestLog(enabled)
+        } catch {
+            NSLog("[RemoteSettings] Failed to save request log: \(error)")
+        }
+    }
+    
+    private func saveDebugMode(_ enabled: Bool) async {
+        guard let apiClient = viewModel.apiClient else { return }
+        do {
+            try await apiClient.setDebug(enabled)
+        } catch {
+            NSLog("[RemoteSettings] Failed to save debug mode: \(error)")
+        }
+    }
+}
+
+// MARK: - Local Proxy Server Section
+
+struct LocalProxyServerSection: View {
+    @Environment(QuotaViewModel.self) private var viewModel
+    @AppStorage("autoStartProxy") private var autoStartProxy = false
+    @State private var portText: String = ""
+    
+    var body: some View {
+        Section {
+            HStack {
+                Text("settings.port".localized())
+                Spacer()
+                TextField("settings.port".localized(), text: $portText)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 100)
+                    .onChange(of: portText) { _, newValue in
+                        if let port = UInt16(newValue), port > 0 {
+                            viewModel.proxyManager.port = port
+                        }
+                    }
+            }
+            
+            LabeledContent("settings.status".localized()) {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(viewModel.proxyManager.proxyStatus.running ? .green : .gray)
+                        .frame(width: 8, height: 8)
+                    Text(viewModel.proxyManager.proxyStatus.running ? "status.running".localized() : "status.stopped".localized())
+                }
+            }
+            
+            LabeledContent("settings.endpoint".localized()) {
+                Text(viewModel.proxyManager.proxyStatus.endpoint)
+                    .font(.system(.body, design: .monospaced))
+                    .textSelection(.enabled)
+            }
+            
+            ManagementKeyRow()
+            
+            Toggle("settings.autoStartProxy".localized(), isOn: $autoStartProxy)
+        } header: {
+            Label("settings.proxyServer".localized(), systemImage: "server.rack")
+        } footer: {
+            Text("settings.restartProxy".localized())
+                .font(.caption)
+        }
+        .onAppear {
+            portText = String(viewModel.proxyManager.port)
+        }
+    }
+}
+
+// MARK: - Local Paths Section
+
+struct LocalPathsSection: View {
+    @Environment(QuotaViewModel.self) private var viewModel
+    
+    var body: some View {
+        Section {
+            LabeledContent("settings.binary".localized()) {
+                PathLabel(path: viewModel.proxyManager.effectiveBinaryPath)
+            }
+            
+            LabeledContent("settings.config".localized()) {
+                PathLabel(path: viewModel.proxyManager.configPath)
+            }
+            
+            LabeledContent("settings.authDir".localized()) {
+                PathLabel(path: viewModel.proxyManager.authDir)
+            }
+        } header: {
+            Label("settings.paths".localized(), systemImage: "folder")
         }
     }
 }

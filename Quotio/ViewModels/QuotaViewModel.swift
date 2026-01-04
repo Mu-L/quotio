@@ -12,7 +12,9 @@ import Observation
 @Observable
 final class QuotaViewModel {
     let proxyManager: CLIProxyManager
-    @ObservationIgnored private var apiClient: ManagementAPIClient?
+    @ObservationIgnored private var _apiClient: ManagementAPIClient?
+    
+    var apiClient: ManagementAPIClient? { _apiClient }
     @ObservationIgnored private let antigravityFetcher = AntigravityQuotaFetcher()
     @ObservationIgnored private let openAIFetcher = OpenAIQuotaFetcher()
     @ObservationIgnored private let copilotFetcher = CopilotQuotaFetcher()
@@ -178,11 +180,11 @@ final class QuotaViewModel {
     }
     
     private func setupRemoteAPIClient(config: RemoteConnectionConfig, managementKey: String) async {
-        if let existingClient = apiClient {
+        if let existingClient = _apiClient {
             await existingClient.invalidate()
         }
         
-        apiClient = ManagementAPIClient(config: config, managementKey: managementKey)
+        _apiClient = ManagementAPIClient(config: config, managementKey: managementKey)
     }
     
     func reconnectRemote() async {
@@ -438,8 +440,8 @@ final class QuotaViewModel {
         
         // Invalidate URLSession to close all connections
         // Capture client reference before setting to nil to avoid race condition
-        let clientToInvalidate = apiClient
-        apiClient = nil
+        let clientToInvalidate = _apiClient
+        _apiClient = nil
         
         if let client = clientToInvalidate {
             Task {
@@ -457,7 +459,7 @@ final class QuotaViewModel {
     }
     
     private func setupAPIClient() {
-        apiClient = ManagementAPIClient(
+        _apiClient = ManagementAPIClient(
             baseURL: proxyManager.managementURL,
             authKey: proxyManager.managementKey
         )
