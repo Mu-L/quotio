@@ -310,6 +310,9 @@ struct ContentView: View {
                         
                         // Proxy mode only (local or remote)
                         if modeManager.isProxyMode {
+                            Label("nav.fallback".localized(), systemImage: "arrow.triangle.branch")
+                                .tag(NavigationPage.fallback)
+
                             if modeManager.currentMode.supportsAgentConfig {
                                 Label("nav.agents".localized(), systemImage: "terminal")
                                     .tag(NavigationPage.agents)
@@ -392,6 +395,8 @@ struct ContentView: View {
                 QuotaScreen()
             case .providers:
                 ProvidersScreen()
+            case .fallback:
+                FallbackScreen()
             case .agents:
                 AgentSetupScreen()
             case .apiKeys:
