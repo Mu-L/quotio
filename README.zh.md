@@ -196,6 +196,18 @@ brew install --cask quotio
   />
 </picture>
 
+## 📊 仓库活动
+
+![Repo Activity](https://repobeats.axiom.co/api/embed/884e7349c8939bfd4bdba4bc582b6fdc0ecc21ee.svg "Repobeats analytics image")
+
+## 💖 贡献者
+
+没有你们，我们无法做到这一切。感谢！🙏
+
+<a href="https://github.com/nguyenphutrong/quotio/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=nguyenphutrong/quotio" />
+</a>
+
 ## 📄 许可证
 
 MIT License。详见 `LICENSE`。

@@ -196,6 +196,18 @@ Vào tab **Agents** → Chọn agent đã cài → Nhấn **Configure** → Ch�
   />
 </picture>
 
+## 📊 Hoạt động Repo
+
+![Repo Activity](https://repobeats.axiom.co/api/embed/884e7349c8939bfd4bdba4bc582b6fdc0ecc21ee.svg "Repobeats analytics image")
+
+## 💖 Người đóng góp
+
+Chúng tôi không thể làm được điều này nếu thiếu các bạn. Cảm ơn! 🙏
+
+<a href="https://github.com/nguyenphutrong/quotio/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=nguyenphutrong/quotio" />
+</a>
+
 ## 📄 Giấy phép
 
 MIT License. Xem file `LICENSE` để biết thêm.

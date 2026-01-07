@@ -196,6 +196,18 @@ Go to **Agents** tab → Select an installed agent → Click **Configure** → C
   />
 </picture>
 
+## 📊 Repo Activity
+
+![Repo Activity](https://repobeats.axiom.co/api/embed/884e7349c8939bfd4bdba4bc582b6fdc0ecc21ee.svg "Repobeats analytics image")
+
+## 💖 Contributors
+
+We couldn't have done this without you. Thank you! 🙏
+
+<a href="https://github.com/nguyenphutrong/quotio/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=nguyenphutrong/quotio" />
+</a>
+
 ## 📄 License
 
 MIT License. See `LICENSE` for details.
