@@ -711,13 +711,35 @@ struct DashboardScreen: View {
     
     private var tunnelSection: some View {
         GroupBox {
-            HStack {
-                Image(systemName: "globe")
-                    .font(.title2)
-                    .foregroundStyle(.blue)
-                    .frame(width: 32, height: 32)
+            HStack(spacing: 16) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [.blue.opacity(0.15), .purple.opacity(0.1)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 48, height: 48)
+                        .overlay(
+                            Circle()
+                                .strokeBorder(Color.white.opacity(0.2), lineWidth: 1)
+                        )
+                    
+                    Image(systemName: "globe")
+                        .font(.system(size: 24))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.blue, .purple],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .shadow(color: .blue.opacity(0.3), radius: 4, x: 0, y: 2)
+                }
                 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Text("tunnel.section.title".localized())
                             .font(.headline)
@@ -730,6 +752,7 @@ struct DashboardScreen: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
+                            .monospaced()
                     } else {
                         Text("tunnel.section.description".localized())
                             .font(.caption)
@@ -744,19 +767,26 @@ struct DashboardScreen: View {
                         tunnelManager.copyURLToClipboard()
                     } label: {
                         Image(systemName: "doc.on.doc")
+                            .font(.system(size: 12))
                     }
                     .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .help("action.copy".localized())
                 }
                 
                 Button {
                     showTunnelSheet = true
                 } label: {
                     Image(systemName: "gearshape")
+                        .font(.system(size: 12))
                 }
                 .buttonStyle(.bordered)
+                .controlSize(.small)
             }
         } label: {
             Label("tunnel.section.label".localized(), systemImage: "network")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
         .sheet(isPresented: $showTunnelSheet) {
             TunnelSheet()
