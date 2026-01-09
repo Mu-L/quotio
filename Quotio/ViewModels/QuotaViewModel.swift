@@ -864,6 +864,11 @@ final class QuotaViewModel {
             
             await refreshData()
             await runWarmupCycle()
+            
+            let autoStartTunnel = UserDefaults.standard.bool(forKey: "autoStartTunnel")
+            if autoStartTunnel && tunnelManager.installation.isInstalled {
+                await tunnelManager.startTunnel(port: proxyManager.port)
+            }
         } catch {
             errorMessage = error.localizedDescription
         }

@@ -677,6 +677,7 @@ struct UnifiedProxySettingsSection: View {
 struct LocalProxyServerSection: View {
     @Environment(QuotaViewModel.self) private var viewModel
     @AppStorage("autoStartProxy") private var autoStartProxy = false
+    @AppStorage("autoStartTunnel") private var autoStartTunnel = false
     @State private var portText: String = ""
     
     var body: some View {
@@ -712,6 +713,9 @@ struct LocalProxyServerSection: View {
             ManagementKeyRow()
             
             Toggle("settings.autoStartProxy".localized(), isOn: $autoStartProxy)
+            
+            Toggle("settings.autoStartTunnel".localized(), isOn: $autoStartTunnel)
+                .disabled(!viewModel.tunnelManager.installation.isInstalled)
         } header: {
             Label("settings.proxyServer".localized(), systemImage: "server.rack")
         } footer: {
