@@ -16,6 +16,9 @@ struct DashboardScreen: View {
     @State private var isImporterPresented = false
     @State private var selectedAgentForConfig: CLIAgent?
     @State private var sheetPresentationID = UUID()
+    @State private var showTunnelSheet = false
+    
+    private var tunnelManager: TunnelManager { TunnelManager.shared }
     
     private var showGettingStarted: Bool {
         guard !hideGettingStarted else { return false }
@@ -146,6 +149,7 @@ struct DashboardScreen: View {
             kpiSection
             providerSection
             endpointSection
+            tunnelSection
         }
     }
     
@@ -700,6 +704,63 @@ struct DashboardScreen: View {
             }
         } label: {
             Label("dashboard.apiEndpoint".localized(), systemImage: "link")
+        }
+    }
+    
+    // MARK: - Tunnel Section
+    
+    private var tunnelSection: some View {
+        GroupBox {
+            HStack {
+                Image(systemName: "globe")
+                    .font(.title2)
+                    .foregroundStyle(.blue)
+                    .frame(width: 32, height: 32)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack {
+                        Text("tunnel.section.title".localized())
+                            .font(.headline)
+                        
+                        TunnelStatusBadge(status: tunnelManager.tunnelState.status, compact: true)
+                    }
+                    
+                    if tunnelManager.tunnelState.isActive, let url = tunnelManager.tunnelState.publicURL {
+                        Text(url)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    } else {
+                        Text("tunnel.section.description".localized())
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                
+                Spacer()
+                
+                if tunnelManager.tunnelState.isActive {
+                    Button {
+                        tunnelManager.copyURLToClipboard()
+                    } label: {
+                        Image(systemName: "doc.on.doc")
+                    }
+                    .buttonStyle(.bordered)
+                }
+                
+                Button {
+                    showTunnelSheet = true
+                } label: {
+                    Image(systemName: "gearshape")
+                }
+                .buttonStyle(.bordered)
+            }
+        } label: {
+            Label("tunnel.section.label".localized(), systemImage: "network")
+        }
+        .sheet(isPresented: $showTunnelSheet) {
+            TunnelSheet()
+                .environment(viewModel)
         }
     }
 }
