@@ -2,8 +2,13 @@
 /**
  * Quotio Screenshot Automation Script
  *
- * Uses CleanShot X URL scheme API to capture all screens of the Quotio app.
- * Requires CleanShot X 4.7+ to be installed.
+ * Captures app windows using macOS screencapture. CleanShot X is optional and only
+ * used to hide/show desktop icons via its URL scheme when available.
+ *
+ * Requirements:
+ * - macOS 15+
+ * - Screen Recording + Accessibility permissions
+ * - Optional: CleanShot X (4.7+ recommended for icon toggle URLs)
  *
  * Usage:
  *   bun run scripts/capture-screenshots.ts              # Interactive TUI
@@ -86,6 +91,37 @@ interface CaptureOptions {
 // =============================================================================
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const REQUIRED_TOOLS = ["magick", "pngquant", "cliclick"] as const;
+
+type RequiredTool = (typeof REQUIRED_TOOLS)[number];
+
+async function checkRequiredTools(): Promise<void> {
+  const missing: RequiredTool[] = [];
+  for (const tool of REQUIRED_TOOLS) {
+    const result = await $`command -v ${tool}`.nothrow();
+    if (result.exitCode !== 0) {
+      missing.push(tool);
+    }
+  }
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing required tools: ${missing.join(", ")}. Install with: brew install ${missing.join(" ")}`
+    );
+  }
+}
+
+async function removeFileIfExists(filePath: string): Promise<void> {
+  if (!existsSync(filePath)) {
+    return;
+  }
+
+  const result = await $`rm ${filePath}`.nothrow();
+  if (result.exitCode !== 0) {
+    log(`Warning: Failed to remove temp file ${filePath}`, "warn");
+  }
+}
 
 // =============================================================================
 // App Detection
@@ -381,11 +417,13 @@ async function captureWindow(outputPath: string, wallpaperPath: string): Promise
   }
 
   const tempPath = outputPath.replace(".png", "_temp.png");
-  await $`screencapture -l ${windowId} ${tempPath}`.quiet();
-  await compositeOnWallpaper(tempPath, wallpaperPath, outputPath, 100);
-  await $`rm ${tempPath}`.quiet();
-
-  log(`Saved: ${outputPath}`, "success");
+  try {
+    await $`screencapture -l ${windowId} ${tempPath}`.quiet();
+    await compositeOnWallpaper(tempPath, wallpaperPath, outputPath, 100);
+    log(`Saved: ${outputPath}`, "success");
+  } finally {
+    await removeFileIfExists(tempPath);
+  }
 }
 
 async function compositeOnWallpaper(
@@ -408,7 +446,12 @@ async function compositeOnWallpaper(
 }
 
 async function compressPng(imagePath: string): Promise<void> {
-  await $`pngquant --force --quality=80-95 --output ${imagePath} ${imagePath}`.quiet();
+  const result = await $`pngquant --force --quality=80-95 --output ${imagePath} ${imagePath}`.nothrow();
+  if (result.exitCode !== 0) {
+    const stderr = result.stderr.toString().trim();
+    const detail = stderr ? `: ${stderr}` : "";
+    throw new Error(`pngquant failed for ${imagePath}${detail}`);
+  }
 }
 
 async function hideAllWindows(includeQuotio = false): Promise<void> {
@@ -691,6 +734,7 @@ async function main() {
   spinner.start("Preparing capture environment...");
 
   const appPath = getAppPath(options.appSource);
+  await checkRequiredTools();
   const wallpapers = await ensureWallpapers();
 
   try {
