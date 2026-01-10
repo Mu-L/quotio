@@ -11,15 +11,14 @@
 
 ## ⚠️ Critical Alerts
 
-**1** high-priority warnings across 1 modules. Check each module's `memory.md` for details.
+**2** high-priority warnings across 2 modules. Check each module's `memory.md` for details.
 
 ## Modules
 
 | Module | Type | Files | Warnings | Hub |
 | ------ | ---- | ----- | -------- | --- |
-| [root](modules/root/MODULE.md) | root | 9 | - |  |
+| [root](modules/root/MODULE.md) | root | 31 | 1 |  |
 | [Quotio/Models](modules/Quotio-Models/MODULE.md) | implicit | 15 | 1 |  |
-| [Quotio/Services](modules/Quotio-Services/MODULE.md) | implicit | 20 | - |  |
 | [Quotio/Services/Antigravity](modules/Quotio-Services-Antigravity/MODULE.md) | implicit | 5 | - |  |
 | [Quotio/Services/QuotaFetchers](modules/Quotio-Services-QuotaFetchers/MODULE.md) | implicit | 8 | - |  |
 | [Quotio/Views/Components](modules/Quotio-Views-Components/MODULE.md) | implicit | 25 | - |  |
