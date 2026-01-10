@@ -205,6 +205,29 @@ async function navigateToScreen(screenIndex: number): Promise<void> {
 }
 
 // =============================================================================
+// Hide Sensitive Information
+// =============================================================================
+
+const BUNDLE_ID = "proseek.io.vn.Quotio";
+
+async function getHideSensitiveState(): Promise<boolean> {
+  const result = await $`defaults read ${BUNDLE_ID} hideSensitiveInfo`.quiet().nothrow();
+  return result.exitCode === 0 && result.text().trim() === "1";
+}
+
+async function setHideSensitive(hide: boolean): Promise<void> {
+  log(`${hide ? "Enabling" : "Disabling"} Hide Sensitive Information...`);
+  await $`defaults write ${BUNDLE_ID} hideSensitiveInfo -bool ${hide ? "true" : "false"}`.quiet();
+  await sleep(300);
+}
+
+async function quitApp(): Promise<void> {
+  log("Quitting Quotio...");
+  await $`osascript -e 'tell application "${CONFIG.appName}" to quit'`.quiet().nothrow();
+  await sleep(1000);
+}
+
+// =============================================================================
 // Appearance Mode
 // =============================================================================
 
@@ -555,9 +578,11 @@ async function main() {
   ensureOutputDir(outputDir);
   log(`Output directory: ${outputDir}`);
 
-  // Save current appearance to restore later
   const originalMode = await getCurrentAppearance();
   log(`Current appearance: ${originalMode}`);
+
+  const originalHideSensitive = await getHideSensitiveState();
+  log(`Hide sensitive info: ${originalHideSensitive ? "enabled" : "disabled"}`);
 
   const spinner = p.spinner();
   spinner.start("Preparing capture environment...");
@@ -565,11 +590,22 @@ async function main() {
   try {
     await ensureCleanShotRunning();
     await hideDesktopIcons();
+
+    if (!originalHideSensitive) {
+      await quitApp();
+      await setHideSensitive(true);
+    }
+
     await launchApp();
     spinner.stop("Environment ready");
 
     await captureSelectedScreens(options, outputDir);
   } finally {
+    if (!originalHideSensitive) {
+      await quitApp();
+      await setHideSensitive(false);
+      await launchApp();
+    }
     await setAppearance(originalMode);
     await showDesktopIcons();
   }
