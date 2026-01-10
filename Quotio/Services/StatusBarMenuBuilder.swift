@@ -159,8 +159,6 @@ final class StatusBarMenuBuilder {
     private func buildTunnelItem() -> NSMenuItem {
         let tunnelManager = TunnelManager.shared
         let tunnelView = MenuTunnelView(
-            status: tunnelManager.tunnelState.status,
-            publicURL: tunnelManager.tunnelState.publicURL,
             onToggle: { [weak viewModel] in
                 guard let viewModel = viewModel else { return }
                 Task {
@@ -932,10 +930,12 @@ private struct MenuBarActionButton: View {
 // MARK: - Menu Tunnel View
 
 private struct MenuTunnelView: View {
-    let status: CloudflareTunnelStatus
-    let publicURL: String?
+    private let tunnelManager = TunnelManager.shared
     let onToggle: () -> Void
     let onCopyURL: () -> Void
+    
+    private var status: CloudflareTunnelStatus { tunnelManager.tunnelState.status }
+    private var publicURL: String? { tunnelManager.tunnelState.publicURL }
     
     var body: some View {
         VStack(spacing: 6) {

@@ -82,6 +82,7 @@ actor CloudflaredService {
             private let lock = NSLock()
             private var buffer = ""
             private var urlFound = false
+            private let maxBufferSize = 65536 // 64KB max buffer
             
             func append(_ text: String) -> String? {
                 lock.lock()
@@ -89,6 +90,25 @@ actor CloudflaredService {
                 
                 guard !urlFound else { return nil }
                 buffer += text
+                
+                // Trim buffer to keep only trailing maxBufferSize characters
+                if buffer.count > maxBufferSize {
+                    let dropCount = buffer.count - maxBufferSize
+                    buffer = String(buffer.dropFirst(dropCount))
+                }
+                
+                if let range = buffer.range(of: CloudflaredService.tunnelURLPattern, options: .regularExpression) {
+                    urlFound = true
+                    return String(buffer[range])
+                }
+                return nil
+            }
+            
+            func checkRemaining() -> String? {
+                lock.lock()
+                defer { lock.unlock() }
+                
+                guard !urlFound else { return nil }
                 
                 if let range = buffer.range(of: CloudflaredService.tunnelURLPattern, options: .regularExpression) {
                     urlFound = true
@@ -100,18 +120,40 @@ actor CloudflaredService {
         
         let buffer = OutputBuffer()
         
-        errorPipe.fileHandleForReading.readabilityHandler = { handle in
+        errorPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
-            guard !data.isEmpty, let text = String(data: data, encoding: .utf8) else { return }
+            
+            // EOF detected - empty data means stream closed
+            if data.isEmpty {
+                handle.readabilityHandler = nil
+                // Check remaining buffer for URL on EOF
+                if let url = buffer.checkRemaining() {
+                    onURLDetected(url)
+                }
+                return
+            }
+            
+            guard let text = String(data: data, encoding: .utf8) else { return }
             
             if let url = buffer.append(text) {
                 onURLDetected(url)
             }
         }
         
-        outputPipe.fileHandleForReading.readabilityHandler = { handle in
+        outputPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
-            guard !data.isEmpty, let text = String(data: data, encoding: .utf8) else { return }
+            
+            // EOF detected - empty data means stream closed
+            if data.isEmpty {
+                handle.readabilityHandler = nil
+                // Check remaining buffer for URL on EOF
+                if let url = buffer.checkRemaining() {
+                    onURLDetected(url)
+                }
+                return
+            }
+            
+            guard let text = String(data: data, encoding: .utf8) else { return }
             
             if let url = buffer.append(text) {
                 onURLDetected(url)
@@ -169,15 +211,33 @@ actor CloudflaredService {
     }
     
     nonisolated static func killOrphanProcesses() {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
-        process.arguments = ["-9", "-f", "cloudflared.*tunnel.*--url"]
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
+        // Use app-specific pattern matching tunnels spawned by Quotio (--config /dev/null)
+        let pattern = "cloudflared.*tunnel.*--config.*/dev/null.*--url"
+        
+        // First try graceful SIGTERM
+        let termProcess = Process()
+        termProcess.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
+        termProcess.arguments = ["-TERM", "-f", pattern]
+        termProcess.standardOutput = FileHandle.nullDevice
+        termProcess.standardError = FileHandle.nullDevice
         
         do {
-            try process.run()
-            process.waitUntilExit()
+            try termProcess.run()
+            termProcess.waitUntilExit()
+            
+            // Wait briefly for graceful shutdown
+            Thread.sleep(forTimeInterval: 0.3)
+            
+            // Check if any matching processes remain and force kill
+            let killProcess = Process()
+            killProcess.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
+            killProcess.arguments = ["-9", "-f", pattern]
+            killProcess.standardOutput = FileHandle.nullDevice
+            killProcess.standardError = FileHandle.nullDevice
+            
+            try killProcess.run()
+            killProcess.waitUntilExit()
+            
             NSLog("[CloudflaredService] Cleaned up orphan cloudflared processes")
         } catch {
             // Silent failure - no orphans to kill is fine

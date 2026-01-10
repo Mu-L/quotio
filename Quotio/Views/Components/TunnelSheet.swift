@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AppKit
 
 struct TunnelSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -132,7 +133,7 @@ struct TunnelSheet: View {
             Divider()
             
             HStack {
-                Text(tunnelManager.tunnelState.isActive ? "Tunnel is active and reachable" : "Tunnel is currently inactive")
+                Text(tunnelManager.tunnelState.isActive ? "tunnel.status.description.active".localized() : "tunnel.status.description.inactive".localized())
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 
@@ -230,7 +231,7 @@ struct TunnelSheet: View {
                 .foregroundStyle(.red)
             
             VStack(alignment: .leading, spacing: 4) {
-                Text("Error")
+                Text("tunnel.error.title".localized())
                     .font(.headline)
                     .foregroundStyle(.red)
                 

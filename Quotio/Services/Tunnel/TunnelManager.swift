@@ -20,6 +20,7 @@ final class TunnelManager {
     
     private let service = CloudflaredService()
     private var monitorTask: Task<Void, Never>?
+    private var tunnelRequestId: UInt64 = 0
     
     // MARK: - Init
     
@@ -48,6 +49,9 @@ final class TunnelManager {
             return
         }
         
+        tunnelRequestId &+= 1
+        let currentRequestId = tunnelRequestId
+        
         tunnelState.status = .starting
         tunnelState.errorMessage = nil
         tunnelState.publicURL = nil
@@ -56,6 +60,10 @@ final class TunnelManager {
             try await service.start(port: port) { [weak self] url in
                 Task { @MainActor in
                     guard let self = self else { return }
+                    guard self.tunnelRequestId == currentRequestId else {
+                        NSLog("[TunnelManager] Ignoring stale callback for request %llu (current: %llu)", currentRequestId, self.tunnelRequestId)
+                        return
+                    }
                     self.tunnelState.publicURL = url
                     self.tunnelState.status = .active
                     self.tunnelState.startTime = Date()
@@ -66,10 +74,12 @@ final class TunnelManager {
             startMonitoring()
             
         } catch let error as TunnelError {
+            guard tunnelRequestId == currentRequestId else { return }
             tunnelState.status = .error
             tunnelState.errorMessage = error.localizedMessage
             NSLog("[TunnelManager] Failed to start tunnel: %@", error.localizedMessage)
         } catch {
+            guard tunnelRequestId == currentRequestId else { return }
             tunnelState.status = .error
             tunnelState.errorMessage = error.localizedDescription
             NSLog("[TunnelManager] Failed to start tunnel: %@", error.localizedDescription)
@@ -80,6 +90,8 @@ final class TunnelManager {
         guard tunnelState.status == .active || tunnelState.status == .starting else {
             return
         }
+        
+        tunnelRequestId &+= 1
         
         tunnelState.status = .stopping
         stopMonitoring()
@@ -120,10 +132,13 @@ final class TunnelManager {
                 guard let self = self else { break }
                 
                 let isRunning = await self.service.isRunning
-                if !isRunning && self.tunnelState.status == .active {
+                let currentStatus = self.tunnelState.status
+                
+                if !isRunning && (currentStatus == .active || currentStatus == .starting) {
                     self.tunnelState.status = .error
                     self.tunnelState.errorMessage = "tunnel.error.unexpectedExit".localized()
                     NSLog("[TunnelManager] Tunnel process exited unexpectedly")
+                    await self.service.stop()
                     break
                 }
             }
