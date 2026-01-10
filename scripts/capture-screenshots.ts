@@ -27,6 +27,10 @@ const CONFIG = {
   windowSize: { width: 1280, height: 800 },
   outputDir: join(import.meta.dir, "..", "screenshots"),
   cleanshotDir: join(homedir(), "Pictures"),
+  paths: {
+    localBuild: join(import.meta.dir, "..", "build", "Quotio.app"),
+    installed: "/Applications/Quotio.app",
+  },
   delays: {
     afterLaunch: 2000,
     afterNavigation: 800,
@@ -37,6 +41,8 @@ const CONFIG = {
   retryAttempts: 3,
   retryDelay: 500,
 } as const;
+
+type AppSource = "local" | "installed";
 
 // =============================================================================
 // Screen Definitions
@@ -64,6 +70,7 @@ type ThemeChoice = "light" | "dark" | "both";
 interface CaptureOptions {
   themes: AppearanceMode[];
   screens: ScreenDef[];
+  appSource: AppSource;
 }
 
 // =============================================================================
@@ -71,6 +78,61 @@ interface CaptureOptions {
 // =============================================================================
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// =============================================================================
+// App Detection
+// =============================================================================
+
+interface AppAvailability {
+  local: boolean;
+  installed: boolean;
+  localPath: string;
+  installedPath: string;
+}
+
+function detectAvailableApps(): AppAvailability {
+  return {
+    local: existsSync(CONFIG.paths.localBuild),
+    installed: existsSync(CONFIG.paths.installed),
+    localPath: CONFIG.paths.localBuild,
+    installedPath: CONFIG.paths.installed,
+  };
+}
+
+function getAppPath(source: AppSource): string {
+  return source === "local" ? CONFIG.paths.localBuild : CONFIG.paths.installed;
+}
+
+async function selectAppSource(apps: AppAvailability): Promise<AppSource | null> {
+  // Only one available - use it
+  if (apps.local && !apps.installed) {
+    p.log.info("Using local build (installed app not found)");
+    return "local";
+  }
+  if (apps.installed && !apps.local) {
+    p.log.info("Using installed app (local build not found)");
+    return "installed";
+  }
+  if (!apps.local && !apps.installed) {
+    p.log.error("No Quotio app found! Build locally or install to /Applications/");
+    return null;
+  }
+
+  // Both available - ask user
+  const choice = await p.select({
+    message: "Which Quotio app to capture?",
+    options: [
+      { value: "local", label: "Local build", hint: "build/Quotio.app" },
+      { value: "installed", label: "Installed app", hint: "/Applications/Quotio.app" },
+    ],
+  });
+
+  if (p.isCancel(choice)) {
+    return null;
+  }
+
+  return choice as AppSource;
+}
 
 async function runAppleScript(script: string): Promise<string> {
   try {
@@ -141,9 +203,9 @@ async function ensureCleanShotRunning(): Promise<void> {
   }
 }
 
-async function launchApp(): Promise<void> {
-  log("Launching Quotio...");
-  await $`open -a ${CONFIG.appName}`.quiet();
+async function launchApp(appPath: string): Promise<void> {
+  log(`Launching Quotio from ${appPath}...`);
+  await $`open ${appPath}`.quiet();
   await sleep(CONFIG.delays.afterLaunch);
 }
 
@@ -460,6 +522,14 @@ function ensureOutputDir(dir: string): void {
 async function showInteractiveTUI(): Promise<CaptureOptions | null> {
   p.intro("📸 Quotio Screenshot Automation");
 
+  // App source selection
+  const apps = detectAvailableApps();
+  const appSource = await selectAppSource(apps);
+  if (!appSource) {
+    p.cancel("Operation cancelled.");
+    return null;
+  }
+
   // Theme selection
   const themeChoice = await p.select({
     message: "Select appearance mode:",
@@ -512,25 +582,26 @@ async function showInteractiveTUI(): Promise<CaptureOptions | null> {
 
   p.log.info(`Themes: ${themesLabel}`);
   p.log.info(`Screens: ${screensLabel}`);
+  p.log.info(`App: ${appSource === "local" ? "Local build" : "Installed"}`);
 
   return {
     themes,
     screens: selectedScreens,
+    appSource,
   };
 }
 
 function parseCliArgs(): CaptureOptions | "interactive" {
   const args = process.argv.slice(2);
 
-  // No args = interactive mode
   if (args.length === 0) {
     return "interactive";
   }
 
-  // Parse CLI flags
   const hasLight = args.includes("--light");
   const hasDark = args.includes("--dark");
   const hasBoth = args.includes("--both");
+  const hasLocal = args.includes("--local");
 
   let themes: AppearanceMode[];
   if (hasBoth || (hasLight && hasDark)) {
@@ -540,12 +611,15 @@ function parseCliArgs(): CaptureOptions | "interactive" {
   } else if (hasLight) {
     themes = ["light"];
   } else {
-    themes = ["light", "dark"]; // default
+    themes = ["light", "dark"];
   }
+
+  const appSource: AppSource = hasLocal ? "local" : "installed";
 
   return {
     themes,
-    screens: SCREENS, // CLI mode captures all screens
+    screens: SCREENS,
+    appSource,
   };
 }
 
@@ -587,6 +661,8 @@ async function main() {
   const spinner = p.spinner();
   spinner.start("Preparing capture environment...");
 
+  const appPath = getAppPath(options.appSource);
+
   try {
     await ensureCleanShotRunning();
     await hideDesktopIcons();
@@ -596,7 +672,7 @@ async function main() {
       await setHideSensitive(true);
     }
 
-    await launchApp();
+    await launchApp(appPath);
     spinner.stop("Environment ready");
 
     await captureSelectedScreens(options, outputDir);
@@ -604,7 +680,7 @@ async function main() {
     if (!originalHideSensitive) {
       await quitApp();
       await setHideSensitive(false);
-      await launchApp();
+      await launchApp(appPath);
     }
     await setAppearance(originalMode);
     await showDesktopIcons();
