@@ -267,29 +267,6 @@ async function navigateToScreen(screenIndex: number): Promise<void> {
 }
 
 // =============================================================================
-// Hide Sensitive Information
-// =============================================================================
-
-const BUNDLE_ID = "proseek.io.vn.Quotio";
-
-async function getHideSensitiveState(): Promise<boolean> {
-  const result = await $`defaults read ${BUNDLE_ID} hideSensitiveInfo`.quiet().nothrow();
-  return result.exitCode === 0 && result.text().trim() === "1";
-}
-
-async function setHideSensitive(hide: boolean): Promise<void> {
-  log(`${hide ? "Enabling" : "Disabling"} Hide Sensitive Information...`);
-  await $`defaults write ${BUNDLE_ID} hideSensitiveInfo -bool ${hide ? "true" : "false"}`.quiet();
-  await sleep(300);
-}
-
-async function quitApp(): Promise<void> {
-  log("Quitting Quotio...");
-  await $`osascript -e 'tell application "${CONFIG.appName}" to quit'`.quiet().nothrow();
-  await sleep(1000);
-}
-
-// =============================================================================
 // Appearance Mode
 // =============================================================================
 
@@ -404,8 +381,8 @@ async function captureWindow(outputPath: string): Promise<void> {
 async function hideAllWindows(includeQuotio = false): Promise<void> {
   log("Hiding all other windows...");
   const excludeApps = includeQuotio
-    ? `name is not "Finder" and name is not "CleanShot X"`
-    : `name is not "${CONFIG.appName}" and name is not "Finder" and name is not "CleanShot X"`;
+    ? `name is not "CleanShot X"`
+    : `name is not "${CONFIG.appName}" and name is not "CleanShot X"`;
 
   await runAppleScript(`
     tell application "System Events"
@@ -417,6 +394,13 @@ async function hideAllWindows(includeQuotio = false): Promise<void> {
       end repeat
     end tell
   `);
+  
+  await runAppleScript(`
+    tell application "Finder"
+      close every window
+    end tell
+  `);
+  
   await sleep(300);
 }
 
@@ -655,9 +639,6 @@ async function main() {
   const originalMode = await getCurrentAppearance();
   log(`Current appearance: ${originalMode}`);
 
-  const originalHideSensitive = await getHideSensitiveState();
-  log(`Hide sensitive info: ${originalHideSensitive ? "enabled" : "disabled"}`);
-
   const spinner = p.spinner();
   spinner.start("Preparing capture environment...");
 
@@ -666,22 +647,11 @@ async function main() {
   try {
     await ensureCleanShotRunning();
     await hideDesktopIcons();
-
-    if (!originalHideSensitive) {
-      await quitApp();
-      await setHideSensitive(true);
-    }
-
     await launchApp(appPath);
     spinner.stop("Environment ready");
 
     await captureSelectedScreens(options, outputDir);
   } finally {
-    if (!originalHideSensitive) {
-      await quitApp();
-      await setHideSensitive(false);
-      await launchApp(appPath);
-    }
     await setAppearance(originalMode);
     await showDesktopIcons();
   }
