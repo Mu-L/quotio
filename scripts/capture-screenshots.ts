@@ -14,8 +14,7 @@
 
 import * as p from "@clack/prompts";
 import { $ } from "bun";
-import { existsSync, mkdirSync, readdirSync, renameSync, statSync } from "fs";
-import { homedir } from "os";
+import { existsSync, mkdirSync } from "fs";
 import { join } from "path";
 
 // =============================================================================
@@ -26,7 +25,11 @@ const CONFIG = {
   appName: "Quotio",
   windowSize: { width: 1280, height: 800 },
   outputDir: join(import.meta.dir, "..", "screenshots"),
-  cleanshotDir: join(homedir(), "Pictures"),
+  wallpaperCacheDir: join(import.meta.dir, "..", ".wallpaper-cache"),
+  wallpapers: {
+    light: "https://misc-assets.raycast.com/wallpapers/blushing-fire.png",
+    dark: "https://misc-assets.raycast.com/wallpapers/loupe-mono-dark.heic",
+  },
   paths: {
     localBuild: join(import.meta.dir, "..", "build", "Quotio.app"),
     installed: "/Applications/Quotio.app",
@@ -37,6 +40,7 @@ const CONFIG = {
     afterCapture: 1500,
     afterMenuOpen: 600,
     afterModeSwitch: 1500,
+    afterWallpaperChange: 1000,
   },
   retryAttempts: 3,
   retryDelay: 500,
@@ -166,42 +170,8 @@ async function retry<T>(fn: () => Promise<T>, attempts: number, delay: number): 
 }
 
 // =============================================================================
-// File Management
-// =============================================================================
-
-function findLatestScreenshot(dir: string, beforeTime: number): string | null {
-  if (!existsSync(dir)) return null;
-
-  const files = readdirSync(dir)
-    .filter((f) => f.endsWith(".png") || f.endsWith(".jpg"))
-    .map((f) => ({
-      name: f,
-      path: join(dir, f),
-      mtime: statSync(join(dir, f)).mtimeMs,
-    }))
-    .filter((f) => f.mtime > beforeTime)
-    .sort((a, b) => b.mtime - a.mtime);
-
-  return files[0]?.path ?? null;
-}
-
-function moveScreenshot(src: string, dest: string): void {
-  renameSync(src, dest);
-  log(`Saved: ${dest}`, "success");
-}
-
-// =============================================================================
 // App Control
 // =============================================================================
-
-async function ensureCleanShotRunning(): Promise<void> {
-  const result = await $`pgrep -x "CleanShot X"`.quiet().nothrow();
-  if (result.exitCode !== 0) {
-    log("Starting CleanShot X...");
-    await $`open -a "CleanShot X"`.quiet();
-    await sleep(2000);
-  }
-}
 
 async function launchApp(appPath: string): Promise<void> {
   log(`Launching Quotio from ${appPath}...`);
@@ -267,6 +237,62 @@ async function navigateToScreen(screenIndex: number): Promise<void> {
 }
 
 // =============================================================================
+// Wallpaper Management
+// =============================================================================
+
+async function downloadWallpaper(url: string, filename: string): Promise<string> {
+  const cacheDir = CONFIG.wallpaperCacheDir;
+  if (!existsSync(cacheDir)) {
+    mkdirSync(cacheDir, { recursive: true });
+  }
+
+  const filePath = join(cacheDir, filename);
+  if (existsSync(filePath)) {
+    return filePath;
+  }
+
+  log(`Downloading wallpaper: ${filename}...`);
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to download wallpaper: ${response.statusText}`);
+  }
+  const buffer = await response.arrayBuffer();
+  await Bun.write(filePath, buffer);
+  return filePath;
+}
+
+async function ensureWallpapers(): Promise<{ light: string; dark: string }> {
+  const [light, dark] = await Promise.all([
+    downloadWallpaper(CONFIG.wallpapers.light, "light-wallpaper.png"),
+    downloadWallpaper(CONFIG.wallpapers.dark, "dark-wallpaper.heic"),
+  ]);
+  return { light, dark };
+}
+
+async function getCurrentWallpaper(): Promise<string> {
+  const result = await runAppleScript(`
+    tell application "System Events"
+      tell every desktop
+        get picture as text
+      end tell
+    end tell
+  `);
+  return result.split(",")[0]?.trim() || "";
+}
+
+async function setWallpaper(imagePath: string): Promise<void> {
+  log(`Setting wallpaper: ${imagePath.split("/").pop()}...`);
+  await runAppleScript(`
+    tell application "System Events"
+      tell every desktop
+        set picture to "${imagePath}"
+      end tell
+    end tell
+  `);
+  await sleep(CONFIG.delays.afterWallpaperChange);
+}
+
+// =============================================================================
 // Appearance Mode
 // =============================================================================
 
@@ -308,38 +334,6 @@ async function showDesktopIcons(): Promise<void> {
   await sleep(300);
 }
 
-async function getWindowBounds(): Promise<{ x: number; y: number; width: number; height: number }> {
-  const posResult = await runAppleScript(`
-    tell application "System Events"
-      tell process "${CONFIG.appName}"
-        if (count of windows) > 0 then
-          set {x, y} to position of window 1
-          return (x as text) & "," & (y as text)
-        end if
-      end tell
-    end tell
-  `);
-  const sizeResult = await runAppleScript(`
-    tell application "System Events"
-      tell process "${CONFIG.appName}"
-        if (count of windows) > 0 then
-          set {w, h} to size of window 1
-          return (w as text) & "," & (h as text)
-        end if
-      end tell
-    end tell
-  `);
-
-  const posParts = posResult.split(",").map(Number);
-  const sizeParts = sizeResult.split(",").map(Number);
-  return {
-    x: posParts[0] ?? 0,
-    y: posParts[1] ?? 0,
-    width: sizeParts[0] ?? 0,
-    height: sizeParts[1] ?? 0,
-  };
-}
-
 async function getScreenBounds(): Promise<{ width: number; height: number }> {
   const result = await runAppleScript(`
     tell application "Finder"
@@ -353,29 +347,39 @@ async function getScreenBounds(): Promise<{ width: number; height: number }> {
   };
 }
 
-async function captureWindow(outputPath: string): Promise<void> {
-  const beforeTime = Date.now();
+async function getWindowId(): Promise<number | null> {
+  const swiftCode = `
+import Cocoa
+let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+guard let windowList = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else { exit(1) }
+for window in windowList {
+    if let ownerName = window[kCGWindowOwnerName as String] as? String,
+       ownerName == "${CONFIG.appName}",
+       let windowNumber = window[kCGWindowNumber as String] as? Int {
+        print(windowNumber)
+        exit(0)
+    }
+}
+exit(1)
+`;
+  const result = await $`swift -e ${swiftCode}`.quiet().nothrow();
+  if (result.exitCode !== 0) return null;
+  const id = parseInt(result.text().trim(), 10);
+  return isNaN(id) ? null : id;
+}
 
+async function captureWindow(outputPath: string): Promise<void> {
   await activateApp();
   await sleep(200);
 
-  const bounds = await getWindowBounds();
-  const clickX = Math.round(bounds.x + bounds.width / 2);
-  const clickY = Math.round(bounds.y + bounds.height / 2);
-
-  await openURL("cleanshot://capture-window?action=save");
-  await sleep(500);
-
-  await $`cliclick c:${clickX},${clickY}`.quiet();
-
-  await sleep(CONFIG.delays.afterCapture);
-
-  const captured = findLatestScreenshot(CONFIG.cleanshotDir, beforeTime);
-  if (captured) {
-    moveScreenshot(captured, outputPath);
-  } else {
-    log(`Warning: Could not find captured screenshot for ${outputPath}`, "warn");
+  const windowId = await getWindowId();
+  if (!windowId) {
+    log(`Warning: Could not get window ID for ${outputPath}`, "warn");
+    return;
   }
+
+  await $`screencapture -l ${windowId} ${outputPath}`.quiet();
+  log(`Saved: ${outputPath}`, "success");
 }
 
 async function hideAllWindows(includeQuotio = false): Promise<void> {
@@ -480,10 +484,15 @@ async function captureScreen(screen: ScreenDef, mode: AppearanceMode, outputDir:
   }
 }
 
-async function captureSelectedScreens(options: CaptureOptions, outputDir: string): Promise<void> {
+async function captureSelectedScreens(
+  options: CaptureOptions,
+  outputDir: string,
+  wallpapers: { light: string; dark: string }
+): Promise<void> {
   for (const mode of options.themes) {
     log(`\n📸 Capturing in ${mode} mode...`);
     await setAppearance(mode);
+    await setWallpaper(wallpapers[mode]);
     await activateApp();
     await resizeWindow();
 
@@ -639,25 +648,33 @@ async function main() {
   const originalMode = await getCurrentAppearance();
   log(`Current appearance: ${originalMode}`);
 
+  const originalWallpaper = await getCurrentWallpaper();
+  log(`Current wallpaper: ${originalWallpaper.split("/").pop()}`);
+
   const spinner = p.spinner();
   spinner.start("Preparing capture environment...");
 
   const appPath = getAppPath(options.appSource);
+  const wallpapers = await ensureWallpapers();
 
   try {
-    await ensureCleanShotRunning();
     await hideDesktopIcons();
     await launchApp(appPath);
     spinner.stop("Environment ready");
 
-    await captureSelectedScreens(options, outputDir);
+    await captureSelectedScreens(options, outputDir, wallpapers);
   } finally {
     await setAppearance(originalMode);
+    if (originalWallpaper) {
+      await setWallpaper(originalWallpaper);
+    }
     await showDesktopIcons();
   }
 
   p.outro(`✅ Captured ${options.screens.length} screens × ${options.themes.length} themes`);
   log(`📁 Output: ${outputDir}`);
+  
+  await $`open ${outputDir}`.quiet();
 }
 
 main().catch((error) => {
