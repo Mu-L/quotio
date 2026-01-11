@@ -20,7 +20,7 @@ final class StatusBarMenuBuilder {
     
     private let viewModel: QuotaViewModel
     private let modeManager = OperatingModeManager.shared
-    private let menuWidth: CGFloat = 360
+    private let menuWidth: CGFloat = 320
     
     // Selected provider from UserDefaults
     @AppStorage("menuBarSelectedProvider") private var selectedProviderRaw: String = ""
@@ -725,13 +725,13 @@ private struct MenuAccountCardView: View {
             if isActiveInIDE {
                 Text("Using in IDE")
                     .font(.system(size: 10, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.green)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
-                    .background(Color.secondary.opacity(0.06))
+                    .background(Color.green.opacity(0.12))
                     .overlay(
                         Capsule()
-                            .strokeBorder(Color.secondary.opacity(0.3), lineWidth: 1)
+                            .strokeBorder(Color.green.opacity(0.25), lineWidth: 1)
                     )
                     .clipShape(Capsule())
             } else if let onUse = onUseAccount {
@@ -1207,6 +1207,8 @@ private struct MenuViewMoreAccountsView: View {
                 Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isExpanded)
 
                 Text(isExpanded ? "Hide accounts" : "menubar.viewMoreAccounts".localized())
                     .font(.system(size: 12, weight: .medium))
@@ -1219,17 +1221,21 @@ private struct MenuViewMoreAccountsView: View {
                         .padding(.vertical, 2)
                         .background(Color.secondary.opacity(0.08))
                         .clipShape(Capsule())
+                        .opacity(isExpanded ? 0 : 1)
+                        .animation(.easeInOut(duration: 0.2), value: isExpanded)
                 }
 
                 Spacer()
             }
             .padding(.vertical, 6)
-            .padding(.horizontal, 12)
-            .background(isHovered ? Color.secondary.opacity(0.1) : Color.secondary.opacity(0.05))
+            .padding(.horizontal, 8)
+            .background(isHovered ? Color.secondary.opacity(0.1) : Color.clear)
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
         .onHover { isHovered = $0 }
     }
 }
@@ -1322,7 +1328,7 @@ private struct MenuBarActionButton: View {
             .padding(.vertical, 6)
             .padding(.horizontal, 8)
             .background(isHovered ? Color.secondary.opacity(0.1) : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
