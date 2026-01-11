@@ -119,7 +119,7 @@ struct QuotaScreen: View {
                                     .tag(mode)
                             }
                         } label: {
-                            Text("Display Mode")
+                            Text("display_mode".localized())
                         }
                         .pickerStyle(.inline)
                     } label: {
