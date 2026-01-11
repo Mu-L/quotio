@@ -2,7 +2,7 @@
 
 [← Back to MODULE](MODULE.md) | [← Back to INDEX](../../INDEX.md)
 
-Symbol maps for 7 large files in this module.
+Symbol maps for 8 large files in this module.
 
 ## Quotio/QuotioApp.swift (550 lines)
 
@@ -298,4 +298,51 @@ Symbol maps for 7 large files in this module.
 | 1625 | fn | loadPersistedIDEQuotas | (private) |
 | 1687 | fn | shortenAccountKey | (private) |
 | 1699 | struct | OAuthState | (internal) |
+
+## scripts/capture-screenshots.ts (763 lines)
+
+| Line | Kind | Name | Visibility |
+| ---- | ---- | ---- | ---------- |
+| 54 | type | AppSource | (private) |
+| 60 | interface | ScreenDef | (private) |
+| 80 | type | AppearanceMode | (private) |
+| 81 | type | ThemeChoice | (private) |
+| 83 | interface | CaptureOptions | (private) |
+| 93 | fn | sleep | (private) |
+| 97 | type | RequiredTool | (private) |
+| 99 | fn | checkRequiredTools | (private) |
+| 115 | fn | removeFileIfExists | (private) |
+| 130 | interface | AppAvailability | (private) |
+| 137 | fn | detectAvailableApps | (private) |
+| 146 | fn | getAppPath | (private) |
+| 150 | fn | selectAppSource | (private) |
+| 181 | fn | runAppleScript | (private) |
+| 190 | fn | openURL | (private) |
+| 194 | fn | log | (private) |
+| 199 | fn | retry | (private) |
+| 216 | fn | launchApp | (private) |
+| 222 | fn | activateApp | (private) |
+| 231 | fn | resizeWindow | (private) |
+| 251 | fn | navigateToScreen | (private) |
+| 283 | fn | downloadWallpaper | (private) |
+| 304 | fn | ensureWallpapers | (private) |
+| 312 | fn | getCurrentWallpaper | (private) |
+| 323 | fn | setWallpaper | (private) |
+| 337 | fn | getCurrentAppearance | (private) |
+| 348 | fn | setAppearance | (private) |
+| 365 | fn | hideDesktopIcons | (private) |
+| 370 | fn | showDesktopIcons | (private) |
+| 375 | fn | getScreenBounds | (private) |
+| 388 | fn | getWindowId | (private) |
+| 409 | fn | captureWindow | (private) |
+| 429 | fn | compositeOnWallpaper | (private) |
+| 448 | fn | compressPng | (private) |
+| 457 | fn | hideAllWindows | (private) |
+| 483 | fn | captureMenuBarDropdown | (private) |
+| 536 | fn | captureScreen | (private) |
+| 565 | fn | captureSelectedScreens | (private) |
+| 584 | fn | ensureOutputDir | (private) |
+| 594 | fn | showInteractiveTUI | (private) |
+| 666 | fn | parseCliArgs | (private) |
+| 702 | fn | main | (private) |
 

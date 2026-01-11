@@ -2,7 +2,7 @@
 
 [← Back to INDEX](../../INDEX.md)
 
-**Type:** root | **Files:** 30
+**Type:** root | **Files:** 31
 
 ## Files
 
@@ -38,6 +38,7 @@
 | `Quotio/ViewModels/AgentSetupViewModel.swift` | 355 |  |
 | `Quotio/ViewModels/LogsViewModel.swift` | 82 |  |
 | `Quotio/ViewModels/QuotaViewModel.swift` | 1708 | 📊 |
+| `scripts/capture-screenshots.ts` | 763 | 📊 |
 
 ## Documentation
 
@@ -46,4 +47,17 @@
 
 ---
 
-_No import relationships detected._
+```mermaid
+graph TD
+    root[root] --> bun[bun]
+    root[root] --> fs[fs]
+    root[root] --> path[path]
+```
+
+## External Dependencies
+
+Dependencies from other modules:
+
+- `bun`
+- `fs`
+- `path`
