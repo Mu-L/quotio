@@ -250,11 +250,19 @@ nonisolated struct ProviderQuotaData: Codable, Sendable {
     var planDisplayName: String? {
         guard let plan = planType?.lowercased() else { return nil }
         switch plan {
+        case "guest": return "Guest"
+        case "free": return "Free"
+        case "go": return "Go"
         case "plus": return "Plus"
         case "pro": return "Pro"
+        case "free_workspace": return "Free Workspace"
         case "team": return "Team"
+        case "business": return "Business"
+        case "education": return "Education"
+        case "quorum": return "Quorum"
+        case "k12": return "K-12"
         case "enterprise": return "Enterprise"
-        case "free": return "Free"
+        case "edu": return "Edu"
         default: return planType?.capitalized
         }
     }
@@ -413,14 +421,19 @@ actor AntigravityQuotaFetcher {
     private let clientSecret = "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"
     private let userAgent = "antigravity/1.11.3 Darwin/arm64"
     
-    private let session: URLSession
+    private var session: URLSession
     
     // Cache subscription info to avoid duplicate API calls within same refresh cycle
     private var subscriptionCache: [String: SubscriptionInfo] = [:]
     
     init() {
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 15
+        let config = ProxyConfigurationService.createProxiedConfigurationStatic(timeout: 15)
+        self.session = URLSession(configuration: config)
+    }
+
+    /// Update the URLSession with current proxy settings
+    func updateProxyConfiguration() {
+        let config = ProxyConfigurationService.createProxiedConfigurationStatic(timeout: 15)
         self.session = URLSession(configuration: config)
     }
     
