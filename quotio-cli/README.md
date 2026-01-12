@@ -8,9 +8,10 @@ quotio-cli is the command-line companion to the Quotio macOS app, allowing you t
 
 - **Quota Management**: Track usage across multiple AI providers including Claude Code, Gemini CLI, and GitHub Copilot.
 - **Authentication**: Manage OAuth tokens and API keys for your AI accounts.
-- **Proxy Control**: Control the local CLIProxyAPI server instance.
+- **Proxy Control**: Start, stop, and monitor the local CLIProxyAPI server instance.
+- **Embedded Proxy Binary**: CLIProxyAPI binary bundled for standalone operation.
 - **Agent Configuration**: Automatically detect and configure CLI tools to use the proxy.
-- **Cross-Platform**: Runs on macOS, Linux, and Windows (via WSL).
+- **Cross-Platform**: Runs on macOS (ARM64/x64), Linux (ARM64/x64), and Windows (x64).
 
 ## Installation
 
@@ -31,12 +32,21 @@ quotio-cli is the command-line companion to the Quotio macOS app, allowing you t
    bun install
    ```
 
-3. Build the binary:
+3. Download the proxy binary for your platform:
    ```bash
-   bun run build
+   bun run download-proxy:current
+   # Or for all platforms:
+   bun run download-proxy -- --all
    ```
 
-The binary will be available at `./dist/quotio`.
+4. Build the binary:
+   ```bash
+   bun run build
+   # Or for all platforms:
+   bun run build:all
+   ```
+
+The binary will be available at `./dist/quotio` (or `./dist/quotio-{platform}` for multi-platform builds).
 
 ## Usage
 
@@ -87,14 +97,31 @@ quotio auth login --provider gemini
 
 ### Proxy Control
 
-Manage the local proxy server.
+Manage the local proxy server process and binary.
 
 ```bash
-# Check proxy status
+# Install the proxy binary
+quotio proxy install
+
+# Start the proxy server
+quotio proxy start
+# Start on a custom port
+quotio proxy start --port 9000
+
+# Stop the proxy server
+quotio proxy stop
+
+# Restart the proxy server
+quotio proxy restart
+
+# Check proxy status (binary path, process PID, health)
 quotio proxy status
 
-# Restart the proxy
-quotio proxy restart
+# Quick health check
+quotio proxy health
+
+# Remove the proxy binary
+quotio proxy uninstall
 ```
 
 ### Agent Configuration
@@ -125,7 +152,9 @@ quotio agent configure --name claude-code
 ### Scripts
 
 - `bun run dev`: Run the CLI in development mode.
-- `bun run build`: Compile the CLI into a single binary.
+- `bun run build`: Compile the CLI into a single binary for the current platform.
+- `bun run build:all`: Compile the CLI for all supported platforms.
+- `bun run download-proxy`: Download the CLIProxyAPI binary for the current platform.
 - `bun run lint`: Run the linter to check for code style issues.
 - `bun run format`: Format the code using the project's style guide.
 
@@ -133,7 +162,9 @@ quotio agent configure --name claude-code
 
 - `src/cli`: Command definitions and handlers.
 - `src/models`: TypeScript interfaces and data models.
-- `src/services`: Core business logic including quota fetchers and agent detection.
+- `src/services`: Core business logic.
+  - `proxy-binary`: Management of the embedded CLIProxyAPI binary.
+  - `proxy-process`: Lifecycle management for the proxy server process.
 - `src/utils`: Helper functions.
 
 ## License
