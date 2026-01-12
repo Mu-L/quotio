@@ -4,8 +4,12 @@ import type { QuotaFetchResult, ProviderQuotaData, QuotaFetcher } from "./quota-
 import {
   ClaudeQuotaFetcher,
   GeminiQuotaFetcher,
-  OpenAIQuotaFetcher,
   CopilotQuotaFetcher,
+  CursorQuotaFetcher,
+  TraeQuotaFetcher,
+  KiroQuotaFetcher,
+  AntigravityQuotaFetcher,
+  CodexQuotaFetcher,
 } from "./quota-fetchers/index.ts";
 
 export type QuotaMap = Map<string, ProviderQuotaData>;
@@ -18,8 +22,12 @@ export interface QuotaServiceResult {
 const FETCHER_MAP: Partial<Record<AIProvider, () => QuotaFetcher>> = {
   claude: () => new ClaudeQuotaFetcher(),
   "gemini-cli": () => new GeminiQuotaFetcher(),
-  codex: () => new OpenAIQuotaFetcher(),
+  codex: () => new CodexQuotaFetcher(),
   "github-copilot": () => new CopilotQuotaFetcher(),
+  cursor: () => new CursorQuotaFetcher(),
+  trae: () => new TraeQuotaFetcher(),
+  kiro: () => new KiroQuotaFetcher(),
+  antigravity: () => new AntigravityQuotaFetcher(),
 };
 
 function getQuotaOnlyProviders(): AIProvider[] {
