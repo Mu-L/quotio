@@ -71,36 +71,36 @@ export async function run(argv: string[] = process.argv): Promise<void> {
     return;
   }
 
-  const { values, positionals } = parseArgs({
-    args,
-    options: {
-      format: { type: "string", default: "table" },
-      verbose: { type: "boolean", short: "v", default: false },
-      "base-url": { type: "string", default: "http://localhost:8217" },
-      help: { type: "boolean", short: "h", default: false },
-    },
-    allowPositionals: true,
-    strict: false,
-  });
+  const command = args[0];
+  const commandArgs = args.slice(1);
 
-  if (values.verbose) {
+  let format: OutputFormat = "table";
+  let verbose = false;
+  let baseUrl = "http://localhost:8217";
+
+  for (let i = 0; i < commandArgs.length; i++) {
+    const arg = commandArgs[i];
+    if (arg === "--format" && commandArgs[i + 1]) {
+      format = commandArgs[i + 1] as OutputFormat;
+    } else if (arg === "--verbose" || arg === "-v") {
+      verbose = true;
+    } else if (arg === "--base-url" && commandArgs[i + 1]) {
+      baseUrl = commandArgs[i + 1] ?? baseUrl;
+    }
+  }
+
+  if (verbose) {
     logger.configure({ level: parseLogLevel("debug") });
   }
 
-  const ctx: CLIContext = {
-    format: (typeof values.format === "string" ? values.format : "table") as OutputFormat,
-    verbose: typeof values.verbose === "boolean" ? values.verbose : false,
-    baseUrl: typeof values["base-url"] === "string" ? values["base-url"] : "http://localhost:8217",
-  };
-
-  const [command, ...commandArgs] = positionals;
+  const ctx: CLIContext = { format, verbose, baseUrl };
 
   if (!command) {
     printHelp();
     return;
   }
 
-  if (values.help) {
+  if (commandArgs.includes("--help") || commandArgs.includes("-h")) {
     const handler = commands.get(command);
     if (handler) {
       await handler(["--help"], ctx);
