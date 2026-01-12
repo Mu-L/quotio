@@ -34,3 +34,8 @@ plans/
 .wallpaper-cache/
 
 .DS_Store
+
+# quotio-cli
+quotio-cli/node_modules/
+quotio-cli/quotio
+quotio-cli/*.log

@@ -1,0 +1,206 @@
+import { parseArgs } from "node:util";
+import { registerCommand, type CLIContext, type CommandResult } from "../index.ts";
+import { ManagementAPIClient } from "../../services/management-api.ts";
+import { logger, formatTable, formatJson, colors, type TableColumn } from "../../utils/index.ts";
+import { PROVIDER_METADATA, AIProvider, parseProvider } from "../../models/index.ts";
+
+const authColumns: TableColumn[] = [
+  { key: "provider", header: "Provider", width: 15 },
+  { key: "account", header: "Account", width: 30 },
+  { key: "status", header: "Status", width: 10 },
+];
+
+async function handleAuth(args: string[], ctx: CLIContext): Promise<CommandResult> {
+  const { values, positionals } = parseArgs({
+    args,
+    options: {
+      help: { type: "boolean", short: "h", default: false },
+    },
+    allowPositionals: true,
+    strict: false,
+  });
+
+  const subcommand = positionals[0] ?? "list";
+
+  if (values.help) {
+    printAuthHelp();
+    return { success: true };
+  }
+
+  const client = new ManagementAPIClient({
+    baseURL: ctx.baseUrl,
+    authKey: "",
+  });
+
+  switch (subcommand) {
+    case "list":
+    case "ls":
+      return await listAuth(client, ctx);
+    case "login":
+      return await login(client, ctx, positionals.slice(1));
+    case "logout":
+      return await logout(client, ctx, positionals.slice(1));
+    default:
+      logger.error(`Unknown auth subcommand: ${subcommand}`);
+      printAuthHelp();
+      return { success: false, message: `Unknown subcommand: ${subcommand}` };
+  }
+}
+
+function printAuthHelp(): void {
+  const providers = Object.entries(PROVIDER_METADATA)
+    .filter(([, meta]) => meta.oauthEndpoint)
+    .map(([key]) => key)
+    .join(", ");
+
+  const help = `
+quotio auth - Authentication management
+
+Usage: quotio auth <subcommand> [options]
+
+Subcommands:
+  list, ls              List authenticated accounts
+  login <provider>      Start OAuth flow for provider
+  logout <provider>     Remove authentication for provider
+
+Supported providers for OAuth:
+  ${providers}
+
+Options:
+  --help, -h    Show this help message
+
+Examples:
+  quotio auth list
+  quotio auth login anthropic
+  quotio auth logout gemini-cli
+`.trim();
+
+  logger.print(help);
+}
+
+async function listAuth(client: ManagementAPIClient, ctx: CLIContext): Promise<CommandResult> {
+  try {
+    const authFiles = await client.fetchAuthFiles();
+
+    if (authFiles.length === 0) {
+      logger.print(colors.dim("No authenticated accounts."));
+      return { success: true, data: [] };
+    }
+
+    const rows = authFiles.map((auth) => {
+      const metadata = PROVIDER_METADATA[auth.provider as AIProvider];
+      return {
+        provider: metadata?.displayName ?? auth.provider,
+        account: auth.email ?? auth.account ?? auth.label ?? "-",
+        status: auth.status === "ready" && !auth.disabled ? colors.green("Active") : colors.dim(auth.status),
+      };
+    });
+
+    if (ctx.format === "json") {
+      logger.print(formatJson(authFiles));
+    } else {
+      logger.print(formatTable(rows, authColumns));
+    }
+
+    return { success: true, data: authFiles };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { success: false, message: `Failed to list auth: ${message}` };
+  }
+}
+
+async function login(client: ManagementAPIClient, ctx: CLIContext, args: string[]): Promise<CommandResult> {
+  const providerArg = args[0];
+  if (!providerArg) {
+    logger.error("Provider required. Usage: quotio auth login <provider>");
+    return { success: false, message: "Provider required" };
+  }
+
+  const provider = parseProvider(providerArg);
+  if (!provider) {
+    logger.error(`Unknown provider: ${providerArg}`);
+    return { success: false, message: `Unknown provider: ${providerArg}` };
+  }
+
+  const metadata = PROVIDER_METADATA[provider];
+  if (!metadata.oauthEndpoint) {
+    logger.error(`Provider ${metadata.displayName} does not support OAuth login`);
+    return { success: false, message: `OAuth not supported for ${provider}` };
+  }
+
+  try {
+    logger.info(`Starting OAuth flow for ${metadata.displayName}...`);
+    const response = await client.getOAuthURL(provider);
+
+    if (response.error) {
+      return { success: false, message: response.error };
+    }
+
+    if (response.url) {
+      logger.print(`\nOpen this URL in your browser to authenticate:\n`);
+      logger.print(colors.cyan(response.url));
+      logger.print(colors.dim("\nWaiting for authentication..."));
+
+      if (response.state) {
+        const result = await pollForAuth(client, response.state);
+        if (result.success) {
+          logger.print(colors.green("\nAuthentication successful!"));
+        }
+        return result;
+      }
+    }
+
+    return { success: true, data: response };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { success: false, message: `Login failed: ${message}` };
+  }
+}
+
+async function pollForAuth(client: ManagementAPIClient, state: string): Promise<CommandResult> {
+  const maxAttempts = 60;
+  const pollInterval = 2000;
+
+  for (let i = 0; i < maxAttempts; i++) {
+    await Bun.sleep(pollInterval);
+
+    try {
+      const status = await client.pollOAuthStatus(state);
+      if (status.status === "success") {
+        return { success: true };
+      }
+      if (status.status === "error" || status.error) {
+        return { success: false, message: status.error ?? "Authentication failed" };
+      }
+    } catch {
+      // Continue polling
+    }
+  }
+
+  return { success: false, message: "Authentication timed out" };
+}
+
+async function logout(client: ManagementAPIClient, ctx: CLIContext, args: string[]): Promise<CommandResult> {
+  const providerArg = args[0];
+
+  try {
+    if (!providerArg || providerArg === "all") {
+      logger.info("Removing all authentication...");
+      await client.deleteAllAuthFiles();
+      logger.print(colors.green("All authentication removed."));
+    } else {
+      logger.info(`Removing authentication for ${providerArg}...`);
+      await client.deleteAuthFile(providerArg);
+      logger.print(colors.green(`Authentication removed for ${providerArg}.`));
+    }
+
+    return { success: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { success: false, message: `Logout failed: ${message}` };
+  }
+}
+
+registerCommand("auth", handleAuth);
+
+export { handleAuth };
