@@ -8,6 +8,8 @@ Follow this protocol to understand the codebase efficiently:
 2. **Navigate to relevant module** - Go to `modules/{name}/MODULE.md` for the area you're working on
 3. **Check memory.md before editing** - Review warnings and TODOs for that module
 4. **Use outline.md for large files** - Find symbols without reading entire files
+5. **Check imports.md for dependencies** - Understand module relationships before changes
+6. **Review files/*.md for complex files** - Deep documentation for high-complexity files
 
 ### Documentation Structure
 
@@ -26,8 +28,8 @@ Follow this protocol to understand the codebase efficiently:
 
 ## Freshness Check
 
-**Generated:** 2026-01-12T13:50:08Z
-**Git HEAD:** `555b987`
+**Generated:** 2026-01-13T15:31:12Z
+**Git HEAD:** `f4785e3`
 
 ### How to verify freshness
 
@@ -39,7 +41,7 @@ Follow this protocol to understand the codebase efficiently:
 
 | Module | Files | Type | Description |
 | ------ | ----- | ---- | ----------- |
-| `` | 32 | root | Module |
+| `` | 33 | root | Module |
 | `Quotio/Models` | 15 | implicit | Data models |
 | `Quotio/Services/Antigravity` | 5 | implicit | Module |
 | `Quotio/Services/QuotaFetchers` | 8 | implicit | Module |
@@ -70,6 +72,14 @@ If documentation seems outdated or inconsistent with the code:
    ```bash
    agentlens --force
    ```
+
+## Quick Reference
+
+| Metric | Value |
+| ------ | ----- |
+| Total files | 101 |
+| Modules | 7 |
+| Warnings | 2 |
 
 ---
 

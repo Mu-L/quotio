@@ -17,7 +17,7 @@
 
 | Module | Type | Files | Warnings | Hub |
 | ------ | ---- | ----- | -------- | --- |
-| [root](modules/root/MODULE.md) | root | 32 | 1 |  |
+| [root](modules/root/MODULE.md) | root | 33 | 1 |  |
 | [Quotio/Models](modules/Quotio-Models/MODULE.md) | implicit | 15 | 1 |  |
 | [Quotio/Services/Antigravity](modules/Quotio-Services-Antigravity/MODULE.md) | implicit | 5 | - |  |
 | [Quotio/Services/QuotaFetchers](modules/Quotio-Services-QuotaFetchers/MODULE.md) | implicit | 8 | - |  |
