@@ -79,7 +79,7 @@ Symbol maps for 3 large files in this module.
 | 490 | fn | urlSession | (internal) |
 | 500 | fn | urlSession | (internal) |
 
-## Quotio/Services/StatusBarMenuBuilder.swift (1359 lines)
+## Quotio/Services/StatusBarMenuBuilder.swift (1365 lines)
 
 | Line | Kind | Name | Visibility |
 | ---- | ---- | ---- | ---------- |
@@ -110,20 +110,20 @@ Symbol maps for 3 large files in this module.
 | 576 | fn | setCopied | (private) |
 | 587 | fn | copyButton | (private) |
 | 604 | struct | MenuAccountCardView | (private) |
-| 838 | fn | formatLocalTime | (private) |
-| 848 | struct | ModelBadgeData | (private) |
-| 878 | struct | AntigravityDisplayGroup | (private) |
-| 885 | fn | menuDisplayPercent | (private) |
-| 889 | fn | menuStatusColor | (private) |
-| 907 | struct | LowestBarLayout | (private) |
-| 987 | struct | RingGridLayout | (private) |
-| 1031 | struct | CardGridLayout | (private) |
-| 1080 | struct | ModernProgressBar | (private) |
-| 1115 | struct | PercentageBadge | (private) |
-| 1151 | struct | MenuModelDetailView | (private) |
-| 1203 | struct | MenuEmptyStateView | (private) |
-| 1218 | struct | MenuViewMoreAccountsView | (private) |
-| 1266 | mod | extension AIProvider | (private) |
-| 1287 | struct | MenuActionsView | (private) |
-| 1325 | struct | MenuBarActionButton | (private) |
+| 844 | fn | formatLocalTime | (private) |
+| 854 | struct | ModelBadgeData | (private) |
+| 884 | struct | AntigravityDisplayGroup | (private) |
+| 891 | fn | menuDisplayPercent | (private) |
+| 895 | fn | menuStatusColor | (private) |
+| 913 | struct | LowestBarLayout | (private) |
+| 993 | struct | RingGridLayout | (private) |
+| 1037 | struct | CardGridLayout | (private) |
+| 1086 | struct | ModernProgressBar | (private) |
+| 1121 | struct | PercentageBadge | (private) |
+| 1157 | struct | MenuModelDetailView | (private) |
+| 1209 | struct | MenuEmptyStateView | (private) |
+| 1224 | struct | MenuViewMoreAccountsView | (private) |
+| 1272 | mod | extension AIProvider | (private) |
+| 1293 | struct | MenuActionsView | (private) |
+| 1331 | struct | MenuBarActionButton | (private) |
 

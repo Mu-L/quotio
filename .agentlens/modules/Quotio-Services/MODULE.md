@@ -27,7 +27,7 @@
 | `Quotio/Services/RequestTracker.swift` | 187 |  |
 | `Quotio/Services/ShellProfileManager.swift` | 121 |  |
 | `Quotio/Services/StatusBarManager.swift` | 238 |  |
-| `Quotio/Services/StatusBarMenuBuilder.swift` | 1359 | 📊 |
+| `Quotio/Services/StatusBarMenuBuilder.swift` | 1365 | 📊 |
 | `Quotio/Services/UpdaterService.swift` | 168 |  |
 | `Quotio/Services/WarmupService.swift` | 183 |  |
 

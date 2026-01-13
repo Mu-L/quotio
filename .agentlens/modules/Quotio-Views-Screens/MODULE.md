@@ -15,7 +15,7 @@
 | `Quotio/Views/Screens/LogsScreen.swift` | 445 |  |
 | `Quotio/Views/Screens/ProvidersScreen.swift` | 916 | 📊 |
 | `Quotio/Views/Screens/QuotaScreen.swift` | 1596 | 📊 |
-| `Quotio/Views/Screens/SettingsScreen.swift` | 2857 | 📊 |
+| `Quotio/Views/Screens/SettingsScreen.swift` | 2870 | 📊 |
 
 ## Documentation
 
