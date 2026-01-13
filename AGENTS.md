@@ -47,6 +47,102 @@ docs/                         # Architecture docs
 | `CLIAgent` | Enum | Models/ | CLI agent definitions (6 agents) |
 | `StatusBarManager` | Class | Services/ | Menu bar icon and menu |
 | `ProxyBridge` | Class | Services/ | TCP bridge layer for connection management |
+| `FallbackSettingsManager` | Class | Services/ | Fallback config via ~/.quotio/fallback-config.json |
+
+## Fallback Architecture
+
+The fallback system enables automatic provider failover when requests fail (429/5xx errors).
+
+### Shared Configuration
+
+Config stored at `~/.quotio/fallback-config.json`, shared between Swift app and CLI:
+
+```
+~/.quotio/fallback-config.json  (shared config file)
+         ↑                  ↑
+    CLI writes         Swift reads/writes
+    (quotio fallback)  (FallbackSettingsManager)
+         ↓                  ↓
+   IPC handlers      ProxyBridge fallback logic
+```
+
+### CLI Commands (quotio-cli)
+
+```bash
+# List all virtual models
+quotio fallback list
+
+# Show entries for a specific model
+quotio fallback show -n <model-name>
+
+# Create a new virtual model
+quotio fallback add model <model-name>
+
+# Add fallback entry to a model
+quotio fallback add entry -n <model-name> -p <provider> -m <model-id>
+
+# Remove a virtual model
+quotio fallback remove model -n <model-name>
+
+# Toggle model enabled state
+quotio fallback toggle -n <model-name>
+
+# Enable/disable global fallback
+quotio fallback enable
+quotio fallback disable
+
+# Show current route states
+quotio fallback routes
+
+# Export/import configuration
+quotio fallback export > backup.json
+quotio fallback import < backup.json
+```
+
+### Config Format
+
+```json
+{
+  "isEnabled": true,
+  "virtualModels": [
+    {
+      "id": "uuid-string",
+      "name": "quotio-opus",
+      "fallbackEntries": [
+        {
+          "id": "uuid-string",
+          "provider": "claude",
+          "modelId": "claude-opus-4-5-thinking",
+          "priority": 1
+        }
+      ],
+      "isEnabled": true
+    }
+  ]
+}
+```
+
+### Key Components
+
+| Component | Location | Role |
+|-----------|----------|------|
+| `FallbackSettingsManager.swift` | Services/ | File-based config, file watcher, UserDefaults migration |
+| `FallbackModels.swift` | Models/ | `VirtualModel`, `FallbackEntry`, `FallbackConfiguration` |
+| `FallbackFormatConverter.swift` | Services/Proxy/ | Provider-specific request format conversion |
+| `quotio-cli/src/models/fallback.ts` | quotio-cli | TypeScript fallback types |
+| `quotio-cli/src/services/fallback/` | quotio-cli | Settings service + IPC handlers |
+
+### Request Flow
+
+```
+CLI Tool (Claude/Cursor)
+    → ProxyBridge.swift (port 8317)
+        - Checks fallback config
+        - Uses FallbackFormatConverter for format conversion
+        - Handles retry on 429/5xx with next provider
+    → CLIProxyAPI (port 18317)
+    → AI Provider (OpenAI/Anthropic/etc.)
+```
 
 ## Build Commands
 

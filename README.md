@@ -131,6 +131,37 @@ Go to **Agents** tab → Select an installed agent → Click **Configure** → C
 - **Auto-start**: Launch proxy automatically when Quotio opens
 - **Notifications**: Toggle alerts for various events
 
+## 🔀 Fallback Configuration
+
+Quotio supports automatic provider failover when requests fail (429 rate limits / 5xx errors). Configure fallback chains via CLI or the app's Fallback screen.
+
+### CLI Commands
+
+```bash
+# List all virtual models
+quotio fallback list
+
+# Create a virtual model with fallback chain
+quotio fallback add model my-claude-chain
+quotio fallback add entry -n my-claude-chain -p claude -m claude-sonnet-4-20250514
+quotio fallback add entry -n my-claude-chain -p antigravity -m claude-sonnet-4
+
+# Enable/disable fallback globally
+quotio fallback enable
+quotio fallback disable
+
+# Toggle specific model
+quotio fallback toggle -n my-claude-chain
+
+# Export/import configuration
+quotio fallback export > backup.json
+quotio fallback import < backup.json
+```
+
+### Configuration File
+
+Fallback configuration is stored at `~/.quotio/fallback-config.json` and shared between the CLI and macOS app. Changes made via CLI are automatically detected by the app.
+
 ## 📸 Screenshots
 
 ### Dashboard
