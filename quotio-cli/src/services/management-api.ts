@@ -215,6 +215,23 @@ export class ManagementAPIClient {
 		}
 	}
 
+	async getRoutingStrategy(): Promise<string> {
+		try {
+			const data = (await this.makeRequest("/routing/strategy")) as {
+				strategy: string;
+			};
+			return data.strategy;
+		} catch (error) {
+			if (error instanceof APIError && error.statusCode === 404) {
+				const data = (await this.makeRequest("/routing")) as {
+					strategy: string;
+				};
+				return data.strategy;
+			}
+			throw error;
+		}
+	}
+
 	async setQuotaExceededSwitchProject(enabled: boolean): Promise<void> {
 		await this.makeRequest("/quota-exceeded/switch-project", "PATCH", {
 			value: enabled,
