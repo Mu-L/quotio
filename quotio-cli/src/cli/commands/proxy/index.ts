@@ -5,3 +5,4 @@ export { proxyInstall } from "./install-command.ts";
 export { proxyUninstall } from "./uninstall-command.ts";
 export { proxyStatus } from "./status-command.ts";
 export { healthCheck } from "./health-command.ts";
+export { proxyLogs } from "./logs-command.ts";

@@ -3,6 +3,6 @@ export {
   stopDaemon,
   getDaemonStatus,
   isServerRunning,
-  getSocketPath,
+  getConnectionInfo,
   getConnectionCount,
 } from "./service.ts";

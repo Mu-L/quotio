@@ -7,7 +7,7 @@ import {
   stopServer,
   registerHandlers,
   isServerRunning,
-  getSocketPath,
+  getConnectionInfo,
   getConnectionCount,
   type MethodHandler,
 } from "../../ipc/server.ts";
@@ -715,4 +715,4 @@ function waitForever(): Promise<never> {
   return new Promise(() => {});
 }
 
-export { isServerRunning, getSocketPath, getConnectionCount };
+export { isServerRunning, getConnectionInfo, getConnectionCount };

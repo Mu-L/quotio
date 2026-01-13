@@ -9,6 +9,7 @@ import {
   proxyUninstall,
   proxyStatus,
   healthCheck,
+  proxyLogs,
 } from "./proxy/index.ts";
 
 async function handleProxy(args: string[], ctx: CLIContext): Promise<CommandResult> {
@@ -17,6 +18,8 @@ async function handleProxy(args: string[], ctx: CLIContext): Promise<CommandResu
     options: {
       help: { type: "boolean", short: "h", default: false },
       port: { type: "string", short: "p" },
+      follow: { type: "boolean", short: "f", default: false },
+      lines: { type: "string", short: "n", default: "50" },
     },
     allowPositionals: true,
     strict: false,
@@ -46,6 +49,10 @@ async function handleProxy(args: string[], ctx: CLIContext): Promise<CommandResu
       return await proxyStatus(port, ctx);
     case "health":
       return await healthCheck(port, ctx);
+    case "logs": {
+      const lines = Number.parseInt(values.lines as string, 10) || 50;
+      return await proxyLogs(lines, values.follow as boolean, ctx);
+    }
     default:
       logger.error(`Unknown proxy subcommand: ${subcommand}`);
       printProxyHelp();
@@ -67,9 +74,12 @@ Subcommands:
   restart       Restart the proxy server
   install       Extract and install the proxy binary
   uninstall     Remove the installed proxy binary
+  logs          View proxy server logs
 
 Options:
   --port, -p <port>   Port to run the proxy on (default: 8217)
+  --follow, -f        Follow log output (tail -f mode)
+  --lines, -n <num>   Number of log lines to show (default: 50)
   --help, -h          Show this help message
 
 Examples:
@@ -79,6 +89,9 @@ Examples:
   quotio proxy stop               # Stop the proxy
   quotio proxy restart            # Restart the proxy
   quotio proxy install            # Install the embedded binary
+  quotio proxy logs               # Show last 50 log lines
+  quotio proxy logs -n 100        # Show last 100 log lines
+  quotio proxy logs -f            # Tail logs in real-time
 `.trim();
 
   logger.print(help);

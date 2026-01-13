@@ -27,6 +27,7 @@ async function handleQuota(args: string[], ctx: CLIContext): Promise<CommandResu
       help: { type: "boolean", short: "h", default: false },
       local: { type: "boolean", short: "l", default: false },
       provider: { type: "string", short: "p" },
+      interval: { type: "string", short: "i", default: "60" },
     },
     allowPositionals: true,
     strict: false,
@@ -49,6 +50,8 @@ async function handleQuota(args: string[], ctx: CLIContext): Promise<CommandResu
     case "fetch":
     case "refresh":
       return await fetchLocalQuotas(ctx, values.provider as AIProvider | undefined);
+    case "watch":
+      return await watchQuotas(ctx, values.provider as AIProvider | undefined, values.interval as string);
     default:
       logger.error(`Unknown quota subcommand: ${subcommand}`);
       printQuotaHelp();
@@ -69,10 +72,12 @@ Usage: quotio quota <subcommand> [options]
 Subcommands:
   list, ls      List auth status (default, requires proxy)
   fetch         Fetch quota data directly from providers
+  watch         Real-time quota monitoring (auto-refresh)
 
 Options:
   --local, -l   Fetch quotas directly without proxy
   --provider, -p <name>  Filter by provider (claude, gemini-cli, codex, github-copilot)
+  --interval, -i <sec>   Watch refresh interval in seconds (default: 60)
   --help, -h    Show this help message
 
 Supported Providers:
@@ -83,6 +88,8 @@ Examples:
   quotio quota --local            # Fetch all quotas directly
   quotio quota fetch              # Same as --local
   quotio quota -l -p claude       # Fetch Claude quotas only
+  quotio quota watch              # Watch quotas, refresh every 60s
+  quotio quota watch -i 10        # Watch quotas, refresh every 10s
 `.trim();
 
   logger.print(help);
@@ -239,6 +246,43 @@ function formatRemaining(percentage: number): string {
   if (percentage >= 75) return colors.green(`${percentage.toFixed(0)}%`);
   if (percentage >= 25) return colors.yellow(`${percentage.toFixed(0)}%`);
   return colors.red(`${percentage.toFixed(0)}%`);
+}
+
+async function watchQuotas(
+  ctx: CLIContext,
+  filterProvider: AIProvider | undefined,
+  intervalStr: string
+): Promise<CommandResult> {
+  const intervalSeconds = Number.parseInt(intervalStr, 10);
+  if (Number.isNaN(intervalSeconds) || intervalSeconds < 1) {
+    return { success: false, message: "Invalid interval. Must be a positive number of seconds." };
+  }
+
+  let running = true;
+  const cleanup = () => {
+    running = false;
+  };
+  process.on("SIGINT", cleanup);
+  process.on("SIGTERM", cleanup);
+
+  logger.info(`Watching quotas every ${intervalSeconds}s. Press Ctrl+C to stop.`);
+
+  while (running) {
+    console.clear();
+    logger.print(colors.bold("📊 Quota Watch Mode"));
+    logger.print(colors.dim(`Refreshing every ${intervalSeconds}s | Ctrl+C to stop\n`));
+
+    await fetchLocalQuotas(ctx, filterProvider);
+
+    if (!running) break;
+    await Bun.sleep(intervalSeconds * 1000);
+  }
+
+  process.removeListener("SIGINT", cleanup);
+  process.removeListener("SIGTERM", cleanup);
+
+  logger.print(`\n${colors.dim("Watch mode stopped.")}`);
+  return { success: true };
 }
 
 function formatResetTime(resetTime: string): string {
