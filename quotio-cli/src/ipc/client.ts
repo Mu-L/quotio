@@ -1,6 +1,6 @@
 import { connect, type Socket } from "bun";
 import { existsSync } from "node:fs";
-import { ConfigFiles, getPlatform } from "../utils/paths.ts";
+import { getIPCConnectionInfo, type IPCConnectionInfo } from "../utils/paths.ts";
 import {
   type JsonRpcResponse,
   type RequestId,
@@ -34,7 +34,7 @@ interface PendingRequest {
 interface IPCClientState {
   socket: Socket<{ parser: (chunk: Buffer | string) => void }> | null;
   connected: boolean;
-  socketPath: string;
+  connectionInfo: IPCConnectionInfo | null;
   pendingRequests: Map<RequestId, PendingRequest>;
   requestIdCounter: number;
   reconnecting: boolean;
@@ -46,7 +46,7 @@ export class IPCClient {
   private state: IPCClientState = {
     socket: null,
     connected: false,
-    socketPath: "",
+    connectionInfo: null,
     pendingRequests: new Map(),
     requestIdCounter: 0,
     reconnecting: false,
@@ -58,46 +58,54 @@ export class IPCClient {
     this.timeout = options?.timeout ?? DEFAULT_TIMEOUT;
   }
 
-  async connect(socketPath?: string): Promise<void> {
+  async connect(): Promise<void> {
     if (this.state.connected) {
       return;
     }
 
-    const path = socketPath ?? ConfigFiles.socket();
-    this.state.socketPath = path;
+    const connInfo = getIPCConnectionInfo();
+    this.state.connectionInfo = connInfo;
 
-    const platform = getPlatform();
-    if (platform !== "win32" && !existsSync(path)) {
+    if (connInfo.type === "unix" && !existsSync(connInfo.path)) {
       throw new IPCClientError("Daemon socket not found. Is the daemon running?", ErrorCodes.DAEMON_NOT_RUNNING);
     }
 
     const self = this;
-
-    this.state.socket = await connect<{ parser: (chunk: Buffer | string) => void }>({
-      unix: path,
-      socket: {
-        open(socket) {
-          socket.data = {
-            parser: createMessageParser((msg) => self.handleMessage(msg)),
-          };
-          self.state.connected = true;
-        },
-
-        data(socket, buffer) {
-          socket.data.parser(buffer);
-        },
-
-        close() {
-          self.state.connected = false;
-          self.state.socket = null;
-          self.rejectAllPending("Connection closed");
-        },
-
-        error(_socket, error) {
-          self.rejectAllPending(`Socket error: ${error.message}`);
-        },
+    const socketHandlers = {
+      open(socket: Socket<{ parser: (chunk: Buffer | string) => void }>) {
+        socket.data = {
+          parser: createMessageParser((msg) => self.handleMessage(msg)),
+        };
+        self.state.connected = true;
       },
-    });
+
+      data(socket: Socket<{ parser: (chunk: Buffer | string) => void }>, buffer: Buffer) {
+        socket.data.parser(buffer);
+      },
+
+      close() {
+        self.state.connected = false;
+        self.state.socket = null;
+        self.rejectAllPending("Connection closed");
+      },
+
+      error(_socket: Socket<{ parser: (chunk: Buffer | string) => void }>, error: Error) {
+        self.rejectAllPending(`Socket error: ${error.message}`);
+      },
+    };
+
+    if (connInfo.type === "unix") {
+      this.state.socket = await connect<{ parser: (chunk: Buffer | string) => void }>({
+        unix: connInfo.path,
+        socket: socketHandlers,
+      });
+    } else {
+      this.state.socket = await connect<{ parser: (chunk: Buffer | string) => void }>({
+        hostname: connInfo.host,
+        port: connInfo.port,
+        socket: socketHandlers,
+      });
+    }
 
     await this.waitForConnection();
   }
@@ -217,16 +225,15 @@ export function getSharedClient(): IPCClient {
 }
 
 export async function isDaemonRunning(): Promise<boolean> {
-  const socketPath = ConfigFiles.socket();
-  const platform = getPlatform();
+  const connInfo = getIPCConnectionInfo();
 
-  if (platform !== "win32" && !existsSync(socketPath)) {
+  if (connInfo.type === "unix" && !existsSync(connInfo.path)) {
     return false;
   }
 
   const client = new IPCClient({ timeout: 2000 });
   try {
-    await client.connect(socketPath);
+    await client.connect();
     const response = await client.call("daemon.ping", {});
     client.disconnect();
     return response.pong === true;

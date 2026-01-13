@@ -32,6 +32,26 @@ import {
 } from "../agent-detection/configuration.ts";
 import { CLI_AGENTS, type CLIAgentId } from "../agent-detection/types.ts";
 import { PROVIDER_METADATA } from "../../models/provider.ts";
+import type { UniversalProvider } from "../../models/universal-provider.ts";
+import type { UniversalProviderInfo } from "../../ipc/protocol.ts";
+import { requestTrackerService } from "./request-tracker-service.ts";
+import { createRequestLog } from "../../models/request-log.ts";
+
+function toProviderInfo(p: UniversalProvider): UniversalProviderInfo {
+  return {
+    id: p.id,
+    name: p.name,
+    baseURL: p.baseURL,
+    modelId: p.modelId,
+    isBuiltIn: p.isBuiltIn,
+    iconAssetName: p.iconAssetName ?? null,
+    color: p.color,
+    supportedAgents: p.supportedAgents,
+    isEnabled: p.isEnabled,
+    createdAt: p.createdAt,
+    updatedAt: p.updatedAt,
+  };
+}
 
 interface DaemonState {
   startedAt: Date | null;
@@ -321,6 +341,237 @@ const handlers: Record<string, MethodHandler> = {
     store[opts.key] = opts.value;
     await saveConfigStore();
     return { success: true as const };
+  },
+
+  "universal.list": async () => {
+    const { getUniversalProviderService } = await import("../universal-provider-service.ts");
+    const service = getUniversalProviderService();
+    const providers = service.getAllProviders().map(toProviderInfo);
+    return { providers };
+  },
+
+  "universal.get": async (params: unknown) => {
+    const { id } = params as { id: string };
+    const { getUniversalProviderService } = await import("../universal-provider-service.ts");
+    const service = getUniversalProviderService();
+    const provider = service.getProvider(id);
+    return { provider: provider ? toProviderInfo(provider) : null };
+  },
+
+  "universal.add": async (params: unknown) => {
+    const opts = params as {
+      name: string;
+      baseURL: string;
+      modelId?: string;
+      color?: string;
+      supportedAgents?: string[];
+      isEnabled?: boolean;
+    };
+    const { getUniversalProviderService } = await import("../universal-provider-service.ts");
+    const service = getUniversalProviderService();
+    const provider = service.addProvider({
+      name: opts.name,
+      baseURL: opts.baseURL,
+      modelId: opts.modelId ?? "",
+      isBuiltIn: false,
+      color: opts.color ?? "#6366F1",
+      supportedAgents: opts.supportedAgents ?? [],
+      isEnabled: opts.isEnabled ?? true,
+    });
+    return { success: true, provider: toProviderInfo(provider) };
+  },
+
+  "universal.update": async (params: unknown) => {
+    const { id, ...updates } = params as { id: string; [key: string]: unknown };
+    const { getUniversalProviderService } = await import("../universal-provider-service.ts");
+    const service = getUniversalProviderService();
+    const provider = service.updateProvider(id, updates);
+    return { success: !!provider, provider: provider ? toProviderInfo(provider) : undefined };
+  },
+
+  "universal.delete": async (params: unknown) => {
+    const { id } = params as { id: string };
+    const { getUniversalProviderService } = await import("../universal-provider-service.ts");
+    const service = getUniversalProviderService();
+    return { success: service.deleteProvider(id) };
+  },
+
+  "universal.setActive": async (params: unknown) => {
+    const { agentId, providerId } = params as { agentId: string; providerId: string };
+    const { getUniversalProviderService } = await import("../universal-provider-service.ts");
+    const service = getUniversalProviderService();
+    service.setActiveProvider(agentId, providerId);
+    return { success: true as const };
+  },
+
+  "universal.getActive": async (params: unknown) => {
+    const { agentId } = params as { agentId: string };
+    const { getUniversalProviderService } = await import("../universal-provider-service.ts");
+    const service = getUniversalProviderService();
+    const provider = service.getActiveProvider(agentId);
+    return { provider: provider ? toProviderInfo(provider) : null };
+  },
+
+  "universal.storeKey": async (params: unknown) => {
+    const { providerId, apiKey } = params as { providerId: string; apiKey: string };
+    const { getUniversalProviderService } = await import("../universal-provider-service.ts");
+    const service = getUniversalProviderService();
+    const validation = service.validateAPIKey(apiKey);
+    if (!validation.valid) {
+      return { success: false, error: validation.error };
+    }
+    service.storeAPIKey(providerId, apiKey);
+    return { success: true };
+  },
+
+  "universal.hasKey": async (params: unknown) => {
+    const { providerId } = params as { providerId: string };
+    const { getUniversalProviderService } = await import("../universal-provider-service.ts");
+    const service = getUniversalProviderService();
+    return { hasKey: service.hasAPIKey(providerId) };
+  },
+
+  "oauth.start": async (params: unknown) => {
+    const { provider, projectId } = params as { provider: string; projectId?: string };
+    const { ManagementAPIClient } = await import("../management-api.ts");
+    const { parseProvider } = await import("../../models/provider.ts");
+    
+    const proxyState = getProcessState();
+    if (!proxyState.running) {
+      return { success: false, error: "Proxy not running" };
+    }
+    
+    const aiProvider = parseProvider(provider);
+    if (!aiProvider) {
+      return { success: false, error: `Unknown provider: ${provider}` };
+    }
+    
+    try {
+      const client = new ManagementAPIClient({
+        baseURL: `http://localhost:${proxyState.port}`,
+        authKey: "quotio-cli-key",
+      });
+      const result = await client.getOAuthURL(aiProvider, { projectId });
+      return {
+        success: result.status === "success",
+        url: result.url,
+        state: result.state,
+        error: result.error,
+      };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  },
+
+  "oauth.poll": async (params: unknown) => {
+    const { state } = params as { state: string };
+    const { ManagementAPIClient } = await import("../management-api.ts");
+    
+    const proxyState = getProcessState();
+    if (!proxyState.running) {
+      return { status: "error" as const, error: "Proxy not running" };
+    }
+    
+    try {
+      const client = new ManagementAPIClient({
+        baseURL: `http://localhost:${proxyState.port}`,
+        authKey: "quotio-cli-key",
+      });
+      const result = await client.pollOAuthStatus(state);
+      
+      if (result.status === "success") {
+        return { status: "success" as const };
+      }
+      if (result.error) {
+        return { status: "error" as const, error: result.error };
+      }
+      return { status: "pending" as const };
+    } catch (err) {
+      return { status: "error" as const, error: err instanceof Error ? err.message : String(err) };
+    }
+  },
+
+  "stats.list": async (params: unknown) => {
+    const opts = params as { provider?: string; minutes?: number } | undefined;
+    let entries = requestTrackerService.getHistory();
+    if (opts?.provider) {
+      entries = entries.filter((e) => e.provider === opts.provider);
+    }
+    if (opts?.minutes) {
+      const cutoff = new Date(Date.now() - opts.minutes * 60 * 1000).toISOString();
+      entries = entries.filter((e) => e.timestamp >= cutoff);
+    }
+    return { entries };
+  },
+
+  "stats.get": async () => {
+    return { stats: requestTrackerService.getStats() };
+  },
+
+  "stats.add": async (params: unknown) => {
+    const opts = params as {
+      method: string;
+      endpoint: string;
+      provider?: string;
+      model?: string;
+      inputTokens?: number;
+      outputTokens?: number;
+      durationMs: number;
+      statusCode?: number;
+      requestSize?: number;
+      responseSize?: number;
+      errorMessage?: string;
+    };
+    const entry = createRequestLog({
+      method: opts.method,
+      endpoint: opts.endpoint,
+      provider: opts.provider ?? null,
+      model: opts.model ?? null,
+      inputTokens: opts.inputTokens ?? null,
+      outputTokens: opts.outputTokens ?? null,
+      durationMs: opts.durationMs,
+      statusCode: opts.statusCode ?? null,
+      requestSize: opts.requestSize ?? 0,
+      responseSize: opts.responseSize ?? 0,
+      errorMessage: opts.errorMessage ?? null,
+    });
+    requestTrackerService.addEntry(entry);
+    return { success: true as const };
+  },
+
+  "stats.clear": async () => {
+    requestTrackerService.clear();
+    return { success: true as const };
+  },
+
+  "stats.status": async () => {
+    return requestTrackerService.getStatus();
+  },
+
+  "tunnel.start": async (params: unknown) => {
+    const opts = params as { port: number };
+    const { getCloudflaredService } = await import("../tunnel/cloudflared-service.ts");
+    const service = getCloudflaredService();
+    return await service.start(opts.port);
+  },
+
+  "tunnel.stop": async () => {
+    const { getCloudflaredService } = await import("../tunnel/cloudflared-service.ts");
+    const service = getCloudflaredService();
+    await service.stop();
+    return { success: true as const };
+  },
+
+  "tunnel.status": async () => {
+    const { getCloudflaredService } = await import("../tunnel/cloudflared-service.ts");
+    const service = getCloudflaredService();
+    return service.getState();
+  },
+
+  "tunnel.installation": async () => {
+    const { getCloudflaredService } = await import("../tunnel/cloudflared-service.ts");
+    const service = getCloudflaredService();
+    return service.getInstallation();
   },
 };
 

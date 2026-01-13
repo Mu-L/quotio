@@ -1,8 +1,8 @@
-import type { Socket } from "bun";
+import type { Socket, SocketListener, TCPSocketListener, UnixSocketListener } from "bun";
 import { existsSync, unlinkSync, chmodSync } from "node:fs";
 import { dirname } from "node:path";
 import { mkdir } from "node:fs/promises";
-import { ConfigFiles, getPlatform } from "../utils/paths.ts";
+import { getIPCConnectionInfo, type IPCConnectionInfo } from "../utils/paths.ts";
 import { logger } from "../utils/logger.ts";
 import {
   type JsonRpcRequest,
@@ -19,21 +19,24 @@ import {
 export type MethodHandler = (params: unknown) => Promise<unknown>;
 
 interface ClientConnection {
-  socket: Socket<{ parser: (chunk: Buffer | string) => void }>;
+  socket: Socket<SocketData>;
   connectedAt: Date;
 }
 
+type SocketData = { parser: (chunk: Buffer | string) => void };
+type IPCServer = TCPSocketListener<SocketData> | UnixSocketListener<SocketData>;
+
 interface IPCServerState {
   running: boolean;
-  socketPath: string;
+  connectionInfo: IPCConnectionInfo | null;
   connections: Map<number, ClientConnection>;
   handlers: Map<string, MethodHandler>;
-  server: ReturnType<typeof Bun.listen> | null;
+  server: IPCServer | null;
 }
 
 const state: IPCServerState = {
   running: false,
-  socketPath: "",
+  connectionInfo: null,
   connections: new Map(),
   handlers: new Map(),
   server: null,
@@ -99,75 +102,82 @@ function processMessage(
     });
 }
 
-export async function startServer(socketPath?: string): Promise<void> {
+export async function startServer(): Promise<void> {
   if (state.running) {
     throw new Error("IPC server is already running");
   }
 
-  const path = socketPath ?? ConfigFiles.socket();
-  const platform = getPlatform();
+  const connInfo = getIPCConnectionInfo();
+  state.connectionInfo = connInfo;
 
-  state.socketPath = path;
+  const socketHandlers = {
+    open(socket: Socket<{ parser: (chunk: Buffer | string) => void }>) {
+      const connId = ++connectionIdCounter;
+      const parser = createMessageParser((msg) => processMessage(socket, msg));
+      socket.data = { parser };
 
-  if (platform !== "win32") {
-    const socketDir = dirname(path);
+      state.connections.set(connId, {
+        socket,
+        connectedAt: new Date(),
+      });
+
+      logger.debug("IPC client connected", { connId });
+    },
+
+    data(socket: Socket<{ parser: (chunk: Buffer | string) => void }>, buffer: Buffer) {
+      socket.data.parser(buffer);
+    },
+
+    close(socket: Socket<{ parser: (chunk: Buffer | string) => void }>) {
+      for (const [id, conn] of state.connections) {
+        if (conn.socket === socket) {
+          state.connections.delete(id);
+          logger.debug("IPC client disconnected", { connId: id });
+          break;
+        }
+      }
+    },
+
+    error(_socket: Socket<{ parser: (chunk: Buffer | string) => void }>, error: Error) {
+      logger.error(`IPC socket error: ${error.message}`);
+    },
+  };
+
+  if (connInfo.type === "unix") {
+    const socketDir = dirname(connInfo.path);
     await mkdir(socketDir, { recursive: true });
 
-    if (existsSync(path)) {
+    if (existsSync(connInfo.path)) {
       try {
-        unlinkSync(path);
+        unlinkSync(connInfo.path);
       } catch {
-        throw new Error(`Cannot remove existing socket at ${path}`);
+        throw new Error(`Cannot remove existing socket at ${connInfo.path}`);
       }
     }
-  }
 
-  state.server = Bun.listen<{ parser: (chunk: Buffer | string) => void }>({
-    unix: state.socketPath,
-    socket: {
-      open(socket) {
-        const connId = ++connectionIdCounter;
-        const parser = createMessageParser((msg) => processMessage(socket, msg));
-        socket.data = { parser };
+    state.server = Bun.listen<{ parser: (chunk: Buffer | string) => void }>({
+      unix: connInfo.path,
+      socket: socketHandlers,
+    });
 
-        state.connections.set(connId, {
-          socket,
-          connectedAt: new Date(),
-        });
-
-        logger.debug("IPC client connected", { connId });
-      },
-
-      data(socket, buffer) {
-        socket.data.parser(buffer);
-      },
-
-      close(socket) {
-        for (const [id, conn] of state.connections) {
-          if (conn.socket === socket) {
-            state.connections.delete(id);
-            logger.debug("IPC client disconnected", { connId: id });
-            break;
-          }
-        }
-      },
-
-      error(_socket, error) {
-        logger.error(`IPC socket error: ${error.message}`);
-      },
-    },
-  });
-
-  if (platform !== "win32") {
     try {
-      chmodSync(state.socketPath, 0o600);
+      chmodSync(connInfo.path, 0o600);
     } catch {
       logger.warn("Could not set socket permissions");
     }
+
+    logger.info(`IPC server listening on unix:${connInfo.path}`);
+  } else {
+    state.server = Bun.listen<{ parser: (chunk: Buffer | string) => void }>({
+      hostname: connInfo.host,
+      port: connInfo.port,
+      socket: socketHandlers,
+    });
+
+    logger.info(`IPC server listening on tcp:${connInfo.host}:${connInfo.port}`);
   }
 
   state.running = true;
-  logger.info(`IPC server listening on ${state.socketPath}`);
 }
 
 export async function stopServer(): Promise<void> {
@@ -185,13 +195,14 @@ export async function stopServer(): Promise<void> {
   state.server.stop();
   state.server = null;
 
-  const platform = getPlatform();
-  if (platform !== "win32" && existsSync(state.socketPath)) {
+  const connInfo = state.connectionInfo;
+  if (connInfo?.type === "unix" && existsSync(connInfo.path)) {
     try {
-      unlinkSync(state.socketPath);
+      unlinkSync(connInfo.path);
     } catch {}
   }
 
+  state.connectionInfo = null;
   state.running = false;
   logger.info("IPC server stopped");
 }
@@ -200,8 +211,8 @@ export function isServerRunning(): boolean {
   return state.running;
 }
 
-export function getSocketPath(): string {
-  return state.socketPath;
+export function getConnectionInfo(): IPCConnectionInfo | null {
+  return state.connectionInfo;
 }
 
 export function getConnectionCount(): number {

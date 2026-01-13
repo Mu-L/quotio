@@ -179,6 +179,99 @@ export interface IPCMethods {
     params: { key: string; value: unknown };
     result: { success: true };
   };
+
+  // -------------------------------------------------------------------------
+  // Universal Provider operations
+  // -------------------------------------------------------------------------
+  "universal.list": {
+    params: Record<string, never>;
+    result: UniversalProviderListResult;
+  };
+  "universal.get": {
+    params: { id: string };
+    result: { provider: UniversalProviderInfo | null };
+  };
+  "universal.add": {
+    params: UniversalProviderAddParams;
+    result: { success: boolean; provider?: UniversalProviderInfo };
+  };
+  "universal.update": {
+    params: UniversalProviderUpdateParams;
+    result: { success: boolean; provider?: UniversalProviderInfo };
+  };
+  "universal.delete": {
+    params: { id: string };
+    result: { success: boolean };
+  };
+  "universal.setActive": {
+    params: { agentId: string; providerId: string };
+    result: { success: true };
+  };
+  "universal.getActive": {
+    params: { agentId: string };
+    result: { provider: UniversalProviderInfo | null };
+  };
+  "universal.storeKey": {
+    params: { providerId: string; apiKey: string };
+    result: { success: boolean; error?: string };
+  };
+  "universal.hasKey": {
+    params: { providerId: string };
+    result: { hasKey: boolean };
+  };
+
+  "oauth.start": {
+    params: { provider: string; projectId?: string };
+    result: OAuthStartResult;
+  };
+  "oauth.poll": {
+    params: { state: string };
+    result: OAuthPollResult;
+  };
+
+  // -------------------------------------------------------------------------
+  // Request tracking operations
+  // -------------------------------------------------------------------------
+  "stats.list": {
+    params: { provider?: string; minutes?: number };
+    result: StatsListResult;
+  };
+  "stats.get": {
+    params: Record<string, never>;
+    result: StatsGetResult;
+  };
+  "stats.add": {
+    params: StatsAddParams;
+    result: { success: true };
+  };
+  "stats.clear": {
+    params: Record<string, never>;
+    result: { success: true };
+  };
+  "stats.status": {
+    params: Record<string, never>;
+    result: { isActive: boolean; entryCount: number };
+  };
+
+  // -------------------------------------------------------------------------
+  // Tunnel operations (Cloudflare Tunnel)
+  // -------------------------------------------------------------------------
+  "tunnel.start": {
+    params: { port: number };
+    result: TunnelStartResult;
+  };
+  "tunnel.stop": {
+    params: Record<string, never>;
+    result: { success: true };
+  };
+  "tunnel.status": {
+    params: Record<string, never>;
+    result: TunnelStatusResult;
+  };
+  "tunnel.installation": {
+    params: Record<string, never>;
+    result: TunnelInstallationResult;
+  };
 }
 
 /** All available method names */
@@ -276,6 +369,141 @@ export interface AuthAccount {
   email?: string;
   status: "ready" | "cooling" | "error";
   disabled: boolean;
+}
+
+export interface UniversalProviderInfo {
+  id: string;
+  name: string;
+  baseURL: string;
+  modelId: string;
+  isBuiltIn: boolean;
+  iconAssetName: string | null;
+  color: string;
+  supportedAgents: string[];
+  isEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UniversalProviderListResult {
+  providers: UniversalProviderInfo[];
+}
+
+export interface UniversalProviderAddParams {
+  name: string;
+  baseURL: string;
+  modelId?: string;
+  color?: string;
+  supportedAgents?: string[];
+  isEnabled?: boolean;
+}
+
+export interface UniversalProviderUpdateParams {
+  id: string;
+  name?: string;
+  baseURL?: string;
+  modelId?: string;
+  color?: string;
+  supportedAgents?: string[];
+  isEnabled?: boolean;
+}
+
+export interface OAuthStartResult {
+  success: boolean;
+  url?: string;
+  state?: string;
+  error?: string;
+}
+
+export interface OAuthPollResult {
+  status: "pending" | "success" | "error";
+  error?: string;
+}
+
+export interface StatsRequestLogInfo {
+  id: string;
+  timestamp: string;
+  method: string;
+  endpoint: string;
+  provider: string | null;
+  model: string | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  durationMs: number;
+  statusCode: number | null;
+  requestSize: number;
+  responseSize: number;
+  errorMessage: string | null;
+}
+
+export interface StatsProviderInfo {
+  provider: string;
+  requestCount: number;
+  inputTokens: number;
+  outputTokens: number;
+  averageDurationMs: number;
+}
+
+export interface StatsModelInfo {
+  model: string;
+  provider: string | null;
+  requestCount: number;
+  inputTokens: number;
+  outputTokens: number;
+  averageDurationMs: number;
+}
+
+export interface StatsAggregateInfo {
+  totalRequests: number;
+  successfulRequests: number;
+  failedRequests: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  averageDurationMs: number;
+  byProvider: Record<string, StatsProviderInfo>;
+  byModel: Record<string, StatsModelInfo>;
+}
+
+export interface StatsListResult {
+  entries: StatsRequestLogInfo[];
+}
+
+export interface StatsGetResult {
+  stats: StatsAggregateInfo;
+}
+
+export interface StatsAddParams {
+  method: string;
+  endpoint: string;
+  provider?: string;
+  model?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  durationMs: number;
+  statusCode?: number;
+  requestSize?: number;
+  responseSize?: number;
+  errorMessage?: string;
+}
+
+export type TunnelStatus = "idle" | "starting" | "active" | "stopping" | "error";
+
+export interface TunnelStartResult {
+  success: boolean;
+  error?: string;
+}
+
+export interface TunnelStatusResult {
+  status: TunnelStatus;
+  publicURL: string | null;
+  errorMessage: string | null;
+  startTime: string | null;
+}
+
+export interface TunnelInstallationResult {
+  isInstalled: boolean;
+  path: string | null;
+  version: string | null;
 }
 
 // ============================================================================

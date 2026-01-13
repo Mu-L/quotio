@@ -103,6 +103,15 @@ export function getLogsDir(): string {
   }
 }
 
+/** TCP port for Windows IPC (since Bun doesn't support named pipes on Windows yet) */
+export const WINDOWS_IPC_PORT = 18217;
+export const WINDOWS_IPC_HOST = "127.0.0.1";
+
+/** IPC connection info - either Unix socket path or TCP address */
+export type IPCConnectionInfo =
+  | { type: "unix"; path: string }
+  | { type: "tcp"; host: string; port: number };
+
 /** Standard file paths within the config directory */
 export const ConfigFiles = {
   /** Main configuration file */
@@ -111,17 +120,34 @@ export const ConfigFiles = {
   credentials: () => join(getConfigDir(), "credentials.json"),
   /** CLI state (last used settings, etc.) */
   state: () => join(getDataDir(), "state.json"),
-  /** Daemon socket/pipe path */
+  /**
+   * Daemon socket path (for Unix) or display string (for Windows).
+   * Use getIPCConnectionInfo() for actual connection parameters.
+   * @deprecated Use getIPCConnectionInfo() for connection logic
+   */
   socket: () => {
     const platform = getPlatform();
     if (platform === "win32") {
-      return "\\\\.\\pipe\\quotio-cli";
+      return `${WINDOWS_IPC_HOST}:${WINDOWS_IPC_PORT}`;
     }
     return join(getCacheDir(), "quotio.sock");
   },
   /** PID file for daemon */
   pidFile: () => join(getCacheDir(), "quotio.pid"),
 } as const;
+
+/**
+ * Get IPC connection info for the current platform.
+ * - macOS/Linux: Unix socket
+ * - Windows: TCP socket (fallback since Bun doesn't support named pipes)
+ */
+export function getIPCConnectionInfo(): IPCConnectionInfo {
+  const platform = getPlatform();
+  if (platform === "win32") {
+    return { type: "tcp", host: WINDOWS_IPC_HOST, port: WINDOWS_IPC_PORT };
+  }
+  return { type: "unix", path: join(getCacheDir(), "quotio.sock") };
+}
 
 /**
  * Ensure a directory exists, creating it if necessary.
