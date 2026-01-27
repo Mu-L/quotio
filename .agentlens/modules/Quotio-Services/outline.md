@@ -100,7 +100,7 @@ Symbol maps for 3 large files in this module.
 | 694 | method | init | (internal) |
 | 708 | fn | encode | (internal) |
 
-## Quotio/Services/StatusBarMenuBuilder.swift (1397 lines)
+## Quotio/Services/StatusBarMenuBuilder.swift (1415 lines)
 
 | Line | Kind | Name | Visibility |
 | ---- | ---- | ---- | ---------- |
@@ -133,19 +133,19 @@ Symbol maps for 3 large files in this module.
 | 604 | struct | MenuAccountCardView | (private) |
 | 643 | fn | planConfig | (private) |
 | 875 | fn | formatLocalTime | (private) |
-| 885 | struct | ModelBadgeData | (private) |
-| 915 | struct | AntigravityDisplayGroup | (private) |
-| 922 | fn | menuDisplayPercent | (private) |
-| 926 | fn | menuStatusColor | (private) |
-| 944 | struct | LowestBarLayout | (private) |
-| 1024 | struct | RingGridLayout | (private) |
-| 1068 | struct | CardGridLayout | (private) |
-| 1117 | struct | ModernProgressBar | (private) |
-| 1152 | struct | PercentageBadge | (private) |
-| 1188 | struct | MenuModelDetailView | (private) |
-| 1240 | struct | MenuEmptyStateView | (private) |
-| 1255 | struct | MenuViewMoreAccountsView | (private) |
-| 1303 | mod | extension AIProvider | (private) |
-| 1325 | struct | MenuActionsView | (private) |
-| 1363 | struct | MenuBarActionButton | (private) |
+| 894 | struct | ModelBadgeData | (private) |
+| 933 | struct | AntigravityDisplayGroup | (private) |
+| 940 | fn | menuDisplayPercent | (private) |
+| 944 | fn | menuStatusColor | (private) |
+| 962 | struct | LowestBarLayout | (private) |
+| 1042 | struct | RingGridLayout | (private) |
+| 1086 | struct | CardGridLayout | (private) |
+| 1135 | struct | ModernProgressBar | (private) |
+| 1170 | struct | PercentageBadge | (private) |
+| 1206 | struct | MenuModelDetailView | (private) |
+| 1258 | struct | MenuEmptyStateView | (private) |
+| 1273 | struct | MenuViewMoreAccountsView | (private) |
+| 1321 | mod | extension AIProvider | (private) |
+| 1343 | struct | MenuActionsView | (private) |
+| 1381 | struct | MenuBarActionButton | (private) |
 
