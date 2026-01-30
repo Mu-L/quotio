@@ -4,7 +4,7 @@
 
 Symbol maps for 1 large files in this module.
 
-## Quotio/Services/Antigravity/AntigravityQuotaFetcher.swift (881 lines)
+## Quotio/Services/Antigravity/AntigravityQuotaFetcher.swift (890 lines)
 
 | Line | Kind | Name | Visibility |
 | ---- | ---- | ---- | ---------- |
@@ -15,14 +15,14 @@ Symbol maps for 1 large files in this module.
 | 494 | fn | updateProxyConfiguration | (internal) |
 | 500 | fn | clearCache | (internal) |
 | 504 | fn | refreshAccessToken | (internal) |
-| 530 | fn | fetchQuota | (internal) |
-| 592 | fn | fetchProjectId | (private) |
-| 604 | fn | fetchSubscriptionInfo | (internal) |
-| 630 | fn | fetchSubscriptionInfoForAuthFile | (internal) |
-| 655 | fn | fetchAllSubscriptionInfo | (internal) |
-| 681 | fn | fetchQuotaForAuthFile | (internal) |
-| 707 | fn | fetchQuotaAndSubscriptionForAuthFile | (internal) |
-| 742 | fn | fetchAllAntigravityQuotas | (internal) |
-| 785 | fn | fetchAllAntigravityData | (internal) |
-| 831 | fn | fetchAllAntigravityQuotasLegacy | (internal) |
+| 533 | fn | fetchQuota | (internal) |
+| 598 | fn | fetchProjectId | (private) |
+| 610 | fn | fetchSubscriptionInfo | (internal) |
+| 639 | fn | fetchSubscriptionInfoForAuthFile | (internal) |
+| 664 | fn | fetchAllSubscriptionInfo | (internal) |
+| 690 | fn | fetchQuotaForAuthFile | (internal) |
+| 716 | fn | fetchQuotaAndSubscriptionForAuthFile | (internal) |
+| 751 | fn | fetchAllAntigravityQuotas | (internal) |
+| 794 | fn | fetchAllAntigravityData | (internal) |
+| 840 | fn | fetchAllAntigravityQuotasLegacy | (internal) |
 

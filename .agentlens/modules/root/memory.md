@@ -31,19 +31,19 @@
 
 > Only checks file existence (metadata), does NOT read file content
 
-### `NOTE` (Quotio/Services/Proxy/CLIProxyManager.swift:207)
+### `NOTE` (Quotio/Services/Proxy/CLIProxyManager.swift:212)
 
 > Bridge mode default is registered in AppDelegate.applicationDidFinishLaunching()
 
-### `NOTE` (Quotio/Services/Proxy/CLIProxyManager.swift:297)
+### `NOTE` (Quotio/Services/Proxy/CLIProxyManager.swift:302)
 
 > Changes take effect after proxy restart (CLIProxyAPI does not support live routing API)
 
-### `NOTE` (Quotio/Services/Proxy/CLIProxyManager.swift:1288)
+### `NOTE` (Quotio/Services/Proxy/CLIProxyManager.swift:1297)
 
 > Notification is handled by AtomFeedUpdateService polling
 
-### `NOTE` (Quotio/ViewModels/AgentSetupViewModel.swift:495)
+### `NOTE` (Quotio/ViewModels/AgentSetupViewModel.swift:431)
 
 > Actual fallback resolution happens at request time in ProxyBridge
 
@@ -59,19 +59,19 @@
 
 > Cursor and Trae removed from auto-refresh to address privacy concerns (issue #29)
 
-### `NOTE` (Quotio/ViewModels/QuotaViewModel.swift:1124)
+### `NOTE` (Quotio/ViewModels/QuotaViewModel.swift:1128)
 
 > Cursor and Trae removed from auto-refresh (issue #29)
 
-### `NOTE` (Quotio/ViewModels/QuotaViewModel.swift:1146)
+### `NOTE` (Quotio/ViewModels/QuotaViewModel.swift:1150)
 
 > Cursor and Trae require explicit user scan (issue #29)
 
-### `NOTE` (Quotio/ViewModels/QuotaViewModel.swift:1155)
+### `NOTE` (Quotio/ViewModels/QuotaViewModel.swift:1159)
 
 > Cursor and Trae removed - require explicit scan (issue #29)
 
-### `NOTE` (Quotio/ViewModels/QuotaViewModel.swift:1209)
+### `NOTE` (Quotio/ViewModels/QuotaViewModel.swift:1213)
 
 > Don't call detectActiveAccount() here - already set by switch operation
 

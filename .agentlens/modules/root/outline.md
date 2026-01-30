@@ -61,7 +61,7 @@ Symbol maps for 9 large files in this module.
 | 1264 | fn | fetchAvailableModels | (internal) |
 | 1319 | fn | testConnection | (internal) |
 
-## Quotio/Services/AtomFeedUpdateService.swift (511 lines)
+## Quotio/Services/AtomFeedUpdateService.swift (533 lines)
 
 | Line | Kind | Name | Visibility |
 | ---- | ---- | ---- | ---------- |
@@ -70,26 +70,26 @@ Symbol maps for 9 large files in this module.
 | 35 | struct | CachedFeedState | (internal) |
 | 44 | class | AtomFeedUpdateService | (internal) |
 | 111 | fn | checkForCLIProxyUpdate | (internal) |
-| 150 | fn | checkForQuotioUpdate | (internal) |
-| 185 | fn | forceCheckForCLIProxyUpdate | (internal) |
-| 196 | fn | startPolling | (internal) |
-| 218 | fn | stopPolling | (internal) |
-| 228 | fn | performPollingCheck | (private) |
-| 258 | fn | manualCheckForCLIProxyUpdate | (internal) |
-| 276 | fn | resetNotificationState | (internal) |
-| 282 | fn | fetchAtomFeed | (private) |
-| 328 | fn | parseAtomFeed | (private) |
-| 333 | fn | saveCacheState | (private) |
-| 346 | fn | loadCacheState | (private) |
-| 357 | fn | isNewerVersion | (private) |
-| 358 | fn | parseVersion | (internal) |
-| 396 | class | AtomFeedParser | (private) |
-| 416 | method | init | (internal) |
-| 421 | fn | parse | (internal) |
-| 428 | fn | parser | (internal) |
-| 444 | fn | parser | (internal) |
-| 448 | fn | parser | (internal) |
-| 493 | enum | AtomFeedError | (internal) |
+| 160 | fn | checkForQuotioUpdate | (internal) |
+| 205 | fn | forceCheckForCLIProxyUpdate | (internal) |
+| 216 | fn | startPolling | (internal) |
+| 238 | fn | stopPolling | (internal) |
+| 248 | fn | performPollingCheck | (private) |
+| 280 | fn | manualCheckForCLIProxyUpdate | (internal) |
+| 298 | fn | resetNotificationState | (internal) |
+| 304 | fn | fetchAtomFeed | (private) |
+| 350 | fn | parseAtomFeed | (private) |
+| 355 | fn | saveCacheState | (private) |
+| 368 | fn | loadCacheState | (private) |
+| 379 | fn | isNewerVersion | (private) |
+| 380 | fn | parseVersion | (internal) |
+| 418 | class | AtomFeedParser | (private) |
+| 438 | method | init | (internal) |
+| 443 | fn | parse | (internal) |
+| 450 | fn | parser | (internal) |
+| 466 | fn | parser | (internal) |
+| 470 | fn | parser | (internal) |
+| 515 | enum | AtomFeedError | (internal) |
 
 ## Quotio/Services/ManagementAPIClient.swift (718 lines)
 
@@ -153,70 +153,70 @@ Symbol maps for 9 large files in this module.
 | 694 | method | init | (internal) |
 | 708 | fn | encode | (internal) |
 
-## Quotio/Services/Proxy/CLIProxyManager.swift (1829 lines)
+## Quotio/Services/Proxy/CLIProxyManager.swift (1838 lines)
 
 | Line | Kind | Name | Visibility |
 | ---- | ---- | ---- | ---------- |
 | 9 | class | CLIProxyManager | (internal) |
 | 181 | method | init | (internal) |
-| 214 | fn | updateConfigValue | (private) |
-| 234 | fn | updateConfigPort | (private) |
-| 238 | fn | updateConfigHost | (private) |
-| 242 | fn | ensureApiKeyExistsInConfig | (private) |
-| 291 | fn | updateConfigLogging | (internal) |
-| 298 | fn | updateConfigRoutingStrategy | (internal) |
-| 302 | fn | updateConfigProxyURL | (internal) |
-| 322 | fn | ensureConfigExists | (private) |
-| 356 | fn | syncSecretKeyInConfig | (private) |
-| 372 | fn | regenerateManagementKey | (internal) |
-| 403 | fn | syncProxyURLInConfig | (private) |
-| 416 | fn | syncCustomProvidersToConfig | (private) |
-| 433 | fn | downloadAndInstallBinary | (internal) |
-| 494 | fn | fetchLatestRelease | (private) |
-| 515 | fn | findCompatibleAsset | (private) |
-| 540 | fn | downloadAsset | (private) |
-| 559 | fn | extractAndInstall | (private) |
-| 621 | fn | findBinaryInDirectory | (private) |
-| 654 | fn | start | (internal) |
-| 786 | fn | stop | (internal) |
-| 842 | fn | startHealthMonitor | (private) |
-| 856 | fn | stopHealthMonitor | (private) |
-| 861 | fn | performHealthCheck | (private) |
-| 924 | fn | cleanupOrphanProcesses | (private) |
-| 978 | fn | terminateAuthProcess | (internal) |
-| 984 | fn | toggle | (internal) |
-| 992 | fn | copyEndpointToClipboard | (internal) |
-| 997 | fn | revealInFinder | (internal) |
-| 1004 | enum | ProxyError | (internal) |
-| 1035 | enum | AuthCommand | (internal) |
-| 1073 | struct | AuthCommandResult | (internal) |
-| 1079 | mod | extension CLIProxyManager | (internal) |
-| 1080 | fn | runAuthCommand | (internal) |
-| 1112 | fn | appendOutput | (internal) |
-| 1116 | fn | tryResume | (internal) |
-| 1127 | fn | safeResume | (internal) |
-| 1227 | mod | extension CLIProxyManager | (internal) |
-| 1257 | fn | checkForUpgrade | (internal) |
-| 1305 | fn | saveInstalledVersion | (private) |
-| 1313 | fn | fetchAvailableReleases | (internal) |
-| 1335 | fn | versionInfo | (internal) |
-| 1341 | fn | fetchGitHubRelease | (private) |
-| 1363 | fn | findCompatibleAsset | (private) |
-| 1396 | fn | performManagedUpgrade | (internal) |
-| 1450 | fn | downloadAndInstallVersion | (private) |
-| 1497 | fn | startDryRun | (private) |
-| 1568 | fn | promote | (private) |
-| 1603 | fn | rollback | (internal) |
-| 1636 | fn | stopTestProxy | (private) |
-| 1665 | fn | stopTestProxySync | (private) |
-| 1691 | fn | findUnusedPort | (private) |
-| 1701 | fn | isPortInUse | (private) |
-| 1720 | fn | createTestConfig | (private) |
-| 1748 | fn | cleanupTestConfig | (private) |
-| 1756 | fn | isNewerVersion | (private) |
-| 1759 | fn | parseVersion | (internal) |
-| 1791 | fn | findPreviousVersion | (private) |
-| 1804 | fn | migrateToVersionedStorage | (internal) |
+| 219 | fn | updateConfigValue | (private) |
+| 239 | fn | updateConfigPort | (private) |
+| 243 | fn | updateConfigHost | (private) |
+| 247 | fn | ensureApiKeyExistsInConfig | (private) |
+| 296 | fn | updateConfigLogging | (internal) |
+| 303 | fn | updateConfigRoutingStrategy | (internal) |
+| 307 | fn | updateConfigProxyURL | (internal) |
+| 327 | fn | ensureConfigExists | (private) |
+| 361 | fn | syncSecretKeyInConfig | (private) |
+| 377 | fn | regenerateManagementKey | (internal) |
+| 412 | fn | syncProxyURLInConfig | (private) |
+| 425 | fn | syncCustomProvidersToConfig | (private) |
+| 442 | fn | downloadAndInstallBinary | (internal) |
+| 503 | fn | fetchLatestRelease | (private) |
+| 524 | fn | findCompatibleAsset | (private) |
+| 549 | fn | downloadAsset | (private) |
+| 568 | fn | extractAndInstall | (private) |
+| 630 | fn | findBinaryInDirectory | (private) |
+| 663 | fn | start | (internal) |
+| 795 | fn | stop | (internal) |
+| 851 | fn | startHealthMonitor | (private) |
+| 865 | fn | stopHealthMonitor | (private) |
+| 870 | fn | performHealthCheck | (private) |
+| 933 | fn | cleanupOrphanProcesses | (private) |
+| 987 | fn | terminateAuthProcess | (internal) |
+| 993 | fn | toggle | (internal) |
+| 1001 | fn | copyEndpointToClipboard | (internal) |
+| 1006 | fn | revealInFinder | (internal) |
+| 1013 | enum | ProxyError | (internal) |
+| 1044 | enum | AuthCommand | (internal) |
+| 1082 | struct | AuthCommandResult | (internal) |
+| 1088 | mod | extension CLIProxyManager | (internal) |
+| 1089 | fn | runAuthCommand | (internal) |
+| 1121 | fn | appendOutput | (internal) |
+| 1125 | fn | tryResume | (internal) |
+| 1136 | fn | safeResume | (internal) |
+| 1236 | mod | extension CLIProxyManager | (internal) |
+| 1266 | fn | checkForUpgrade | (internal) |
+| 1314 | fn | saveInstalledVersion | (private) |
+| 1322 | fn | fetchAvailableReleases | (internal) |
+| 1344 | fn | versionInfo | (internal) |
+| 1350 | fn | fetchGitHubRelease | (private) |
+| 1372 | fn | findCompatibleAsset | (private) |
+| 1405 | fn | performManagedUpgrade | (internal) |
+| 1459 | fn | downloadAndInstallVersion | (private) |
+| 1506 | fn | startDryRun | (private) |
+| 1577 | fn | promote | (private) |
+| 1612 | fn | rollback | (internal) |
+| 1645 | fn | stopTestProxy | (private) |
+| 1674 | fn | stopTestProxySync | (private) |
+| 1700 | fn | findUnusedPort | (private) |
+| 1710 | fn | isPortInUse | (private) |
+| 1729 | fn | createTestConfig | (private) |
+| 1757 | fn | cleanupTestConfig | (private) |
+| 1765 | fn | isNewerVersion | (private) |
+| 1768 | fn | parseVersion | (internal) |
+| 1800 | fn | findPreviousVersion | (private) |
+| 1813 | fn | migrateToVersionedStorage | (internal) |
 
 ## Quotio/Services/Proxy/ProxyBridge.swift (1091 lines)
 
@@ -281,7 +281,7 @@ Symbol maps for 9 large files in this module.
 | 1343 | struct | MenuActionsView | (private) |
 | 1381 | struct | MenuBarActionButton | (private) |
 
-## Quotio/ViewModels/QuotaViewModel.swift (1821 lines)
+## Quotio/ViewModels/QuotaViewModel.swift (1825 lines)
 
 | Line | Kind | Name | Visibility |
 | ---- | ---- | ---- | ---------- |
@@ -338,41 +338,41 @@ Symbol maps for 9 large files in this module.
 | 1010 | fn | startAutoRefresh | (private) |
 | 1047 | fn | attemptProxyRecovery | (private) |
 | 1063 | fn | refreshData | (internal) |
-| 1106 | fn | manualRefresh | (internal) |
-| 1117 | fn | refreshAllQuotas | (internal) |
-| 1147 | fn | refreshQuotasUnified | (internal) |
-| 1179 | fn | refreshAntigravityQuotasInternal | (private) |
-| 1199 | fn | refreshAntigravityQuotasWithoutDetect | (private) |
-| 1216 | fn | isAntigravityAccountActive | (internal) |
-| 1221 | fn | switchAntigravityAccount | (internal) |
-| 1233 | fn | beginAntigravitySwitch | (internal) |
-| 1238 | fn | cancelAntigravitySwitch | (internal) |
-| 1243 | fn | dismissAntigravitySwitchResult | (internal) |
-| 1246 | fn | refreshOpenAIQuotasInternal | (private) |
-| 1251 | fn | refreshCopilotQuotasInternal | (private) |
-| 1256 | fn | refreshQuotaForProvider | (internal) |
-| 1291 | fn | refreshAutoDetectedProviders | (internal) |
-| 1298 | fn | startOAuth | (internal) |
-| 1340 | fn | startCopilotAuth | (private) |
-| 1357 | fn | startKiroAuth | (private) |
-| 1391 | fn | pollCopilotAuthCompletion | (private) |
-| 1408 | fn | pollKiroAuthCompletion | (private) |
-| 1426 | fn | pollOAuthStatus | (private) |
-| 1454 | fn | cancelOAuth | (internal) |
-| 1458 | fn | deleteAuthFile | (internal) |
-| 1486 | fn | pruneMenuBarItems | (private) |
-| 1522 | fn | importVertexServiceAccount | (internal) |
-| 1546 | fn | fetchAPIKeys | (internal) |
-| 1556 | fn | addAPIKey | (internal) |
-| 1568 | fn | updateAPIKey | (internal) |
-| 1580 | fn | deleteAPIKey | (internal) |
-| 1593 | fn | checkAccountStatusChanges | (private) |
-| 1614 | fn | checkQuotaNotifications | (internal) |
-| 1646 | fn | scanIDEsWithConsent | (internal) |
-| 1715 | fn | savePersistedIDEQuotas | (private) |
-| 1738 | fn | loadPersistedIDEQuotas | (private) |
-| 1800 | fn | shortenAccountKey | (private) |
-| 1812 | struct | OAuthState | (internal) |
+| 1110 | fn | manualRefresh | (internal) |
+| 1121 | fn | refreshAllQuotas | (internal) |
+| 1151 | fn | refreshQuotasUnified | (internal) |
+| 1183 | fn | refreshAntigravityQuotasInternal | (private) |
+| 1203 | fn | refreshAntigravityQuotasWithoutDetect | (private) |
+| 1220 | fn | isAntigravityAccountActive | (internal) |
+| 1225 | fn | switchAntigravityAccount | (internal) |
+| 1237 | fn | beginAntigravitySwitch | (internal) |
+| 1242 | fn | cancelAntigravitySwitch | (internal) |
+| 1247 | fn | dismissAntigravitySwitchResult | (internal) |
+| 1250 | fn | refreshOpenAIQuotasInternal | (private) |
+| 1255 | fn | refreshCopilotQuotasInternal | (private) |
+| 1260 | fn | refreshQuotaForProvider | (internal) |
+| 1295 | fn | refreshAutoDetectedProviders | (internal) |
+| 1302 | fn | startOAuth | (internal) |
+| 1344 | fn | startCopilotAuth | (private) |
+| 1361 | fn | startKiroAuth | (private) |
+| 1395 | fn | pollCopilotAuthCompletion | (private) |
+| 1412 | fn | pollKiroAuthCompletion | (private) |
+| 1430 | fn | pollOAuthStatus | (private) |
+| 1458 | fn | cancelOAuth | (internal) |
+| 1462 | fn | deleteAuthFile | (internal) |
+| 1490 | fn | pruneMenuBarItems | (private) |
+| 1526 | fn | importVertexServiceAccount | (internal) |
+| 1550 | fn | fetchAPIKeys | (internal) |
+| 1560 | fn | addAPIKey | (internal) |
+| 1572 | fn | updateAPIKey | (internal) |
+| 1584 | fn | deleteAPIKey | (internal) |
+| 1597 | fn | checkAccountStatusChanges | (private) |
+| 1618 | fn | checkQuotaNotifications | (internal) |
+| 1650 | fn | scanIDEsWithConsent | (internal) |
+| 1719 | fn | savePersistedIDEQuotas | (private) |
+| 1742 | fn | loadPersistedIDEQuotas | (private) |
+| 1804 | fn | shortenAccountKey | (private) |
+| 1816 | struct | OAuthState | (internal) |
 
 ## scripts/capture-screenshots.ts (763 lines)
 
