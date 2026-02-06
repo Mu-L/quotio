@@ -5,41 +5,19 @@
 ## Summary
 
 | High 🔴 | Medium 🟡 | Low 🟢 |
-| 1 | 0 | 15 |
-
-## 🔴 High Priority
-
-### `WARNING` (Quotio/Services/LaunchAtLoginManager.swift:97)
-
-> if app is not in /Applications (registration may fail or be non-persistent)
+| 0 | 0 | 11 |
 
 ## 🟢 Low Priority
 
-### `NOTE` (Quotio/Services/AgentDetectionService.swift:16)
-
-> Only checks file existence (metadata), does NOT read file content
-
-### `NOTE` (Quotio/Services/AgentDetectionService.swift:92)
-
-> May not work in GUI apps due to limited PATH inheritance
-
-### `NOTE` (Quotio/Services/AgentDetectionService.swift:98)
-
-> Only checks file existence (metadata), does NOT read file content
-
-### `NOTE` (Quotio/Services/CLIExecutor.swift:33)
-
-> Only checks file existence (metadata), does NOT read file content
-
-### `NOTE` (Quotio/Services/Proxy/CLIProxyManager.swift:207)
+### `NOTE` (Quotio/Services/Proxy/CLIProxyManager.swift:213)
 
 > Bridge mode default is registered in AppDelegate.applicationDidFinishLaunching()
 
-### `NOTE` (Quotio/Services/Proxy/CLIProxyManager.swift:319)
+### `NOTE` (Quotio/Services/Proxy/CLIProxyManager.swift:325)
 
 > Changes take effect after proxy restart (CLIProxyAPI does not support live routing API)
 
-### `NOTE` (Quotio/Services/Proxy/CLIProxyManager.swift:1394)
+### `NOTE` (Quotio/Services/Proxy/CLIProxyManager.swift:1403)
 
 > Notification is handled by AtomFeedUpdateService polling
 

@@ -24,7 +24,7 @@
 | `Quotio/Services/LaunchAtLoginManager.swift` | 189 |  |
 | `Quotio/Services/Logger.swift` | 124 |  |
 | `Quotio/Services/ManagementAPIClient.swift` | 727 | 📊 |
-| `Quotio/Services/NotificationManager.swift` | 326 |  |
+| `Quotio/Services/NotificationManager.swift` | 331 |  |
 | `Quotio/Services/ProxyConfigurationService.swift` | 96 |  |
 | `Quotio/Services/RequestTracker.swift` | 192 |  |
 | `Quotio/Services/ShellProfileManager.swift` | 121 |  |

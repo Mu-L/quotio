@@ -4,7 +4,7 @@
 
 ## Overview
 
-- **Lines:** 3013
+- **Lines:** 3026
 - **Language:** Swift
 - **Symbols:** 60
 - **Public symbols:** 0
@@ -40,37 +40,37 @@
 | 957 | struct | RefreshCadenceSettingsSection | (internal) | `struct RefreshCadenceSettingsSection` |
 | 996 | struct | UpdateSettingsSection | (internal) | `struct UpdateSettingsSection` |
 | 1038 | struct | ProxyUpdateSettingsSection | (internal) | `struct ProxyUpdateSettingsSection` |
-| 1185 | fn | checkForUpdate | (private) | `private func checkForUpdate()` |
-| 1199 | fn | performUpgrade | (private) | `private func performUpgrade(to version: ProxyVe...` |
-| 1218 | struct | ProxyVersionManagerSheet | (internal) | `struct ProxyVersionManagerSheet` |
-| 1377 | fn | sectionHeader | (private) | `@ViewBuilder   private func sectionHeader(_ tit...` |
-| 1392 | fn | isVersionInstalled | (private) | `private func isVersionInstalled(_ version: Stri...` |
-| 1396 | fn | refreshInstalledVersions | (private) | `private func refreshInstalledVersions()` |
-| 1400 | fn | loadReleases | (private) | `private func loadReleases() async` |
-| 1414 | fn | installVersion | (private) | `private func installVersion(_ release: GitHubRe...` |
-| 1432 | fn | performInstall | (private) | `private func performInstall(_ release: GitHubRe...` |
-| 1453 | fn | activateVersion | (private) | `private func activateVersion(_ version: String)` |
-| 1471 | fn | deleteVersion | (private) | `private func deleteVersion(_ version: String)` |
-| 1484 | struct | InstalledVersionRow | (private) | `struct InstalledVersionRow` |
-| 1542 | struct | AvailableVersionRow | (private) | `struct AvailableVersionRow` |
-| 1628 | fn | formatDate | (private) | `private func formatDate(_ isoString: String) ->...` |
-| 1646 | struct | MenuBarSettingsSection | (internal) | `struct MenuBarSettingsSection` |
-| 1787 | struct | AppearanceSettingsSection | (internal) | `struct AppearanceSettingsSection` |
-| 1816 | struct | PrivacySettingsSection | (internal) | `struct PrivacySettingsSection` |
-| 1838 | struct | GeneralSettingsTab | (internal) | `struct GeneralSettingsTab` |
-| 1877 | struct | AboutTab | (internal) | `struct AboutTab` |
-| 1904 | struct | AboutScreen | (internal) | `struct AboutScreen` |
-| 2119 | struct | AboutUpdateSection | (internal) | `struct AboutUpdateSection` |
-| 2175 | struct | AboutProxyUpdateSection | (internal) | `struct AboutProxyUpdateSection` |
-| 2328 | fn | checkForUpdate | (private) | `private func checkForUpdate()` |
-| 2342 | fn | performUpgrade | (private) | `private func performUpgrade(to version: ProxyVe...` |
-| 2361 | struct | VersionBadge | (internal) | `struct VersionBadge` |
-| 2413 | struct | AboutUpdateCard | (internal) | `struct AboutUpdateCard` |
-| 2504 | struct | AboutProxyUpdateCard | (internal) | `struct AboutProxyUpdateCard` |
-| 2678 | fn | checkForUpdate | (private) | `private func checkForUpdate()` |
-| 2692 | fn | performUpgrade | (private) | `private func performUpgrade(to version: ProxyVe...` |
-| 2711 | struct | LinkCard | (internal) | `struct LinkCard` |
-| 2798 | struct | ManagementKeyRow | (internal) | `struct ManagementKeyRow` |
-| 2892 | struct | LaunchAtLoginToggle | (internal) | `struct LaunchAtLoginToggle` |
-| 2950 | struct | UsageDisplaySettingsSection | (internal) | `struct UsageDisplaySettingsSection` |
+| 1198 | fn | checkForUpdate | (private) | `private func checkForUpdate()` |
+| 1212 | fn | performUpgrade | (private) | `private func performUpgrade(to version: ProxyVe...` |
+| 1231 | struct | ProxyVersionManagerSheet | (internal) | `struct ProxyVersionManagerSheet` |
+| 1390 | fn | sectionHeader | (private) | `@ViewBuilder   private func sectionHeader(_ tit...` |
+| 1405 | fn | isVersionInstalled | (private) | `private func isVersionInstalled(_ version: Stri...` |
+| 1409 | fn | refreshInstalledVersions | (private) | `private func refreshInstalledVersions()` |
+| 1413 | fn | loadReleases | (private) | `private func loadReleases() async` |
+| 1427 | fn | installVersion | (private) | `private func installVersion(_ release: GitHubRe...` |
+| 1445 | fn | performInstall | (private) | `private func performInstall(_ release: GitHubRe...` |
+| 1466 | fn | activateVersion | (private) | `private func activateVersion(_ version: String)` |
+| 1484 | fn | deleteVersion | (private) | `private func deleteVersion(_ version: String)` |
+| 1497 | struct | InstalledVersionRow | (private) | `struct InstalledVersionRow` |
+| 1555 | struct | AvailableVersionRow | (private) | `struct AvailableVersionRow` |
+| 1641 | fn | formatDate | (private) | `private func formatDate(_ isoString: String) ->...` |
+| 1659 | struct | MenuBarSettingsSection | (internal) | `struct MenuBarSettingsSection` |
+| 1800 | struct | AppearanceSettingsSection | (internal) | `struct AppearanceSettingsSection` |
+| 1829 | struct | PrivacySettingsSection | (internal) | `struct PrivacySettingsSection` |
+| 1851 | struct | GeneralSettingsTab | (internal) | `struct GeneralSettingsTab` |
+| 1890 | struct | AboutTab | (internal) | `struct AboutTab` |
+| 1917 | struct | AboutScreen | (internal) | `struct AboutScreen` |
+| 2132 | struct | AboutUpdateSection | (internal) | `struct AboutUpdateSection` |
+| 2188 | struct | AboutProxyUpdateSection | (internal) | `struct AboutProxyUpdateSection` |
+| 2341 | fn | checkForUpdate | (private) | `private func checkForUpdate()` |
+| 2355 | fn | performUpgrade | (private) | `private func performUpgrade(to version: ProxyVe...` |
+| 2374 | struct | VersionBadge | (internal) | `struct VersionBadge` |
+| 2426 | struct | AboutUpdateCard | (internal) | `struct AboutUpdateCard` |
+| 2517 | struct | AboutProxyUpdateCard | (internal) | `struct AboutProxyUpdateCard` |
+| 2691 | fn | checkForUpdate | (private) | `private func checkForUpdate()` |
+| 2705 | fn | performUpgrade | (private) | `private func performUpgrade(to version: ProxyVe...` |
+| 2724 | struct | LinkCard | (internal) | `struct LinkCard` |
+| 2811 | struct | ManagementKeyRow | (internal) | `struct ManagementKeyRow` |
+| 2905 | struct | LaunchAtLoginToggle | (internal) | `struct LaunchAtLoginToggle` |
+| 2963 | struct | UsageDisplaySettingsSection | (internal) | `struct UsageDisplaySettingsSection` |
 
