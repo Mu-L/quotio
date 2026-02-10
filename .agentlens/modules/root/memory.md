@@ -5,23 +5,45 @@
 ## Summary
 
 | High 🔴 | Medium 🟡 | Low 🟢 |
-| 0 | 0 | 11 |
+| 1 | 0 | 15 |
+
+## 🔴 High Priority
+
+### `WARNING` (Quotio/Services/LaunchAtLoginManager.swift:97)
+
+> if app is not in /Applications (registration may fail or be non-persistent)
 
 ## 🟢 Low Priority
 
-### `NOTE` (Quotio/Services/Proxy/CLIProxyManager.swift:213)
+### `NOTE` (Quotio/Services/AgentDetectionService.swift:16)
+
+> Only checks file existence (metadata), does NOT read file content
+
+### `NOTE` (Quotio/Services/AgentDetectionService.swift:92)
+
+> May not work in GUI apps due to limited PATH inheritance
+
+### `NOTE` (Quotio/Services/AgentDetectionService.swift:98)
+
+> Only checks file existence (metadata), does NOT read file content
+
+### `NOTE` (Quotio/Services/CLIExecutor.swift:33)
+
+> Only checks file existence (metadata), does NOT read file content
+
+### `NOTE` (Quotio/Services/Proxy/CLIProxyManager.swift:222)
 
 > Bridge mode default is registered in AppDelegate.applicationDidFinishLaunching()
 
-### `NOTE` (Quotio/Services/Proxy/CLIProxyManager.swift:325)
+### `NOTE` (Quotio/Services/Proxy/CLIProxyManager.swift:338)
 
 > Changes take effect after proxy restart (CLIProxyAPI does not support live routing API)
 
-### `NOTE` (Quotio/Services/Proxy/CLIProxyManager.swift:1403)
+### `NOTE` (Quotio/Services/Proxy/CLIProxyManager.swift:1425)
 
 > Notification is handled by AtomFeedUpdateService polling
 
-### `NOTE` (Quotio/ViewModels/AgentSetupViewModel.swift:431)
+### `NOTE` (Quotio/ViewModels/AgentSetupViewModel.swift:444)
 
 > Actual fallback resolution happens at request time in ProxyBridge
 
@@ -37,19 +59,19 @@
 
 > Cursor and Trae removed from auto-refresh to address privacy concerns (issue #29)
 
-### `NOTE` (Quotio/ViewModels/QuotaViewModel.swift:1167)
+### `NOTE` (Quotio/ViewModels/QuotaViewModel.swift:1166)
 
 > Cursor and Trae removed from auto-refresh (issue #29)
 
-### `NOTE` (Quotio/ViewModels/QuotaViewModel.swift:1189)
+### `NOTE` (Quotio/ViewModels/QuotaViewModel.swift:1190)
 
 > Cursor and Trae require explicit user scan (issue #29)
 
-### `NOTE` (Quotio/ViewModels/QuotaViewModel.swift:1198)
+### `NOTE` (Quotio/ViewModels/QuotaViewModel.swift:1200)
 
 > Cursor and Trae removed - require explicit scan (issue #29)
 
-### `NOTE` (Quotio/ViewModels/QuotaViewModel.swift:1252)
+### `NOTE` (Quotio/ViewModels/QuotaViewModel.swift:1254)
 
 > Don't call detectActiveAccount() here - already set by switch operation
 

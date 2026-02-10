@@ -8,7 +8,7 @@
 
 | File | Lines | Large |
 | ---- | ----- | ----- |
-| `Quotio/Services/QuotaFetchers/ClaudeCodeQuotaFetcher.swift` | 364 |  |
+| `Quotio/Services/QuotaFetchers/ClaudeCodeQuotaFetcher.swift` | 456 |  |
 | `Quotio/Services/QuotaFetchers/CodexCLIQuotaFetcher.swift` | 402 |  |
 | `Quotio/Services/QuotaFetchers/CopilotQuotaFetcher.swift` | 487 |  |
 | `Quotio/Services/QuotaFetchers/CursorQuotaFetcher.swift` | 406 |  |

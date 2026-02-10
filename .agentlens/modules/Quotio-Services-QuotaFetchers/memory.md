@@ -5,17 +5,9 @@
 ## Summary
 
 | High 🔴 | Medium 🟡 | Low 🟢 |
-| 0 | 0 | 5 |
+| 0 | 0 | 3 |
 
 ## 🟢 Low Priority
-
-### `NOTE` (Quotio/Services/QuotaFetchers/ClaudeCodeQuotaFetcher.swift:174)
-
-> Anthropic OAuth tokens expire after ~1 hour and don't support refresh
-
-### `NOTE` (Quotio/Services/QuotaFetchers/ClaudeCodeQuotaFetcher.swift:336)
-
-> Anthropic OAuth tokens expire after ~1 hour and don't support refresh
 
 ### `NOTE` (Quotio/Services/QuotaFetchers/GeminiCLIQuotaFetcher.swift:6)
 
