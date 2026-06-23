@@ -309,15 +309,18 @@ start_spinner() {
 stop_spinner() {
     local status="${1:-0}"
     local message="${2:-}"
+    local had_spinner=false
     
     if [[ -n "$SPINNER_PID" ]]; then
+        had_spinner=true
         kill "$SPINNER_PID" 2>/dev/null
         wait "$SPINNER_PID" 2>/dev/null || true
         SPINNER_PID=""
     fi
     
-    # Clear the spinner line
-    printf "\r\033[K"
+    if [[ "$had_spinner" == true ]]; then
+        printf "\r\033[K"
+    fi
     
     # Print final status if message provided
     if [[ -n "$message" ]]; then
