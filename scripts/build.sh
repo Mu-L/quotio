@@ -20,6 +20,14 @@ rm -rf "${BUILD_DIR}"
 mkdir -p "${BUILD_DIR}"
 mkdir -p "${RELEASE_DIR}"
 
+POSTHOG_BUILD_SETTINGS=()
+if [ -n "${POSTHOG_PROJECT_TOKEN:-}" ]; then
+    POSTHOG_BUILD_SETTINGS+=("POSTHOG_PROJECT_TOKEN=${POSTHOG_PROJECT_TOKEN}")
+fi
+if [ -n "${POSTHOG_HOST:-}" ]; then
+    POSTHOG_BUILD_SETTINGS+=("POSTHOG_HOST=${POSTHOG_HOST}")
+fi
+
 print_step 1 4 "Creating Archive"
 start_step_timer "archive"
 
@@ -35,6 +43,7 @@ xcodebuild archive \
     CODE_SIGN_IDENTITY="-" \
     CODE_SIGNING_REQUIRED=NO \
     CODE_SIGNING_ALLOWED=NO \
+    "${POSTHOG_BUILD_SETTINGS[@]}" \
     2>&1 | tee "${BUILD_DIR}/build.log" | while read -r line; do
         if [[ "$line" == *"error:"* ]]; then
             echo -e "  ${RED}${SYM_CROSS} ${line}${NC}"

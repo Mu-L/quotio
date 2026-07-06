@@ -81,6 +81,9 @@ jobs:
       # 6. Build
       # ===========================================
       - name: Build
+        env:
+          POSTHOG_PROJECT_TOKEN: ${{ secrets.POSTHOG_PROJECT_TOKEN }}
+          POSTHOG_HOST: ${{ vars.POSTHOG_HOST || 'https://us.i.posthog.com' }}
         run: |
           chmod +x ./scripts/build.sh
           ./scripts/build.sh
