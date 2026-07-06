@@ -306,6 +306,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             "modelAggregationMode": ModelAggregationMode.lowest.rawValue
         ])
 
+        TelemetryService.shared.configureIfAllowed()
+
         // Apply initial dock visibility based on saved preference
         let showInDock = UserDefaults.standard.bool(forKey: "showInDock")
         NSApp.setActivationPolicy(showInDock ? .regular : .accessory)

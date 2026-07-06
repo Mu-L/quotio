@@ -28,7 +28,7 @@ else
     NEW_VERSION=$(get_version)
 fi
 
-TOTAL_STEPS=5
+TOTAL_STEPS=6
 RELEASE_TYPE="Release"
 [[ "$IS_BETA" == true ]] && RELEASE_TYPE="Beta Release"
 
@@ -73,7 +73,14 @@ start_step_timer "appcast"
 
 log_success "Appcast generated ($(get_step_duration "appcast"))"
 
-print_step 5 $TOTAL_STEPS "Creating GitHub Release"
+print_step 5 $TOTAL_STEPS "Uploading PostHog dSYMs"
+start_step_timer "posthog-dsyms"
+
+"${SCRIPT_DIR}/upload-posthog-dsyms.sh"
+
+log_success "PostHog dSYM step completed ($(get_step_duration "posthog-dsyms"))"
+
+print_step 6 $TOTAL_STEPS "Creating GitHub Release"
 start_step_timer "github"
 
 TAG_NAME="v${NEW_VERSION}"

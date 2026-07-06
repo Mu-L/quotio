@@ -1839,6 +1839,7 @@ struct AppearanceSettingsSection: View {
 
 struct PrivacySettingsSection: View {
     @State private var settings = MenuBarSettingsManager.shared
+    @State private var telemetrySettings = TelemetrySettings.shared
     
     private var hideSensitiveBinding: Binding<Bool> {
         Binding(
@@ -1846,14 +1847,22 @@ struct PrivacySettingsSection: View {
             set: { settings.hideSensitiveInfo = $0 }
         )
     }
+
+    private var shareAnonymousUsageBinding: Binding<Bool> {
+        Binding(
+            get: { telemetrySettings.shareAnonymousUsage },
+            set: { telemetrySettings.shareAnonymousUsage = $0 }
+        )
+    }
     
     var body: some View {
         Section {
             Toggle("settings.privacy.hideSensitive".localized(), isOn: hideSensitiveBinding)
+            Toggle("settings.privacy.shareAnonymousUsage".localized(), isOn: shareAnonymousUsageBinding)
         } header: {
             Label("settings.privacy".localized(), systemImage: "eye.slash")
         } footer: {
-            Text("settings.privacy.hideSensitiveHelp".localized())
+            Text("settings.privacy.help".localized())
                 .font(.caption)
         }
     }

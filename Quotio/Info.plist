@@ -14,6 +14,13 @@
     
     <key>SUScheduledCheckInterval</key>
     <integer>86400</integer>
+
+    <!-- Anonymous usage sharing -->
+    <key>PostHogProjectToken</key>
+    <string>$(POSTHOG_PROJECT_TOKEN)</string>
+
+    <key>PostHogHost</key>
+    <string>$(POSTHOG_HOST)</string>
     
     <!-- App Info -->
     <key>LSMinimumSystemVersion</key>

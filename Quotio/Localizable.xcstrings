@@ -16821,6 +16821,62 @@
         }
       }
     },
+    "settings.privacy.help" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Masks sensitive account text. Anonymous usage sharing sends app version and crash diagnostics only; it never sends tokens, OAuth codes, API keys, prompts, request bodies, headers, account identities, quota payloads, or local file paths."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Masque les textes de compte sensibles. Le partage d'utilisation anonyme envoie uniquement la version de l'app et les diagnostics de crash ; il n'envoie jamais de jetons, codes OAuth, cles API, prompts, corps de requete, en-tetes, identites de compte, donnees de quota ou chemins de fichiers locaux."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Che nội dung tài khoản nhạy cảm. Chia sẻ sử dụng ẩn danh chỉ gửi phiên bản ứng dụng và chẩn đoán crash; không bao giờ gửi token, mã OAuth, API key, prompt, request body, header, danh tính tài khoản, dữ liệu quota hoặc đường dẫn file cục bộ."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏敏感账户文本。匿名使用分享只发送应用版本和崩溃诊断；绝不会发送令牌、OAuth 代码、API 密钥、提示词、请求正文、标头、账户身份、配额数据或本地文件路径。"
+          }
+        }
+      }
+    },
+    "settings.privacy.shareAnonymousUsage" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share Anonymous Usage"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Partager l'utilisation anonyme"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chia sẻ sử dụng ẩn danh"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享匿名使用情况"
+          }
+        }
+      }
+    },
     "settings.proxy.error.invalidPort" : {
       "extractionState" : "stale",
       "localizations" : {
