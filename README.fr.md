@@ -19,6 +19,15 @@
 </p>
 
 <p align="center">
+  <a href="https://trendshift.io/repositories/16304?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-16304" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/16304" alt="nguyenphutrong%2Fquotio | Trendshift" width="250" height="55"/></a>
+  <a href="https://trendshift.io/repositories/16304?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-16304" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/16304/daily?language=Swift" alt="nguyenphutrong%2Fquotio | Trendshift" width="250" height="55"/></a>
+  <a href="https://trendshift.io/repositories/16304?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-16304" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/16304/daily" alt="nguyenphutrong%2Fquotio | Trendshift" width="250" height="55"/></a>
+  <a href="https://trendshift.io/repositories/16304?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-16304" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/16304/weekly?language=Swift" alt="nguyenphutrong%2Fquotio | Trendshift" width="250" height="55"/></a>
+  <a href="https://trendshift.io/repositories/16304?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-16304" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/16304/weekly" alt="nguyenphutrong%2Fquotio | Trendshift" width="250" height="55"/></a>
+  <a href="https://trendshift.io/repositories/16304?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-16304" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/16304/monthly?language=Swift" alt="nguyenphutrong%2Fquotio | Trendshift" width="250" height="55"/></a>
+</p>
+
+<p align="center">
   <strong>Le centre de commande ultime pour vos assistants de codage IA sur macOS.</strong>
 </p>
 
