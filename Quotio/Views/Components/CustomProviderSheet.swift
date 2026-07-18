@@ -9,7 +9,18 @@ struct CustomProviderSheet: View {
     @Environment(\.dismiss) private var dismiss
     
     let provider: CustomProvider?
+    let initialProviderType: CustomProviderType
     let onSave: (CustomProvider) -> Void
+
+    init(
+        provider: CustomProvider?,
+        initialProviderType: CustomProviderType = .openaiCompatibility,
+        onSave: @escaping (CustomProvider) -> Void
+    ) {
+        self.provider = provider
+        self.initialProviderType = initialProviderType
+        self.onSave = onSave
+    }
     
     // MARK: - Form State
     
@@ -34,6 +45,22 @@ struct CustomProviderSheet: View {
     @State private var isLoadingModels: Bool = false
     @State private var modelFetchError: String?
     @State private var limitToSelectedModels: Bool = true
+
+    private static let selectableProviderTypes = CustomProviderType.allCases.filter { $0 != .clinePass }
+
+    private static let clinePassModels = [
+        AvailableModel(id: "cline-pass/glm-5.2", name: "GLM-5.2", provider: "clinepass", isDefault: false),
+        AvailableModel(id: "cline-pass/kimi-k3", name: "Kimi K3", provider: "clinepass", isDefault: false),
+        AvailableModel(id: "cline-pass/kimi-k2.7-code", name: "Kimi K2.7 Code", provider: "clinepass", isDefault: false),
+        AvailableModel(id: "cline-pass/kimi-k2.6", name: "Kimi K2.6", provider: "clinepass", isDefault: false),
+        AvailableModel(id: "cline-pass/deepseek-v4-pro", name: "DeepSeek V4 Pro", provider: "clinepass", isDefault: false),
+        AvailableModel(id: "cline-pass/deepseek-v4-flash", name: "DeepSeek V4 Flash", provider: "clinepass", isDefault: false),
+        AvailableModel(id: "cline-pass/mimo-v2.5", name: "MiMo-V2.5", provider: "clinepass", isDefault: false),
+        AvailableModel(id: "cline-pass/mimo-v2.5-pro", name: "MiMo-V2.5-Pro", provider: "clinepass", isDefault: false),
+        AvailableModel(id: "cline-pass/minimax-m3", name: "MiniMax M3", provider: "clinepass", isDefault: false),
+        AvailableModel(id: "cline-pass/qwen3.7-max", name: "Qwen3.7 Max", provider: "clinepass", isDefault: false),
+        AvailableModel(id: "cline-pass/qwen3.7-plus", name: "Qwen3.7 Plus", provider: "clinepass", isDefault: false),
+    ]
     
     private var isEditing: Bool {
         provider != nil
@@ -48,7 +75,9 @@ struct CustomProviderSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     // Step 1: Provider name and type
-                    basicInfoSection
+                    if providerType != .clinePass {
+                        basicInfoSection
+                    }
                     
                     // Step 2: API Keys (needed before fetching models)
                     apiKeysSection
@@ -64,7 +93,9 @@ struct CustomProviderSheet: View {
                     }
                     
                     // Step 5: Enable toggle
-                    enabledSection
+                    if providerType != .clinePass {
+                        enabledSection
+                    }
                 }
                 .padding(20)
             }
@@ -94,10 +125,14 @@ struct CustomProviderSheet: View {
     
     private var headerView: some View {
         HStack(spacing: 16) {
-            Image(providerType.menuBarIconName)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 24, height: 24)
+            if providerType == .clinePass {
+                ProviderIcon(provider: .clinePass, size: 24)
+            } else {
+                Image(providerType.menuBarIconName)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 24, height: 24)
+            }
             
             VStack(alignment: .leading, spacing: 2) {
                 Text(isEditing ? "customProviders.edit".localized() : "customProviders.add".localized())
@@ -150,7 +185,7 @@ struct CustomProviderSheet: View {
                     .foregroundStyle(.secondary)
                 
                 Picker("Type", selection: $providerType) {
-                    ForEach(CustomProviderType.allCases) { type in
+                    ForEach(Self.selectableProviderTypes) { type in
                         HStack {
                             Image(type.menuBarIconName)
                                 .resizable()
@@ -163,7 +198,6 @@ struct CustomProviderSheet: View {
                 }
                 .pickerStyle(.menu)
                 .onChange(of: providerType) { _, newType in
-                    // Update base URL to default if empty
                     if baseURL.isEmpty, let defaultURL = newType.defaultBaseURL {
                         baseURL = defaultURL
                     }
@@ -185,6 +219,7 @@ struct CustomProviderSheet: View {
                 
                 TextField(providerType.defaultBaseURL ?? "https://api.example.com", text: $baseURL)
                     .textFieldStyle(.roundedBorder)
+                    .disabled(providerType == .clinePass)
             }
 
             VStack(alignment: .leading, spacing: 8) {
@@ -214,19 +249,21 @@ struct CustomProviderSheet: View {
             HStack {
                 Text("customProviders.apiKeys".localized())
                     .font(.headline)
-                Text("• Step 2")
+                Text(providerType == .clinePass ? "• Step 1" : "• Step 2")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
                 
                 Spacer()
                 
-                Button {
-                    apiKeys.append(CustomAPIKeyEntry(apiKey: ""))
-                } label: {
-                    Label("customProviders.addKey".localized(), systemImage: "plus.circle")
-                        .font(.caption)
+                if providerType != .clinePass {
+                    Button {
+                        apiKeys.append(CustomAPIKeyEntry(apiKey: ""))
+                    } label: {
+                        Label("customProviders.addKey".localized(), systemImage: "plus.circle")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.sectionHeader)
                 }
-                .buttonStyle(.sectionHeader)
             }
             
             ForEach(Array(apiKeys.enumerated()), id: \.offset) { index, _ in
@@ -309,7 +346,7 @@ struct CustomProviderSheet: View {
                     HStack {
                         Text("customProviders.modelMapping".localized())
                             .font(.headline)
-                        Text("• Step 3")
+                        Text(providerType == .clinePass ? "• Step 2" : "• Step 3")
                             .font(.caption)
                             .foregroundStyle(.tertiary)
                     }
@@ -321,18 +358,20 @@ struct CustomProviderSheet: View {
                 
                 Spacer()
                 
-                if isLoadingModels {
-                    ProgressView()
-                        .scaleEffect(0.6)
-                } else {
-                    Button {
-                        fetchModelsFromAPI()
-                    } label: {
-                        Label("customProviders.fetchModels".localized(), systemImage: "arrow.clockwise")
-                            .font(.caption)
+                if providerType != .clinePass {
+                    if isLoadingModels {
+                        ProgressView()
+                            .scaleEffect(0.6)
+                    } else {
+                        Button {
+                            fetchModelsFromAPI()
+                        } label: {
+                            Label("customProviders.fetchModels".localized(), systemImage: "arrow.clockwise")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.sectionHeader)
+                        .disabled(apiKeys.first?.apiKey.trimmingCharacters(in: .whitespaces).isEmpty ?? true)
                     }
-                    .buttonStyle(.sectionHeader)
-                    .disabled(apiKeys.first?.apiKey.trimmingCharacters(in: .whitespaces).isEmpty ?? true)
                 }
             }
             
@@ -348,6 +387,7 @@ struct CustomProviderSheet: View {
                     }
                 }
                 .toggleStyle(.checkbox)
+                .disabled(providerType == .clinePass)
                 
                 if limitToSelectedModels && selectedModelIds.isEmpty {
                     HStack {
@@ -646,6 +686,7 @@ struct CustomProviderSheet: View {
     private var enabledSection: some View {
         HStack {
             Toggle("customProviders.enableProvider".localized(), isOn: $isEnabled)
+                .disabled(providerType == .clinePass)
             
             Spacer()
             
@@ -695,17 +736,38 @@ struct CustomProviderSheet: View {
     // MARK: - Actions
     
     private func loadProviderData() {
-        guard let provider = provider else { return }
+        guard let provider = provider else {
+            providerType = initialProviderType
+            if initialProviderType == .clinePass {
+                name = nextAvailableClinePassName()
+                baseURL = initialProviderType.defaultBaseURL ?? ""
+                apiKeys = [CustomAPIKeyEntry(apiKey: "")]
+                availableModels = Self.clinePassModels
+                limitToSelectedModels = true
+                isEnabled = true
+            }
+            return
+        }
         
-        name = provider.name
+        name = provider.type == .clinePass && provider.name.isEmpty
+            ? nextAvailableClinePassName()
+            : provider.name
         providerType = provider.type
-        baseURL = normalizedBaseURL(provider.baseURL, for: provider.type)
+        baseURL = provider.type == .clinePass
+            ? (provider.type.defaultBaseURL ?? provider.baseURL)
+            : normalizedBaseURL(provider.baseURL, for: provider.type)
         prefix = provider.prefix ?? ""
-        apiKeys = provider.apiKeys
-        models = provider.models
+        apiKeys = provider.type == .clinePass
+            ? [provider.apiKeys.first ?? CustomAPIKeyEntry(apiKey: "")]
+            : provider.apiKeys
+        models = provider.type == .clinePass ? [] : provider.models
         headers = provider.headers
-        limitToSelectedModels = provider.limitToSelectedModels
-        isEnabled = provider.isEnabled
+        limitToSelectedModels = provider.type == .clinePass ? true : provider.limitToSelectedModels
+        isEnabled = provider.type == .clinePass ? true : provider.isEnabled
+
+        if provider.type == .clinePass {
+            availableModels = Self.clinePassModels
+        }
         
         // Set selected models from existing provider
         selectedModelIds = Set(provider.models.map { $0.name })
@@ -758,6 +820,12 @@ struct CustomProviderSheet: View {
     }
     
     private func fetchModelsFromAPI() {
+        if providerType == .clinePass {
+            availableModels = Self.clinePassModels
+            modelFetchError = nil
+            return
+        }
+
         guard let firstKey = apiKeys.first, !firstKey.apiKey.trimmingCharacters(in: .whitespaces).isEmpty else {
             modelFetchError = "Enter an API key first"
             return
@@ -778,7 +846,7 @@ struct CustomProviderSheet: View {
         
         // Set authorization header based on provider type
         switch providerType {
-        case .openaiCompatibility, .codexCompatibility:
+        case .openaiCompatibility, .codexCompatibility, .clinePass:
             request.setValue("Bearer \(firstKey.apiKey)", forHTTPHeaderField: "Authorization")
         case .claudeCompatibility:
             request.setValue("Bearer \(firstKey.apiKey)", forHTTPHeaderField: "Authorization")
@@ -862,7 +930,9 @@ struct CustomProviderSheet: View {
             id: provider?.id ?? UUID(),
             name: name.trimmingCharacters(in: .whitespaces),
             type: providerType,
-            baseURL: normalizedBaseURL(baseURL, for: providerType),
+            baseURL: providerType == .clinePass
+                ? (providerType.defaultBaseURL ?? baseURL)
+                : normalizedBaseURL(baseURL, for: providerType),
             prefix: prefix.trimmingCharacters(in: .whitespaces).isEmpty ? nil : prefix.trimmingCharacters(in: .whitespaces),
             apiKeys: apiKeys.filter { !$0.apiKey.trimmingCharacters(in: .whitespaces).isEmpty },
             models: limitToSelectedModels ? allModels : [],
@@ -908,6 +978,14 @@ struct CustomProviderSheet: View {
         guard let firstKey = provider.apiKeys.first else {
             throw CustomProviderTestError.noAPIKey
         }
+
+        if provider.type == .clinePass {
+            let quota = try await ClinePassQuotaFetcher().fetchQuota(apiKey: firstKey.apiKey)
+            guard !quota.isForbidden else {
+                throw CustomProviderTestError.unauthorized
+            }
+            return true
+        }
         
         let effectiveBaseURL = provider.baseURL.isEmpty 
             ? (provider.type.defaultBaseURL ?? "")
@@ -923,7 +1001,7 @@ struct CustomProviderSheet: View {
         
         // Set authorization header based on provider type
         switch provider.type {
-        case .openaiCompatibility, .codexCompatibility:
+        case .openaiCompatibility, .codexCompatibility, .clinePass:
             request.setValue("Bearer \(firstKey.apiKey)", forHTTPHeaderField: "Authorization")
         case .claudeCompatibility:
             request.setValue("Bearer \(firstKey.apiKey)", forHTTPHeaderField: "Authorization")
@@ -963,6 +1041,21 @@ struct CustomProviderSheet: View {
             }
             throw CustomProviderTestError.serverError(httpResponse.statusCode, "Unknown error")
         }
+    }
+
+    private func nextAvailableClinePassName() -> String {
+        let baseName = "ClinePass"
+        let existingNames = Set(CustomProviderService.shared.providers.map { $0.name.lowercased() })
+
+        guard existingNames.contains(baseName.lowercased()) else {
+            return baseName
+        }
+
+        var suffix = 2
+        while existingNames.contains("\(baseName) \(suffix)".lowercased()) {
+            suffix += 1
+        }
+        return "\(baseName) \(suffix)"
     }
 }
 

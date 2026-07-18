@@ -35,9 +35,11 @@ struct ProvidersScreen: View {
     /// Providers that can be added manually
     private var addableProviders: [AIProvider] {
         if modeManager.isLocalProxyMode {
-            return AIProvider.allCases.filter { $0.supportsManualAuth }
+            return AIProvider.allCases.filter { $0.supportsManualAuth || $0 == .clinePass }
         } else {
-            return AIProvider.allCases.filter { $0.supportsQuotaOnlyMode && $0.supportsManualAuth }
+            return AIProvider.allCases.filter {
+                $0.supportsQuotaOnlyMode && ($0.supportsManualAuth || $0 == .clinePass)
+            }
         }
     }
     
@@ -61,9 +63,9 @@ struct ProvidersScreen: View {
         }
 
         // Add auto-detected accounts (Cursor, Trae)
-        // Note: GLM uses API key auth via CustomProviderService, so skip it here
+        // API-key providers are added from their own storage below.
         for (provider, quotas) in viewModel.providerQuotas {
-            if !provider.supportsManualAuth && provider != .glm {
+            if !provider.supportsManualAuth && provider != .glm && provider != .clinePass {
                 for (accountKey, _) in quotas {
                     let data = AccountRowData.from(provider: provider, accountKey: accountKey)
                     groups[provider, default: []].append(data)
@@ -87,6 +89,23 @@ struct ProvidersScreen: View {
                 canEdit: true
             )
             groups[.glm, default: []].append(data)
+        }
+
+        // ClinePass API keys are stored as custom providers but shown as first-class accounts.
+        for clinePassProvider in customProviderService.providers.filter({ $0.type == .clinePass && $0.isEnabled }) {
+            let data = AccountRowData(
+                id: clinePassProvider.id.uuidString,
+                provider: .clinePass,
+                displayName: clinePassProvider.name,
+                menuBarAccountKey: clinePassProvider.name,
+                source: .direct,
+                status: "ready",
+                statusMessage: nil,
+                isDisabled: false,
+                canDelete: true,
+                canEdit: true
+            )
+            groups[.clinePass, default: []].append(data)
         }
 
         // Add Warp providers from WarpService
@@ -174,7 +193,10 @@ struct ProvidersScreen: View {
             .environment(viewModel)
         }
         .sheet(item: $customProviderSheetMode) { mode in
-            CustomProviderSheet(provider: mode.provider) { provider in
+            CustomProviderSheet(
+                provider: mode.provider,
+                initialProviderType: mode.initialProviderType
+            ) { provider in
                 // Check if provider already exists by ID to determine if we're updating or adding
                 if customProviderService.providers.contains(where: { $0.id == provider.id }) {
                     customProviderService.updateProvider(provider)
@@ -182,6 +204,9 @@ struct ProvidersScreen: View {
                     customProviderService.addProvider(provider)
                 }
                 syncCustomProvidersToConfig()
+                if provider.type == .clinePass {
+                    Task { await viewModel.refreshQuotaForProvider(.clinePass) }
+                }
             }
         }
         .sheet(isPresented: $showWarpConnectionSheet) {
@@ -209,7 +234,7 @@ struct ProvidersScreen: View {
                     showIDEScanSheet = true
                 },
                 onAddCustomProvider: {
-                    customProviderSheetMode = .add
+                    customProviderSheetMode = .add(.openaiCompatibility)
                 },
                 onDismiss: {
                     showAddProviderPopover = false
@@ -289,6 +314,8 @@ struct ProvidersScreen: View {
                         onEditAccount: { account in
                             if provider == .glm {
                                 handleEditGlmAccount(account)
+                            } else if provider == .clinePass {
+                                handleEditClinePassAccount(account)
                             } else if provider == .warp {
                                 handleEditWarpAccount(account)
                             }
@@ -330,12 +357,14 @@ struct ProvidersScreen: View {
 
     @ViewBuilder
     private var customProvidersSection: some View {
-        // Filter out GLM providers (they're shown in Your Accounts section)
-        let nonGlmProviders = customProviderService.providers.filter { $0.type != .glmCompatibility }
+        // API-key providers with first-class quota tracking are shown in Your Accounts.
+        let genericProviders = customProviderService.providers.filter {
+            $0.type != .glmCompatibility && $0.type != .clinePass
+        }
 
         Section {
             // List existing custom providers
-            ForEach(nonGlmProviders) { provider in
+            ForEach(genericProviders) { provider in
                 CustomProviderRow(
                     provider: provider,
                     onEdit: {
@@ -355,9 +384,9 @@ struct ProvidersScreen: View {
             HStack {
                 Label("customProviders.title".localized(), systemImage: "puzzlepiece.extension.fill")
 
-                if !nonGlmProviders.isEmpty {
+                if !genericProviders.isEmpty {
                     Spacer()
-                    Text("\(nonGlmProviders.count)")
+                    Text("\(genericProviders.count)")
                         .font(.caption2.bold())
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
@@ -375,6 +404,11 @@ struct ProvidersScreen: View {
     // MARK: - Helper Functions
 
     private func handleAddProvider(_ provider: AIProvider) {
+        if provider == .clinePass {
+            customProviderSheetMode = .add(.clinePass)
+            return
+        }
+
         // In Local Proxy Mode, require proxy to be running for OAuth
         if modeManager.isLocalProxyMode && !viewModel.proxyManager.proxyStatus.running {
             showProxyRequiredAlert = true
@@ -403,6 +437,15 @@ struct ProvidersScreen: View {
             if let glmProvider = customProviderService.providers.first(where: { $0.id.uuidString == account.id }) {
                 customProviderService.deleteProvider(id: glmProvider.id)
                 syncCustomProvidersToConfig()
+            }
+            return
+        }
+
+        if account.provider == .clinePass {
+            if let provider = customProviderService.providers.first(where: { $0.id.uuidString == account.id }) {
+                customProviderService.deleteProvider(id: provider.id)
+                syncCustomProvidersToConfig()
+                await viewModel.refreshQuotaForProvider(.clinePass)
             }
             return
         }
@@ -436,6 +479,12 @@ struct ProvidersScreen: View {
         // Find the GLM provider by ID and open edit sheet using CustomProviderSheet
         if let glmProvider = customProviderService.providers.first(where: { $0.id.uuidString == account.id }) {
             customProviderSheetMode = .edit(glmProvider)
+        }
+    }
+
+    private func handleEditClinePassAccount(_ account: AccountRowData) {
+        if let provider = customProviderService.providers.first(where: { $0.id.uuidString == account.id }) {
+            customProviderSheetMode = .edit(provider)
         }
     }
     
@@ -1035,13 +1084,13 @@ private struct OAuthStatusView: View {
 // MARK: - Custom Provider Sheet Mode
 
 enum CustomProviderSheetMode: Identifiable {
-    case add
+    case add(CustomProviderType)
     case edit(CustomProvider)
 
     var id: String {
         switch self {
-        case .add:
-            return "add"
+        case .add(let type):
+            return "add-\(type.rawValue)"
         case .edit(let provider):
             return provider.id.uuidString
         }
@@ -1053,6 +1102,15 @@ enum CustomProviderSheetMode: Identifiable {
             return nil
         case .edit(let provider):
             return provider
+        }
+    }
+
+    var initialProviderType: CustomProviderType {
+        switch self {
+        case .add(let type):
+            return type
+        case .edit(let provider):
+            return provider.type
         }
     }
 }
