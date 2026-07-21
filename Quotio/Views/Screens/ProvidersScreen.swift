@@ -23,6 +23,10 @@ struct ProvidersScreen: View {
     @State private var customProviderSheetMode: CustomProviderSheetMode?
     @State private var showWarpConnectionSheet = false
     @State private var editingWarpToken: WarpService.WarpToken?
+    @State private var showGLMConnectionSheet = false
+    @State private var editingGLMProvider: CustomProvider?
+    @State private var monitorAPIKeyProvider: AIProvider?
+    @State private var editingMonitorAPIKeyAccount: MonitorAccount?
     @State private var showAddProviderPopover = false
     @State private var switchingAccount: AccountRowData?
     @State private var modeManager = OperatingModeManager.shared
@@ -35,10 +39,12 @@ struct ProvidersScreen: View {
     /// Providers that can be added manually
     private var addableProviders: [AIProvider] {
         if modeManager.isLocalProxyMode {
-            return AIProvider.allCases.filter { $0.supportsManualAuth || $0 == .clinePass }
+            return AIProvider.allCases.filter {
+                ![.factoryDroid, .openRouter].contains($0) && ($0.supportsManualAuth || $0 == .clinePass)
+            }
         } else {
             return AIProvider.allCases.filter {
-                $0.supportsQuotaOnlyMode && ($0.supportsManualAuth || $0 == .clinePass)
+                $0.supportsQuotaOnlyMode && ($0.supportsManualAuth || $0 == .glm || $0 == .clinePass)
             }
         }
     }
@@ -233,6 +239,37 @@ struct ProvidersScreen: View {
                 Task { await viewModel.refreshAutoDetectedProviders() }
             }
         }
+        .sheet(isPresented: $showGLMConnectionSheet) {
+            GLMAPIKeySheet(provider: editingGLMProvider) { provider in
+                if customProviderService.providers.contains(where: { $0.id == provider.id }) {
+                    customProviderService.updateProvider(provider)
+                } else {
+                    customProviderService.addProvider(provider)
+                }
+                editingGLMProvider = nil
+                syncCustomProvidersToConfig()
+                Task { await viewModel.refreshQuotaForProvider(.glm) }
+            }
+            .environment(viewModel)
+        }
+        .sheet(item: $monitorAPIKeyProvider) { provider in
+            MonitorAPIKeyConnectionSheet(provider: provider, account: editingMonitorAPIKeyAccount) { label, apiKey in
+                if provider == .factoryDroid {
+                    try await viewModel.saveFactoryDroidAccount(
+                        label: label,
+                        apiKey: apiKey,
+                        existingAccountID: editingMonitorAPIKeyAccount?.id
+                    )
+                } else {
+                    try await viewModel.saveOpenRouterAccount(
+                        label: label,
+                        apiKey: apiKey,
+                        existingAccountID: editingMonitorAPIKeyAccount?.id
+                    )
+                }
+                editingMonitorAPIKeyAccount = nil
+            }
+        }
         .sheet(isPresented: $showAddProviderPopover) {
             AddProviderPopover(
                 providers: addableProviders,
@@ -332,6 +369,8 @@ struct ProvidersScreen: View {
                                 handleEditClinePassAccount(account)
                             } else if provider == .warp {
                                 handleEditWarpAccount(account)
+                            } else if [.factoryDroid, .openRouter].contains(provider) {
+                                handleEditMonitorAPIKeyAccount(account)
                             }
                         },
                         onSwitchAccount: provider == .antigravity ? { account in
@@ -422,6 +461,16 @@ struct ProvidersScreen: View {
             customProviderSheetMode = .add(.clinePass)
             return
         }
+        if provider == .glm {
+            editingGLMProvider = nil
+            showGLMConnectionSheet = true
+            return
+        }
+        if [.factoryDroid, .openRouter].contains(provider) {
+            editingMonitorAPIKeyAccount = nil
+            monitorAPIKeyProvider = provider
+            return
+        }
 
         // In Local Proxy Mode, require proxy to be running for OAuth
         if modeManager.isLocalProxyMode && !viewModel.proxyManager.proxyStatus.running {
@@ -499,9 +548,9 @@ struct ProvidersScreen: View {
     }
 
     private func handleEditGlmAccount(_ account: AccountRowData) {
-        // Find the GLM provider by ID and open edit sheet using CustomProviderSheet
         if let glmProvider = customProviderService.providers.first(where: { $0.id.uuidString == account.id }) {
-            customProviderSheetMode = .edit(glmProvider)
+            editingGLMProvider = glmProvider
+            showGLMConnectionSheet = true
         }
     }
 
@@ -517,6 +566,12 @@ struct ProvidersScreen: View {
             editingWarpToken = token
             showWarpConnectionSheet = true
         }
+    }
+
+    private func handleEditMonitorAPIKeyAccount(_ account: AccountRowData) {
+        guard let monitorAccount = viewModel.monitorAccounts.first(where: { $0.id == account.id }) else { return }
+        editingMonitorAPIKeyAccount = monitorAccount
+        monitorAPIKeyProvider = monitorAccount.provider
     }
 
     private func syncCustomProvidersToConfig() {
