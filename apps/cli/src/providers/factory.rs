@@ -484,7 +484,19 @@ fn parse_windows(
             },
         });
     }
-    Ok(windows)
+    Ok(ProviderUsage {
+        reset_credits: None,
+        diagnostics: vec![],
+        account_ref: None,
+        provider: ProviderId("factory".into()),
+        account: AccountIdentity {
+            subscription_status: None,
+            plan: None,
+            id: format!("{}:{}", identity.user_id, identity.org_id),
+            label: format!("{} / {}", identity.user_id, identity.org_id),
+        },
+        windows,
+    })
 }
 impl FactoryProvider {
     async fn fetch_api(
