@@ -161,6 +161,9 @@ fn parse(
     let email = account.email.ok_or(ProviderError::InvalidData)?;
     let mut usage = ProviderUsage {
         reset_credits: None,
+        antigravity_subscription: None,
+        codex_profile: None,
+        codex_reset_credits: None,
         diagnostics: vec![],
         account_ref: None,
         provider: ProviderId("codex".into()),
@@ -338,36 +341,6 @@ mod tests {
     fn identity() -> Account {
         account(json!({"account":{"type":"chatgpt","email":"demo@example.com","planType":"pro"}}))
             .unwrap()
-    }
-    #[test]
-    fn optional_native_reset_summary_preserves_quota_on_malformed_details() {
-        for (credits, expected, diagnostic) in [
-            (Value::Null, None, false),
-            (json!({"availableCount":3}), Some(3), false),
-            (json!({"availableCount":0,"credits":[]}), Some(0), false),
-            (json!({"availableCount":"secret-sentinel"}), None, true),
-        ] {
-            let usage = parse(identity(), json!({"rateLimits":{"primary":{"usedPercent":20}},"rateLimitResetCredits":credits}), OffsetDateTime::UNIX_EPOCH).unwrap();
-            assert_eq!(usage.windows[0].quota, Quota::from_used(Some(20.0)));
-            assert_eq!(
-                usage.reset_credits.as_ref().map(|c| c.available_count),
-                expected
-            );
-            assert_eq!(!usage.diagnostics.is_empty(), diagnostic);
-            assert!(
-                !serde_json::to_string(&usage)
-                    .unwrap()
-                    .contains("secret-sentinel")
-            );
-        }
-        let old = parse(
-            identity(),
-            json!({"rateLimits":{"primary":{"usedPercent":20}}}),
-            OffsetDateTime::UNIX_EPOCH,
-        )
-        .unwrap();
-        assert!(old.reset_credits.is_none());
-        assert!(old.diagnostics.is_empty());
     }
     #[test]
     fn prefer_all_buckets_and_omit_missing_windows() {

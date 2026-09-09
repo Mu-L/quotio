@@ -465,6 +465,199 @@ async fn read_only_reset_credit_snapshots_expire_without_changing_quota() {
     );
     std::fs::remove_dir_all(dir).unwrap();
 }
+#[tokio::test]
+async fn antigravity_owned_intake_is_explicit_and_idempotent() {
+    let (state, dir, _) = fixture().await;
+    let body = json!({"kind":"antigravity_owned","label":"Owned Antigravity","access_token":"synthetic-antigravity-access","refresh_token":"synthetic-antigravity-refresh","expires_at":0,"client_id":"1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com","client_secret":"synthetic-client-secret"});
+    let (_, Json(op)) = management::create(
+        State(state.clone()),
+        key("antigravity-intake"),
+        ApiJson(body.clone()),
+    )
+    .await
+    .unwrap_or_else(|_| panic!());
+    assert_eq!(done(&state, &op.id).await.status, "completed");
+    let (_, Json(retry)) = management::create(
+        State(state.clone()),
+        key("antigravity-intake"),
+        ApiJson(body.clone()),
+    )
+    .await
+    .unwrap_or_else(|_| panic!());
+    assert_eq!(retry.id, op.id);
+    let Json(accounts) = management::list(State(state.clone()))
+        .await
+        .unwrap_or_else(|_| panic!());
+    assert!(!accounts.to_string().contains("synthetic-"));
+    let account = accounts["accounts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|a| a["provider"] == "antigravity")
+        .unwrap();
+    assert_eq!(account["origin"], "owned");
+    for field in ["path", "endpoint", "provider", "owned"] {
+        let mut invalid = body.clone();
+        invalid[field] = "fixture".into();
+        assert!(matches!(
+            management::create(
+                State(state.clone()),
+                key("invalid-antigravity"),
+                ApiJson(invalid)
+            )
+            .await,
+            Err(ApiError(StatusCode::BAD_REQUEST, _))
+        ));
+    }
+    std::fs::remove_dir_all(dir).unwrap();
+}
+#[tokio::test]
+async fn kiro_owned_intake_is_explicit_and_idempotent() {
+    let (state, dir, _) = fixture().await;
+    let body = json!({"kind":"kiro_owned","label":"Owned Kiro","access_token":"synthetic-kiro-access","refresh_token":"synthetic-kiro-refresh","expires_at":0,"authMethod":"Social","region":"us-east-1"});
+    let (_, Json(op)) = management::create(
+        State(state.clone()),
+        key("kiro-intake"),
+        ApiJson(body.clone()),
+    )
+    .await
+    .unwrap_or_else(|_| panic!());
+    assert_eq!(done(&state, &op.id).await.status, "completed");
+    let (_, Json(retry)) = management::create(
+        State(state.clone()),
+        key("kiro-intake"),
+        ApiJson(body.clone()),
+    )
+    .await
+    .unwrap_or_else(|_| panic!());
+    assert_eq!(retry.id, op.id);
+    let Json(accounts) = management::list(State(state.clone()))
+        .await
+        .unwrap_or_else(|_| panic!());
+    assert!(!accounts.to_string().contains("synthetic-kiro"));
+    let account = accounts["accounts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|a| a["provider"] == "kiro")
+        .unwrap();
+    assert_eq!(account["origin"], "owned");
+    for field in ["path", "endpoint", "provider", "owned", "machine"] {
+        let mut invalid = body.clone();
+        invalid[field] = "fixture".into();
+        assert!(matches!(
+            management::create(State(state.clone()), key("invalid-kiro"), ApiJson(invalid)).await,
+            Err(ApiError(StatusCode::BAD_REQUEST, _))
+        ));
+    }
+    std::fs::remove_dir_all(dir).unwrap();
+}
+#[tokio::test]
+async fn factory_owned_intake_is_explicit_and_idempotent() {
+    let (state, dir, _) = fixture().await;
+    let body = json!({"kind":"factory_owned","label":"Owned Factory","access_token":"synthetic-factory-access","refresh_token":"synthetic-factory-refresh","organization_id":"org"});
+    let (_, Json(op)) = management::create(
+        State(state.clone()),
+        key("factory-intake"),
+        ApiJson(body.clone()),
+    )
+    .await
+    .unwrap_or_else(|_| panic!());
+    assert_eq!(done(&state, &op.id).await.status, "completed");
+    let (_, Json(retry)) = management::create(
+        State(state.clone()),
+        key("factory-intake"),
+        ApiJson(body.clone()),
+    )
+    .await
+    .unwrap_or_else(|_| panic!());
+    assert_eq!(retry.id, op.id);
+    let Json(accounts) = management::list(State(state.clone()))
+        .await
+        .unwrap_or_else(|_| panic!());
+    assert!(!accounts.to_string().contains("synthetic-factory"));
+    let account = accounts["accounts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|a| a["provider"] == "factory")
+        .unwrap();
+    assert_eq!(account["origin"], "owned");
+    for field in [
+        "path",
+        "owned",
+        "provider",
+        "client_id",
+        "expires_at",
+        "region",
+        "endpoint",
+    ] {
+        let mut invalid = body.clone();
+        invalid[field] = "fixture".into();
+        assert!(matches!(
+            management::create(
+                State(state.clone()),
+                key("invalid-factory"),
+                ApiJson(invalid)
+            )
+            .await,
+            Err(ApiError(StatusCode::BAD_REQUEST, _))
+        ));
+    }
+    std::fs::remove_dir_all(dir).unwrap();
+}
+#[tokio::test]
+async fn grok_owned_intake_is_explicit_secret_free_and_idempotent() {
+    let (state, dir, _) = fixture().await;
+    let body = json!({"kind":"grok_owned","label":"Owned Grok","access_token":"synthetic-grok-access","refresh_token":"synthetic-grok-refresh","expires_at":0});
+    let (_, Json(op)) = management::create(
+        State(state.clone()),
+        key("grok-intake"),
+        ApiJson(body.clone()),
+    )
+    .await
+    .unwrap_or_else(|_| panic!());
+    assert_eq!(done(&state, &op.id).await.status, "completed");
+    let (_, Json(retry)) = management::create(
+        State(state.clone()),
+        key("grok-intake"),
+        ApiJson(body.clone()),
+    )
+    .await
+    .unwrap_or_else(|_| panic!());
+    assert_eq!(retry.id, op.id);
+    let Json(accounts) = management::list(State(state.clone()))
+        .await
+        .unwrap_or_else(|_| panic!());
+    assert!(!accounts.to_string().contains("synthetic-grok"));
+    let rows = accounts["accounts"].as_array().unwrap();
+    let account = rows.iter().find(|a| a["provider"] == "grok").unwrap();
+    assert_eq!(account["origin"], "owned");
+    let id = account["id"].as_str().unwrap().to_owned();
+    for field in ["path", "entry_key", "owned", "provider"] {
+        let mut invalid = body.clone();
+        invalid[field] = "fixture".into();
+        assert!(matches!(
+            management::create(State(state.clone()), key("invalid-grok"), ApiJson(invalid)).await,
+            Err(ApiError(StatusCode::BAD_REQUEST, _))
+        ));
+    }
+    assert!(matches!(management::reference(State(state.clone()), key("invalid-source"), ApiJson(json!({"kind":"grok_native","entry_key":"https://auth.x.ai::fixture","path":"/tmp/auth.json"}))).await, Err(ApiError(StatusCode::BAD_REQUEST, _))));
+    let (_, Json(disable)) = management::patch(
+        State(state.clone()),
+        Path(id.clone()),
+        key("disable-grok"),
+        ApiJson(json!({"enabled":false})),
+    )
+    .await
+    .unwrap_or_else(|_| panic!());
+    assert_eq!(done(&state, &disable.id).await.status, "completed");
+    let (_, Json(remove)) = management::remove(State(state.clone()), Path(id), key("remove-grok"))
+        .await
+        .unwrap_or_else(|_| panic!());
+    assert_eq!(done(&state, &remove.id).await.status, "completed");
+    std::fs::remove_dir_all(dir).unwrap();
+}
 
 #[tokio::test]
 async fn account_http_services_are_secret_free_idempotent_and_fenced() {

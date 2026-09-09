@@ -538,6 +538,9 @@ async fn clinepass_at(
     }
     Ok(ProviderUsage {
         reset_credits: None,
+        antigravity_subscription: None,
+        codex_profile: None,
+        codex_reset_credits: None,
         provider: crate::domain::ProviderId("clinepass".into()),
         account: common::account_identity("clinepass", &key, "personal"),
         account_ref: None,
@@ -1573,10 +1576,16 @@ mod tests {
         assert_eq!(usage.windows[1].amounts.as_ref().unwrap().remaining, 10.0);
         let request = server.await.unwrap().pop().unwrap();
         assert!(request.contains(&format!("\"category\":\"{}\"", warp_platform())));
-        assert!(request.to_ascii_lowercase().contains("x-warp-client-id: warp-app"));
-        assert!(request.to_ascii_lowercase().contains(
-            "x-warp-client-version: v0.2026.01.07.08.13.stable_01"
-        ));
+        assert!(
+            request
+                .to_ascii_lowercase()
+                .contains("x-warp-client-id: warp-app")
+        );
+        assert!(
+            request
+                .to_ascii_lowercase()
+                .contains("x-warp-client-version: v0.2026.01.07.08.13.stable_01")
+        );
         assert!(request.starts_with("POST /graphql/v2?op=GetRequestLimitInfo "));
         assert!(request.contains("GetRequestLimitInfo"));
         assert!(

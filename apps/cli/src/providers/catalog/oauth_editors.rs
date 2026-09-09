@@ -280,6 +280,9 @@ fn cursor_summary(
     }
     Ok(ProviderUsage {
         reset_credits: None,
+        antigravity_subscription: None,
+        codex_profile: None,
+        codex_reset_credits: None,
         provider: crate::domain::ProviderId("cursor".into()),
         account,
         account_ref: None,
@@ -348,6 +351,9 @@ pub(crate) async fn fetch_grok_complete_at(
     }
     Ok(ProviderUsage {
         reset_credits: None,
+        antigravity_subscription: None,
+        codex_profile: None,
+        codex_reset_credits: None,
         provider: crate::domain::ProviderId("grok".into()),
         account,
         account_ref: None,

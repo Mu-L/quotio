@@ -169,6 +169,12 @@ impl ResetCredits {
 pub struct ProviderUsage {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reset_credits: Option<ResetCredits>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub antigravity_subscription: Option<AntigravitySubscriptionInfo>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_profile: Option<CodexProfileAnalytics>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_reset_credits: Option<CodexResetCreditInventory>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub diagnostics: Vec<UsageDiagnostic>,
     #[serde(skip_serializing_if = "Option::is_none")]

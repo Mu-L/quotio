@@ -259,6 +259,7 @@ pub(crate) async fn fetch_oauth_at(
         .await
         .unwrap_or_else(|| id.clone());
     Ok(ProviderUsage {
+        reset_credits: None,
         antigravity_subscription: None,
         codex_profile: None,
         codex_reset_credits: None,
@@ -365,6 +366,7 @@ fn parse(
     }
     let windows = parse_windows(response, now)?;
     Ok(ProviderUsage {
+        reset_credits: None,
         antigravity_subscription: None,
         codex_profile: None,
         codex_reset_credits: None,
@@ -484,19 +486,7 @@ fn parse_windows(
             },
         });
     }
-    Ok(ProviderUsage {
-        reset_credits: None,
-        diagnostics: vec![],
-        account_ref: None,
-        provider: ProviderId("factory".into()),
-        account: AccountIdentity {
-            subscription_status: None,
-            plan: None,
-            id: format!("{}:{}", identity.user_id, identity.org_id),
-            label: format!("{} / {}", identity.user_id, identity.org_id),
-        },
-        windows,
-    })
+    Ok(windows)
 }
 impl FactoryProvider {
     async fn fetch_api(

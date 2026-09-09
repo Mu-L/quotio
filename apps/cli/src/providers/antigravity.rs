@@ -415,7 +415,17 @@ impl AntigravityProvider {
         };
         Ok(ProviderUsage {
             reset_credits: None,
-            diagnostics: vec![],
+            antigravity_subscription,
+            codex_profile: None,
+            codex_reset_credits: None,
+            diagnostics: if invalid_metadata {
+                vec![UsageDiagnostic {
+                    source: "antigravity_subscription".into(),
+                    code: ProviderError::InvalidData,
+                }]
+            } else {
+                vec![]
+            },
             account_ref: None,
             provider: self.id(),
             account: AccountIdentity {

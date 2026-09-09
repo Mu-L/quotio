@@ -239,6 +239,9 @@ async fn probe(
     }
     Ok(ProviderUsage {
         reset_credits: None,
+        antigravity_subscription: None,
+        codex_profile: None,
+        codex_reset_credits: None,
         diagnostics: vec![],
         account_ref: None,
         provider: ProviderId("antigravity".into()),

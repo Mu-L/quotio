@@ -570,6 +570,9 @@ impl KeyApiProvider {
             .collect();
         Ok(ProviderUsage {
             reset_credits: None,
+            antigravity_subscription: None,
+            codex_profile: None,
+            codex_reset_credits: None,
             diagnostics: vec![],
             account_ref: None,
             provider: self.id(),
@@ -688,6 +691,9 @@ mod tests {
             generated_at: OffsetDateTime::UNIX_EPOCH,
             providers: vec![ProviderUsage {
                 reset_credits: None,
+                antigravity_subscription: None,
+                codex_profile: None,
+                codex_reset_credits: None,
                 diagnostics: vec![],
                 account_ref: None,
                 provider: ProviderId("openrouter".into()),
@@ -789,8 +795,14 @@ mod tests {
         assert_eq!(windows[0].label, "Session");
         assert_eq!(windows[1].metric_id.as_deref(), Some("zai-weekly"));
         assert_eq!(windows[1].label, "1.5 days");
-        assert_eq!(windows[0].resets_at.unwrap().unix_timestamp_nanos(), 1_500_500_000);
-        assert_eq!(windows[1].resets_at.unwrap().unix_timestamp(), 1_788_696_000);
+        assert_eq!(
+            windows[0].resets_at.unwrap().unix_timestamp_nanos(),
+            1_500_500_000
+        );
+        assert_eq!(
+            windows[1].resets_at.unwrap().unix_timestamp(),
+            1_788_696_000
+        );
         assert_eq!(windows[2].resets_at.unwrap().unix_timestamp(), 1);
         assert_eq!(windows[2].metric_id.as_deref(), Some("zai-web-searches"));
         assert_eq!(windows[2].consumption.as_ref().unwrap().unit, "searches");
