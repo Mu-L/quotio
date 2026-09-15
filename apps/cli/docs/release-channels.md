@@ -32,11 +32,11 @@ there; never put their values in Git, workflow inputs or chat:
 
 | Secret | Purpose |
 | --- | --- |
-| `MACOS_CERTIFICATE_P12` | Base64-encoded Developer ID Application certificate and private key |
-| `MACOS_CERTIFICATE_PASSWORD` | Password protecting that certificate export |
-| `NOTARY_PRIVATE_KEY` | Apple notarization API private key, in PEM format |
-| `NOTARY_KEY_ID` | Associated Apple API key ID |
-| `NOTARY_ISSUER_ID` | Associated Apple API issuer ID |
+| `DEVELOPER_ID_CERTIFICATE_BASE64` | Base64-encoded Developer ID Application certificate and private key |
+| `DEVELOPER_ID_CERTIFICATE_PASSWORD` | Password protecting that certificate export |
+| `APP_STORE_CONNECT_API_KEY_BASE64` | Base64-encoded Apple notarization API private key |
+| `APP_STORE_CONNECT_KEY_ID` | Associated Apple API key ID |
+| `APP_STORE_CONNECT_ISSUER_ID` | Associated Apple API issuer ID |
 | `HOMEBREW_TAP_SSH_KEY` | Private SSH deploy key whose public key has write access only on the tap repository |
 
 Set the environment variable `HOMEBREW_TAP_REPOSITORY` in GitHub Actions to

@@ -5,7 +5,7 @@ trap 'echo "Release signing failed during: $stage" >&2' ERR
 # Called only on an ephemeral release runner. No certificate is stored in Git.
 : "${MACOS_CERTIFICATE_P12:?Set the Developer ID certificate secret}"
 : "${MACOS_CERTIFICATE_PASSWORD:?Set the certificate password secret}"
-: "${NOTARY_PRIVATE_KEY:?Set the notarization API key secret}"
+: "${NOTARY_PRIVATE_KEY_BASE64:?Set the base64-encoded notarization API key secret}"
 : "${NOTARY_KEY_ID:?Set the notarization key ID}"
 : "${NOTARY_ISSUER_ID:?Set the notarization issuer ID}"
 binary=${1:?Pass the release binary}
@@ -25,7 +25,7 @@ cleanup() {
 trap cleanup EXIT
 password=$(openssl rand -hex 32)
 printf '%s' "$MACOS_CERTIFICATE_P12" | base64 --decode > "$staging/certificate.p12"
-printf '%s' "$NOTARY_PRIVATE_KEY" > "$staging/notary.p8"
+printf '%s' "$NOTARY_PRIVATE_KEY_BASE64" | base64 --decode > "$staging/notary.p8"
 chmod 600 "$staging/certificate.p12" "$staging/notary.p8"
 stage="create keychain"
 security create-keychain -p "$password" "$keychain"
