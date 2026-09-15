@@ -33,7 +33,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
       # ===========================================
       # 2. Setup Xcode
@@ -223,11 +223,13 @@ jobs:
       - name: Create tag
         if: github.event_name == 'workflow_dispatch'
         env:
+          GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
           TAG_NAME="v${VERSION}"
           if ! git tag -l | grep -q "^${TAG_NAME}$"; then
             git tag -a "${TAG_NAME}" -m "Release ${VERSION}"
+            gh auth setup-git
             git push origin "${TAG_NAME}"
           fi
 
@@ -286,6 +288,7 @@ jobs:
         env:
           BASE_REF: ${{ github.event.base_ref }}
           EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
           REF_NAME: ${{ github.ref_name }}
           VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
@@ -338,6 +341,7 @@ jobs:
             fi
             
             echo "Pushing to branch: ${TARGET_BRANCH}"
+            gh auth setup-git
             git push origin HEAD:"${TARGET_BRANCH}"
           fi
 
