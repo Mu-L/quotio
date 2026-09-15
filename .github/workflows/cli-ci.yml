@@ -2,9 +2,19 @@ name: Rust checks
 
 on:
   pull_request:
+    paths:
+      - 'apps/cli/**'
+      - '.github/workflows/cli-ci.yml'
   push:
-    branches: [main]
+    branches: [master]
+    paths:
+      - 'apps/cli/**'
+      - '.github/workflows/cli-ci.yml'
   workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: apps/cli
 
 permissions: {}
 

@@ -1,4 +1,4 @@
-name: Release
+name: macOS Release
 
 on:
   push:
@@ -14,6 +14,8 @@ on:
 env:
   PROJECT_NAME: Quotio
 
+permissions: {}
+
 jobs:
   build-and-release:
     runs-on: macos-15
@@ -28,7 +30,7 @@ jobs:
       # 1. Checkout
       # ===========================================
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -37,7 +39,7 @@ jobs:
       # 2. Setup Xcode
       # ===========================================
       - name: Setup Xcode
-        uses: maxim-lobanov/setup-xcode@v1
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
         with:
           xcode-version: '26.1'
 
@@ -46,11 +48,18 @@ jobs:
       # ===========================================
       - name: Get version
         id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.version }}"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION="$INPUT_VERSION"
           else
             VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)[.-][0-9]+)?$ ]]; then
+            echo "Invalid release version: $VERSION" >&2
+            exit 1
           fi
           echo "VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
           
@@ -178,8 +187,9 @@ jobs:
           POSTHOG_HOST: ${{ vars.POSTHOG_HOST || 'https://us.i.posthog.com' }}
           SIGNING_ENABLED: ${{ steps.signing.outputs.enabled }}
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
-          args=(--version "${{ steps.version.outputs.VERSION }}" --generate-appcast)
+          args=(--version "$VERSION" --generate-appcast)
           if [[ "${SIGNING_ENABLED}" == "true" ]]; then
             args+=(--distribution)
           fi
@@ -212,10 +222,12 @@ jobs:
       # ===========================================
       - name: Create tag
         if: github.event_name == 'workflow_dispatch'
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
-          TAG_NAME="v${{ steps.version.outputs.VERSION }}"
+          TAG_NAME="v${VERSION}"
           if ! git tag -l | grep -q "^${TAG_NAME}$"; then
-            git tag -a "${TAG_NAME}" -m "Release ${{ steps.version.outputs.VERSION }}"
+            git tag -a "${TAG_NAME}" -m "Release ${VERSION}"
             git push origin "${TAG_NAME}"
           fi
 
@@ -223,7 +235,7 @@ jobs:
       # 6. Create GitHub Release
       # ===========================================
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: v${{ steps.version.outputs.VERSION }}
           name: ${{ env.PROJECT_NAME }} ${{ steps.version.outputs.VERSION }}
@@ -251,7 +263,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Get the latest stable release tag
-          LATEST_STABLE=$(gh release list --exclude-pre-releases --limit 1 --json tagName -q '.[0].tagName')
+          LATEST_STABLE=$(gh release list --exclude-pre-releases --limit 100 --json tagName -q '[.[] | select(.tagName | startswith("v"))][0].tagName // ""')
           
           if [ -n "$LATEST_STABLE" ]; then
             echo "Updating appcast on latest stable release: $LATEST_STABLE"
@@ -271,6 +283,11 @@ jobs:
       # 8. Commit version changes
       # ===========================================
       - name: Commit changes
+        env:
+          BASE_REF: ${{ github.event.base_ref }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -280,17 +297,15 @@ jobs:
             echo "No changes to commit"
           else
             git add CHANGELOG.md Quotio.xcodeproj/project.pbxproj
-            git commit -m "chore: bump version to ${{ steps.version.outputs.VERSION }} [skip ci]"
+            git commit -m "chore: bump version to ${VERSION} [skip ci]"
             
             # Determine target branch. For tag-triggered releases, never guess
             # master/main when the tag commit is present on multiple branches.
-            if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
               # For manual dispatch, push to the branch that triggered the workflow
-              TARGET_BRANCH="${{ github.ref_name }}"
+              TARGET_BRANCH="$REF_NAME"
             else
               # For tag push, prefer the source branch from the webhook payload.
-              BASE_REF="${{ github.event.base_ref }}"
-
               if [[ "$BASE_REF" == refs/heads/* ]]; then
                 TARGET_BRANCH="${BASE_REF#refs/heads/}"
               else
@@ -308,7 +323,7 @@ jobs:
                 if [ "$BRANCH_COUNT" -eq 1 ]; then
                   TARGET_BRANCH="$BRANCHES"
                 else
-                  echo "Error: Cannot determine the source branch for tag ${{ github.ref_name }}."
+                  echo "Error: Cannot determine the source branch for tag $REF_NAME."
                   echo "Branches containing this commit: ${BRANCHES:-none}"
                   echo "Push the version/changelog commit manually to the intended branch, or run this workflow with workflow_dispatch from that branch."
                   exit 1
@@ -330,13 +345,16 @@ jobs:
       # 9. Summary
       # ===========================================
       - name: Summary
+        env:
+          IS_PRERELEASE: ${{ steps.version.outputs.IS_PRERELEASE }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
           {
             echo "## Release Summary"
             echo ""
-            echo "- **Version**: ${{ steps.version.outputs.VERSION }}"
-            echo "- **Tag**: v${{ steps.version.outputs.VERSION }}"
-            echo "- **Pre-release**: ${{ steps.version.outputs.IS_PRERELEASE }}"
+            echo "- **Version**: ${VERSION}"
+            echo "- **Tag**: v${VERSION}"
+            echo "- **Pre-release**: ${IS_PRERELEASE}"
             echo ""
             echo "### Assets"
             ls -la build/release/
@@ -347,9 +365,12 @@ jobs:
       # ===========================================
       - name: Trigger homebrew-tap update
         if: steps.version.outputs.IS_PRERELEASE == 'false'
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
           curl -X POST \
-            -H "Authorization: token ${{ secrets.TAP_TOKEN }}" \
+            -H "Authorization: token ${TAP_TOKEN}" \
             -H "Accept: application/vnd.github.v3+json" \
             https://api.github.com/repos/nguyenphutrong/homebrew-tap/dispatches \
-            -d '{"event_type":"quotio-release","client_payload":{"version":"${{ steps.version.outputs.VERSION }}"}}'
+            -d "{\"event_type\":\"quotio-release\",\"client_payload\":{\"version\":\"${VERSION}\"}}"

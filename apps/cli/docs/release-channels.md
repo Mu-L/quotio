@@ -48,8 +48,8 @@ API before cloning; it does not disable host verification. Forks must change thi
 In npm package settings, configure a GitHub trusted publisher for:
 
 - Repository owner: `nguyenphutrong`
-- Repository: `quotio-cli`
-- Workflow filename: `publish-release.yml`
+- Repository: `quotio`
+- Workflow filename: `cli-publish-release.yml`
 - Environment: `release`
 - Allowed action: `npm publish`
 
@@ -72,14 +72,15 @@ integrity matches exactly.
    Supported versions are `X.Y.Z`, `X.Y.Z-alpha.N`, `X.Y.Z-beta.N`, or `X.Y.Z-rc.N`.
    npm's version is generated from the release input; its source package is a
    template, not a separately versioned product.
-2. Push the intended commit and run **Prepare release** (`release.yml`) on that
-   commit/branch, with the matching version without `v`.
+2. Push the intended commit and run **Prepare release** (`cli-release.yml`) on that
+   commit/branch, with the matching version without `cli-v`.
 3. Each target runs fmt, Clippy and offline tests, builds its binary, and checks
    the executable version. macOS binaries must pass Developer ID signing and
    notarization before their archives can be uploaded. The certificate/keychain
    files exist only on the temporary runner and are removed afterward.
 4. The final job assembles the npm package and checksum-pinned Homebrew formula,
-   then creates a **draft** GitHub release pointing to the exact workflow commit.
+   then creates a **draft** `cli-v*` GitHub release pointing to the exact workflow
+   commit without replacing the macOS app's latest release.
    It does not overwrite an existing release/tag automatically. To change code,
    prepare a new version rather than replacing published assets.
 5. Download and verify the draft artifacts on the supported machines. Complete the

@@ -6,12 +6,13 @@ on:
 
 permissions: {}
 concurrency:
-  group: publish-release
+  group: cli-publish-release
   cancel-in-progress: false
 
 jobs:
   npm:
     name: Publish npm package
+    if: startsWith(github.event.release.tag_name, 'cli-v')
     runs-on: ubuntu-24.04
     environment: release
     timeout-minutes: 10
@@ -29,15 +30,15 @@ jobs:
           registry-url: https://registry.npmjs.org
       - name: Download and verify npm artifact
         run: |
-          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?$ ]]
-          version=${RELEASE_TAG#v}
+          [[ "$RELEASE_TAG" =~ ^cli-v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?$ ]]
+          version=${RELEASE_TAG#cli-v}
           gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "quotio-$version.tgz" --pattern SHA256SUMS
           awk -v name="quotio-$version.tgz" '$2 == name' SHA256SUMS > npm.sha256
           test "$(wc -l < npm.sha256)" -eq 1
           sha256sum --check npm.sha256
       - name: Publish npm with trusted publishing
         run: |
-          version=${RELEASE_TAG#v}
+          version=${RELEASE_TAG#cli-v}
           channel=latest
           if [[ "$version" == *-* ]]; then channel=next; fi
           local_integrity=$(node -e 'const fs=require("fs"),c=require("crypto"); console.log("sha512-"+c.createHash("sha512").update(fs.readFileSync(process.argv[1])).digest("base64"))' "quotio-$version.tgz")
@@ -49,6 +50,7 @@ jobs:
           fi
   homebrew:
     name: Update Homebrew tap
+    if: startsWith(github.event.release.tag_name, 'cli-v')
     needs: npm
     runs-on: ubuntu-24.04
     environment: release
@@ -63,7 +65,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?$ ]]
+          [[ "$RELEASE_TAG" =~ ^cli-v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?$ ]]
           formula=quotio.rb
           if [[ "$RELEASE_TAG" == *-* ]]; then formula=quotio-beta.rb; fi
           gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$formula" --pattern SHA256SUMS

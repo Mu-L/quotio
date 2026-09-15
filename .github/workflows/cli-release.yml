@@ -4,20 +4,20 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Version matching Cargo.toml, without v (for example 0.1.0-beta.1)
+        description: Version matching Cargo.toml, without cli-v (for example 0.1.0-beta.1)
         required: true
         type: string
 
 permissions: {}
 concurrency:
-  group: prepare-release
+  group: cli-prepare-release
   cancel-in-progress: false
 
 jobs:
   security:
     permissions:
       contents: read
-    uses: ./.github/workflows/security.yml # zizmor: ignore[self-repository] GitHub and actionlint require ./ here.
+    uses: ./.github/workflows/cli-security.yml # zizmor: ignore[self-repository] GitHub and actionlint require ./ here.
   build:
     name: Build ${{ matrix.target }}
     needs: security
@@ -36,6 +36,9 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
+    defaults:
+      run:
+        working-directory: apps/cli
     env:
       VERSION: ${{ inputs.version }}
       TARGET: ${{ matrix.target }}
@@ -77,7 +80,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: binary-${{ matrix.target }}
-          path: artifacts/*.tar.gz
+          path: apps/cli/artifacts/*.tar.gz
           if-no-files-found: error
           retention-days: 7
   draft:
@@ -88,6 +91,9 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write # Required to create the draft GitHub release.
+    defaults:
+      run:
+        working-directory: apps/cli
     env:
       VERSION: ${{ inputs.version }}
       GH_TOKEN: ${{ github.token }}
@@ -101,7 +107,7 @@ jobs:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           pattern: binary-*
-          path: artifacts
+          path: apps/cli/artifacts
           merge-multiple: true
       - name: Verify distribution tooling
         run: |
@@ -113,5 +119,5 @@ jobs:
         run: |
           args=()
           if [[ "$VERSION" == *-* ]]; then args+=(--prerelease); fi
-          gh release create "v$VERSION" release-output/*.tar.gz release-output/*.tgz release-output/*.rb release-output/SHA256SUMS \
-            --target "$GITHUB_SHA" --draft --title "Quotio v$VERSION" --generate-notes "${args[@]}"
+          gh release create "cli-v$VERSION" release-output/*.tar.gz release-output/*.tgz release-output/*.rb release-output/SHA256SUMS \
+            --target "$GITHUB_SHA" --draft --latest=false --title "Quotio CLI v$VERSION" --generate-notes "${args[@]}"

@@ -48,7 +48,7 @@ def formula(release, repository, hashes):
     klass = 'QuotioBeta' if beta else 'Quotio'
     def source(target, indent):
         name = archive_name(release, target)
-        return f'{indent}url "https://github.com/{repository}/releases/download/v{release}/{name}"\n{indent}sha256 "{hashes[name]}"\n'
+        return f'{indent}url "https://github.com/{repository}/releases/download/cli-v{release}/{name}"\n{indent}sha256 "{hashes[name]}"\n'
     return f'''class {klass} < Formula
   desc "Check AI provider quota and usage"
   homepage "https://github.com/{repository}"

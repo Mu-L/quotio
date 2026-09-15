@@ -44,7 +44,7 @@ class ReleaseTests(unittest.TestCase):
                 self.assertNotIn('Linux has no saved-account vault', readme)
             self.assertEqual(len((out / 'SHA256SUMS').read_text().splitlines()), 5)
             formula = (out / 'quotio.rb').read_text()
-            self.assertIn('/releases/download/v0.1.0/', formula)
+            self.assertIn('/releases/download/cli-v0.1.0/', formula)
             self.assertNotIn('no_check', formula)
             subprocess.run(['npm', 'install', '--prefix', str(root / 'install'), '--ignore-scripts', '--no-audit', '--no-fund', str(out / 'quotio-0.1.0.tgz')], check=True)
             binary = root / 'install/node_modules/.bin/quotio'

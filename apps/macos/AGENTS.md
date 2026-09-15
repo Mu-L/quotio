@@ -40,7 +40,7 @@ production graph and owns lifecycle only.
 - `apps/macos/QuotioTests/`: executable dependency-graph, lifecycle, identity, and bundle tests.
 - `apps/macos/Config/`: Debug/Release xcconfig files and the template for local overrides.
 - `apps/macos/scripts/`: local build/run helpers and release packaging scripts.
-- `.github/workflows/release.yml`: tag/manual release pipeline.
+- `.github/workflows/macos-release.yml`: tag/manual release pipeline.
 
 The Xcode groups and local package use filesystem synchronization. Place new files in
 the owning module or test target; manual edits to `project.pbxproj` are normally
@@ -177,8 +177,8 @@ the repository root is not a Swift package.
 
 ## CI, Commits, and Pull Requests
 
-- `.github/workflows/ci.yml` runs package tests, architecture checks, Xcode tests, and a
-  Debug build. `.github/workflows/release.yml` handles `v*` tags and manual dispatch to
+- `.github/workflows/macos-ci.yml` runs package tests, architecture checks, Xcode tests, and a
+  Debug build. `.github/workflows/macos-release.yml` handles `v*` tags and manual dispatch to
   build release artifacts, optionally sign/notarize them, publish the GitHub release and
   appcast, and dispatch the Homebrew tap update. Before review, report the relevant
   local checks from the Testing section and any checks that could not run.
