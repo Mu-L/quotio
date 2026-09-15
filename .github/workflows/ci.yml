@@ -24,16 +24,16 @@ jobs:
         run: swift test --package-path Packages/QuotioCore
 
       - name: Check architecture boundaries
-        run: ./scripts/check_architecture.sh
+        run: ./apps/macos/scripts/check_architecture.sh
 
       - name: Test app
         run: >-
-          xcodebuild -project Quotio.xcodeproj -scheme Quotio
+          xcodebuild -project apps/macos/Quotio.xcodeproj -scheme Quotio
           -configuration Debug -destination 'platform=macOS'
           CODE_SIGNING_ALLOWED=NO test
 
       - name: Build app
         run: >-
-          xcodebuild -project Quotio.xcodeproj -scheme Quotio
+          xcodebuild -project apps/macos/Quotio.xcodeproj -scheme Quotio
           -configuration Debug -destination 'platform=macOS'
           CODE_SIGNING_ALLOWED=NO build

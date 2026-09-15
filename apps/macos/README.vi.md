@@ -97,7 +97,7 @@ Các bản phát hành chính thức được ký bằng Developer ID và đư�
 1. **Clone repo:**
    ```bash
    git clone https://github.com/nguyenphutrong/quotio.git
-   cd Quotio
+   cd quotio/apps/macos
    ```
 
 2. **Mở trong Xcode:**

@@ -31,7 +31,7 @@ POSTHOG_HOST = https:/$()/us.i.posthog.com
 // ========================
 // CREATING USER SCHEME IN XCODE:
 // ========================
-// 1. Open Quotio.xcodeproj in Xcode
+// 1. Open apps/macos/Quotio.xcodeproj in Xcode
 // 2. Click on scheme selector (top left, next to Stop button)
 // 3. Click "Manage Schemes..."
 // 4. Select "Quotio" scheme → Click "Duplicate" (or press Cmd+D)

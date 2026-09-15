@@ -530,7 +530,7 @@
 /* Begin XCLocalSwiftPackageReference section */
 		B20000000000000000000001 /* XCLocalSwiftPackageReference "Packages/QuotioCore" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = Packages/QuotioCore;
+			relativePath = ../../Packages/QuotioCore;
 		};
 /* End XCLocalSwiftPackageReference section */
 

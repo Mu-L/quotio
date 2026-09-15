@@ -19,6 +19,9 @@ jobs:
     runs-on: macos-15
     permissions:
       contents: write
+    defaults:
+      run:
+        working-directory: apps/macos
 
     steps:
       # ===========================================
@@ -49,13 +52,13 @@ jobs:
           else
             VERSION="${GITHUB_REF#refs/tags/v}"
           fi
-          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
           
           # Check if beta
           if [[ "$VERSION" == *"-beta"* ]] || [[ "$VERSION" == *"-alpha"* ]] || [[ "$VERSION" == *"-rc"* ]]; then
-            echo "IS_PRERELEASE=true" >> $GITHUB_OUTPUT
+            echo "IS_PRERELEASE=true" >> "$GITHUB_OUTPUT"
           else
-            echo "IS_PRERELEASE=false" >> $GITHUB_OUTPUT
+            echo "IS_PRERELEASE=false" >> "$GITHUB_OUTPUT"
           fi
           
           echo "Releasing version: ${VERSION}"
@@ -225,9 +228,9 @@ jobs:
           tag_name: v${{ steps.version.outputs.VERSION }}
           name: ${{ env.PROJECT_NAME }} ${{ steps.version.outputs.VERSION }}
           files: |
-            build/release/*.dmg
-            build/release/*.zip
-            build/release/appcast.xml
+            apps/macos/build/release/*.dmg
+            apps/macos/build/release/*.zip
+            apps/macos/build/release/appcast.xml
           generate_release_notes: true
           append_body: true
           body: |
@@ -328,14 +331,16 @@ jobs:
       # ===========================================
       - name: Summary
         run: |
-          echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version**: ${{ steps.version.outputs.VERSION }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Tag**: v${{ steps.version.outputs.VERSION }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Pre-release**: ${{ steps.version.outputs.IS_PRERELEASE }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Assets" >> $GITHUB_STEP_SUMMARY
-          ls -la build/release/ >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Release Summary"
+            echo ""
+            echo "- **Version**: ${{ steps.version.outputs.VERSION }}"
+            echo "- **Tag**: v${{ steps.version.outputs.VERSION }}"
+            echo "- **Pre-release**: ${{ steps.version.outputs.IS_PRERELEASE }}"
+            echo ""
+            echo "### Assets"
+            ls -la build/release/
+          } >> "$GITHUB_STEP_SUMMARY"
 
       # ===========================================
       # 10. Trigger homebrew-tap update

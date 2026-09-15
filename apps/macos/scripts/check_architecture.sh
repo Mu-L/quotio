@@ -3,7 +3,7 @@
 set -euo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-source_root="${ARCHITECTURE_SOURCE_ROOT:-${repository_root}/Packages/QuotioCore/Sources}"
+source_root="${ARCHITECTURE_SOURCE_ROOT:-${repository_root}/../../Packages/QuotioCore/Sources}"
 app_root="${ARCHITECTURE_APP_ROOT:-${repository_root}/Quotio}"
 app_test_root="${ARCHITECTURE_APP_TEST_ROOT:-${repository_root}/QuotioTests}"
 failure_count=0

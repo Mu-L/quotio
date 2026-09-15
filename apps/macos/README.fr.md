@@ -97,7 +97,7 @@ Les versions officielles sont signées avec Developer ID et notariées par Apple
 1. **Clonez le dépôt :**
    ```bash
    git clone https://github.com/nguyenphutrong/quotio.git
-   cd Quotio
+   cd quotio/apps/macos
    ```
 
 2. **Ouvrez dans Xcode :**
