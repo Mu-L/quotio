@@ -922,7 +922,7 @@ dependencies = [
 
 [[package]]
 name = "quotio"
-version = "0.2.11"
+version = "0.2.12"
 dependencies = [
  "axum",
  "base64",
