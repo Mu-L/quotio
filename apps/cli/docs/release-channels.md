@@ -87,8 +87,9 @@ integrity matches exactly.
    [live acceptance checks](operations.md#release-acceptance). The ZIP submitted to
    Apple is a notarization transport; the distributed raw CLI relies on online
    Gatekeeper ticket lookup, not a stapled installer.
-6. Publish the draft in GitHub. **Publish package channels** publishes the verified
-   npm tarball, then updates the existing tap using its repository-scoped SSH deploy key.
+6. Publish the draft in GitHub. **Publish package channels** keeps the macOS app as
+   GitHub's latest release, publishes the verified npm tarball, then updates the
+   existing tap using its repository-scoped SSH deploy key.
 
 | Version | npm tag | Homebrew formula |
 | --- | --- | --- |
