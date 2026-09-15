@@ -72,8 +72,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           [[ "$RELEASE_TAG" =~ ^cli-v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?$ ]]
+          version=${RELEASE_TAG#cli-v}
           formula=quotio.rb
-          if [[ "$RELEASE_TAG" == *-* ]]; then formula=quotio-beta.rb; fi
+          if [[ "$version" == *-* ]]; then formula=quotio-beta.rb; fi
           gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$formula"
           expected=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" --jq ".assets[] | select(.name == \"$formula\") | .digest")
           [[ "$expected" =~ ^sha256:[0-9a-f]{64}$ ]]
@@ -87,8 +88,9 @@ jobs:
           : "${HOMEBREW_TAP_SSH_KEY:?Set the tap deploy key secret}"
           : "${TAP_REPOSITORY:?Set HOMEBREW_TAP_REPOSITORY}"
           [[ "$TAP_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
+          version=${RELEASE_TAG#cli-v}
           formula=quotio.rb
-          if [[ "$RELEASE_TAG" == *-* ]]; then formula=quotio-beta.rb; fi
+          if [[ "$version" == *-* ]]; then formula=quotio-beta.rb; fi
           private=$(mktemp -d)
           trap 'rm -rf "$private"' EXIT
           printf '%s\n' "$HOMEBREW_TAP_SSH_KEY" > "$private/key"
