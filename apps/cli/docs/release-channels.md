@@ -109,9 +109,10 @@ bundle the verified platform-specific GitHub binary without requiring npm or bre
 
 ## Retry and limitations
 
-If npm succeeds but the tap update fails, fix the tap credentials and rerun the
-failed workflow. An identical npm tarball is skipped; different bytes for an
-existing npm version stop publishing. An unchanged tap formula is also skipped.
+If npm succeeds but the tap update fails, fix the cause and manually run
+**Publish package channels** for the existing `cli-v*` tag. An identical npm
+tarball is skipped; different bytes for an existing npm version stop publishing.
+An unchanged tap formula is also skipped.
 GitHub publication, npm and the tap are separate services: publishing is not an
 atomic transaction across all three. Review all job outcomes before announcing
 that every channel is available. Publish versions in order; publishing an older
