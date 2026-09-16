@@ -2,9 +2,8 @@
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="screenshots/menu_bar_dark.png" />
-    <source media="(prefers-color-scheme: light)" srcset="screenshots/menu_bar.png" />
-    <img alt="Quotio Banner" src="screenshots/menu_bar.png" width="720" />
+    <source media="(prefers-color-scheme: light)" srcset="apps/macos/screenshots/menu_bar.png" />
+    <img alt="Quotio Banner" src="apps/macos/screenshots/menu_bar.png" width="720" />
   </picture>
 </p>
 
@@ -12,7 +11,7 @@
   <img src="https://img.shields.io/badge/platform-macOS-lightgrey.svg?style=flat" alt="Platform macOS" />
   <img src="https://img.shields.io/badge/language-Swift-orange.svg?style=flat" alt="Language Swift" />
   <img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat" alt="License MIT" />
-  <a href="README.md"><img src="https://img.shields.io/badge/lang-English-blue.svg?style=flat" alt="English" /></a>
+  <a href="apps/macos/README.md"><img src="https://img.shields.io/badge/lang-English-blue.svg?style=flat" alt="English" /></a>
   <a href="README.zh.md"><img src="https://img.shields.io/badge/lang-zh--CN-green.svg?style=flat" alt="Chinese" /></a>
   <a href="README.fr.md"><img src="https://img.shields.io/badge/lang-Français-blue.svg?style=flat" alt="French" /></a>
 </p>
@@ -138,51 +137,50 @@ Vào tab **Agents** → Chọn agent đã cài → Nhấn **Configure** → Ch�
 
 ### Bảng điều khiển
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/dashboard_dark.png" />
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/dashboard.png" />
-  <img alt="Bảng điều khiển" src="screenshots/dashboard.png" />
+  <source media="(prefers-color-scheme: dark)" srcset="apps/macos/screenshots/dashboard_dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="apps/macos/screenshots/dashboard.png" />
+  <img alt="Bảng điều khiển" src="apps/macos/screenshots/dashboard.png" />
 </picture>
 
 ### Nhà cung cấp
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/provider_dark.png" />
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/provider.png" />
-  <img alt="Nhà cung cấp" src="screenshots/provider.png" />
+  <source media="(prefers-color-scheme: dark)" srcset="apps/macos/screenshots/provider_dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="apps/macos/screenshots/provider.png" />
+  <img alt="Nhà cung cấp" src="apps/macos/screenshots/provider.png" />
 </picture>
 
 ### Cài đặt Agent
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/agent_setup_dark.png" />
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/agent_setup.png" />
-  <img alt="Cài đặt Agent" src="screenshots/agent_setup.png" />
+  <source media="(prefers-color-scheme: dark)" srcset="apps/macos/screenshots/agent_setup_dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="apps/macos/screenshots/agent_setup.png" />
+  <img alt="Cài đặt Agent" src="apps/macos/screenshots/agent_setup.png" />
 </picture>
 
 ### Giám sát Hạn mức
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/quota_dark.png" />
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/quota.png" />
-  <img alt="Giám sát Hạn mức" src="screenshots/quota.png" />
+  <source media="(prefers-color-scheme: dark)" srcset="apps/macos/screenshots/quota_dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="apps/macos/screenshots/quota.png" />
+  <img alt="Giám sát Hạn mức" src="apps/macos/screenshots/quota.png" />
 </picture>
 
 ### API Keys
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/api_keys_dark.png" />
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/api_keys.png" />
-  <img alt="API Keys" src="screenshots/api_keys.png" />
+  <source media="(prefers-color-scheme: dark)" srcset="apps/macos/screenshots/api_keys_dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="apps/macos/screenshots/api_keys.png" />
+  <img alt="API Keys" src="apps/macos/screenshots/api_keys.png" />
 </picture>
 
 ### Cài đặt
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/settings_dark.png" />
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/settings.png" />
-  <img alt="Cài đặt" src="screenshots/settings.png" />
+  <source media="(prefers-color-scheme: dark)" srcset="apps/macos/screenshots/settings_dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="apps/macos/screenshots/settings.png" />
+  <img alt="Cài đặt" src="apps/macos/screenshots/settings.png" />
 </picture>
 
 ### Menu Bar
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/menu_bar_dark.png" />
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/menu_bar.png" />
-  <img alt="Menu Bar" src="screenshots/menu_bar.png" width="720" />
+  <source media="(prefers-color-scheme: light)" srcset="apps/macos/screenshots/menu_bar.png" />
+  <img alt="Menu Bar" src="apps/macos/screenshots/menu_bar.png" width="720" />
 </picture>
 
 ## 🤝 Đóng góp

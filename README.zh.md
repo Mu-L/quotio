@@ -2,9 +2,8 @@
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="screenshots/menu_bar_dark.png" />
-    <source media="(prefers-color-scheme: light)" srcset="screenshots/menu_bar.png" />
-    <img alt="Quotio Banner" src="screenshots/menu_bar.png" width="720" />
+    <source media="(prefers-color-scheme: light)" srcset="apps/macos/screenshots/menu_bar.png" />
+    <img alt="Quotio Banner" src="apps/macos/screenshots/menu_bar.png" width="720" />
   </picture>
 </p>
 
@@ -12,7 +11,7 @@
   <img src="https://img.shields.io/badge/platform-macOS-lightgrey.svg?style=flat" alt="Platform macOS" />
   <img src="https://img.shields.io/badge/language-Swift-orange.svg?style=flat" alt="Language Swift" />
   <img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat" alt="License MIT" />
-  <a href="README.md"><img src="https://img.shields.io/badge/lang-English-blue.svg?style=flat" alt="English" /></a>
+  <a href="apps/macos/README.md"><img src="https://img.shields.io/badge/lang-English-blue.svg?style=flat" alt="English" /></a>
   <a href="README.vi.md"><img src="https://img.shields.io/badge/lang-Tiếng%20Việt-red.svg?style=flat" alt="Vietnamese" /></a>
   <a href="README.fr.md"><img src="https://img.shields.io/badge/lang-Français-blue.svg?style=flat" alt="French" /></a>
 </p>
@@ -138,51 +137,50 @@ brew install --cask quotio
 
 ### 仪表盘
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/dashboard_dark.png" />
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/dashboard.png" />
-  <img alt="Dashboard" src="screenshots/dashboard.png" />
+  <source media="(prefers-color-scheme: dark)" srcset="apps/macos/screenshots/dashboard_dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="apps/macos/screenshots/dashboard.png" />
+  <img alt="Dashboard" src="apps/macos/screenshots/dashboard.png" />
 </picture>
 
 ### 提供商
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/provider_dark.png" />
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/provider.png" />
-  <img alt="Providers" src="screenshots/provider.png" />
+  <source media="(prefers-color-scheme: dark)" srcset="apps/macos/screenshots/provider_dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="apps/macos/screenshots/provider.png" />
+  <img alt="Providers" src="apps/macos/screenshots/provider.png" />
 </picture>
 
 ### Agent 配置
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/agent_setup_dark.png" />
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/agent_setup.png" />
-  <img alt="Agent Setup" src="screenshots/agent_setup.png" />
+  <source media="(prefers-color-scheme: dark)" srcset="apps/macos/screenshots/agent_setup_dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="apps/macos/screenshots/agent_setup.png" />
+  <img alt="Agent Setup" src="apps/macos/screenshots/agent_setup.png" />
 </picture>
 
 ### 配额监控
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/quota_dark.png" />
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/quota.png" />
-  <img alt="Quota Monitoring" src="screenshots/quota.png" />
+  <source media="(prefers-color-scheme: dark)" srcset="apps/macos/screenshots/quota_dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="apps/macos/screenshots/quota.png" />
+  <img alt="Quota Monitoring" src="apps/macos/screenshots/quota.png" />
 </picture>
 
 ### API 密钥
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/api_keys_dark.png" />
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/api_keys.png" />
-  <img alt="API Keys" src="screenshots/api_keys.png" />
+  <source media="(prefers-color-scheme: dark)" srcset="apps/macos/screenshots/api_keys_dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="apps/macos/screenshots/api_keys.png" />
+  <img alt="API Keys" src="apps/macos/screenshots/api_keys.png" />
 </picture>
 
 ### 设置
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/settings_dark.png" />
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/settings.png" />
-  <img alt="Settings" src="screenshots/settings.png" />
+  <source media="(prefers-color-scheme: dark)" srcset="apps/macos/screenshots/settings_dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="apps/macos/screenshots/settings.png" />
+  <img alt="Settings" src="apps/macos/screenshots/settings.png" />
 </picture>
 
 ### 菜单栏
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/menu_bar_dark.png" />
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/menu_bar.png" />
-  <img alt="Menu Bar" src="screenshots/menu_bar.png" width="720" />
+  <source media="(prefers-color-scheme: light)" srcset="apps/macos/screenshots/menu_bar.png" />
+  <img alt="Menu Bar" src="apps/macos/screenshots/menu_bar.png" width="720" />
 </picture>
 
 ## 🤝 贡献

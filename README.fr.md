@@ -2,9 +2,8 @@
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="screenshots/menu_bar_dark.png" />
-    <source media="(prefers-color-scheme: light)" srcset="screenshots/menu_bar.png" />
-    <img alt="Bannière Quotio" src="screenshots/menu_bar.png" height="600" />
+    <source media="(prefers-color-scheme: light)" srcset="apps/macos/screenshots/menu_bar.png" />
+    <img alt="Bannière Quotio" src="apps/macos/screenshots/menu_bar.png" height="600" />
   </picture>
 </p>
 
@@ -12,7 +11,7 @@
   <img src="https://img.shields.io/badge/platform-macOS-lightgrey.svg?style=flat" alt="Plateforme macOS" />
   <img src="https://img.shields.io/badge/language-Swift-orange.svg?style=flat" alt="Langage Swift" />
   <img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat" alt="Licence MIT" />
-  <a href="README.md"><img src="https://img.shields.io/badge/lang-English-blue.svg?style=flat" alt="Anglais" /></a>
+  <a href="apps/macos/README.md"><img src="https://img.shields.io/badge/lang-English-blue.svg?style=flat" alt="Anglais" /></a>
   <a href="README.vi.md"><img src="https://img.shields.io/badge/lang-Tiếng%20Việt-red.svg?style=flat" alt="Vietnamien" /></a>
   <a href="README.zh.md"><img src="https://img.shields.io/badge/lang-zh--CN-green.svg?style=flat" alt="Chinois" /></a>
 </p>
@@ -138,51 +137,50 @@ Allez dans l'onglet **Agents** → Sélectionnez un agent installé → Cliquez 
 
 ### Tableau de Bord
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/dashboard_dark.png" />
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/dashboard.png" />
-  <img alt="Tableau de Bord" src="screenshots/dashboard.png" />
+  <source media="(prefers-color-scheme: dark)" srcset="apps/macos/screenshots/dashboard_dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="apps/macos/screenshots/dashboard.png" />
+  <img alt="Tableau de Bord" src="apps/macos/screenshots/dashboard.png" />
 </picture>
 
 ### Fournisseurs
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/provider_dark.png" />
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/provider.png" />
-  <img alt="Fournisseurs" src="screenshots/provider.png" />
+  <source media="(prefers-color-scheme: dark)" srcset="apps/macos/screenshots/provider_dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="apps/macos/screenshots/provider.png" />
+  <img alt="Fournisseurs" src="apps/macos/screenshots/provider.png" />
 </picture>
 
 ### Configuration des Agents
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/agent_setup_dark.png" />
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/agent_setup.png" />
-  <img alt="Configuration des Agents" src="screenshots/agent_setup.png" />
+  <source media="(prefers-color-scheme: dark)" srcset="apps/macos/screenshots/agent_setup_dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="apps/macos/screenshots/agent_setup.png" />
+  <img alt="Configuration des Agents" src="apps/macos/screenshots/agent_setup.png" />
 </picture>
 
 ### Surveillance des Quotas
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/quota_dark.png" />
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/quota.png" />
-  <img alt="Surveillance des Quotas" src="screenshots/quota.png" />
+  <source media="(prefers-color-scheme: dark)" srcset="apps/macos/screenshots/quota_dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="apps/macos/screenshots/quota.png" />
+  <img alt="Surveillance des Quotas" src="apps/macos/screenshots/quota.png" />
 </picture>
 
 ### Clés API
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/api_keys_dark.png" />
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/api_keys.png" />
-  <img alt="Clés API" src="screenshots/api_keys.png" />
+  <source media="(prefers-color-scheme: dark)" srcset="apps/macos/screenshots/api_keys_dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="apps/macos/screenshots/api_keys.png" />
+  <img alt="Clés API" src="apps/macos/screenshots/api_keys.png" />
 </picture>
 
 ### Paramètres
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/settings_dark.png" />
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/settings.png" />
-  <img alt="Paramètres" src="screenshots/settings.png" />
+  <source media="(prefers-color-scheme: dark)" srcset="apps/macos/screenshots/settings_dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="apps/macos/screenshots/settings.png" />
+  <img alt="Paramètres" src="apps/macos/screenshots/settings.png" />
 </picture>
 
 ### Barre de Menu
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/menu_bar_dark.png" />
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/menu_bar.png" />
-  <img alt="Barre de Menu" src="screenshots/menu_bar.png" height="600" />
+  <source media="(prefers-color-scheme: light)" srcset="apps/macos/screenshots/menu_bar.png" />
+  <img alt="Barre de Menu" src="apps/macos/screenshots/menu_bar.png" height="600" />
 </picture>
 
 ## 🤝 Contribuer

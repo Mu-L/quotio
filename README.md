@@ -81,9 +81,9 @@ in a desktop app that stays close in the menu bar.
 
 Read the [complete macOS feature guide and screenshot gallery](apps/macos/README.md).
 The macOS guide is also available in
-[Vietnamese](apps/macos/README.vi.md),
-[Simplified Chinese](apps/macos/README.zh.md), and
-[French](apps/macos/README.fr.md).
+[Vietnamese](README.vi.md),
+[Simplified Chinese](README.zh.md), and
+[French](README.fr.md).
 
 ## Quotio CLI
 
