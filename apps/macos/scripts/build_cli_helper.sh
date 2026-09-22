@@ -40,17 +40,21 @@ else
     done
 fi
 
+STAGED_BINARY="${TEMP_DIR:?}/quotio-cli"
+if [ -n "${CLI_BINARY:-}" ]; then
+    cp "${CLI_BINARY}" "${STAGED_BINARY}"
+elif [ "${#CLI_BINARIES[@]}" -eq 1 ]; then
+    cp "${CLI_BINARIES[0]}" "${STAGED_BINARY}"
+else
+    lipo -create "${CLI_BINARIES[@]}" -output "${STAGED_BINARY}"
+fi
+chmod 755 "${STAGED_BINARY}"
+for arch in ${ARCHS:-$(uname -m)}; do
+    lipo "${STAGED_BINARY}" -verify_arch "${arch}"
+done
+"${STAGED_BINARY}" --version >/dev/null
+
 DESTINATION="${TARGET_BUILD_DIR:?}/${CONTENTS_FOLDER_PATH:?}/Helpers/quotio-cli"
 mkdir -p "$(dirname "${DESTINATION}")"
-if [ -n "${CLI_BINARY:-}" ]; then
-    cp "${CLI_BINARY}" "${DESTINATION}"
-elif [ "${#CLI_BINARIES[@]}" -eq 1 ]; then
-    cp "${CLI_BINARIES[0]}" "${DESTINATION}"
-else
-    lipo -create "${CLI_BINARIES[@]}" -output "${DESTINATION}"
-fi
+cp "${STAGED_BINARY}" "${DESTINATION}"
 chmod 755 "${DESTINATION}"
-for arch in ${ARCHS:-$(uname -m)}; do
-    lipo "${DESTINATION}" -verify_arch "${arch}"
-done
-"${DESTINATION}" --version >/dev/null
