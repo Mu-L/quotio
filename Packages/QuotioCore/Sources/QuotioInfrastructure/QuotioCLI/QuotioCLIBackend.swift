@@ -88,6 +88,11 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
     }
     private struct EnabledBody: Encodable { let enabled: Bool }
     private struct LabelBody: Encodable { let label: String }
+    private struct SourceDiscoveryBody: Encodable {
+        let provider: String
+        let kind: String
+        let inspect: Bool
+    }
     private struct CustomProviderSourceBody: Encodable {
         struct Source: Encodable {
             let domain: String
@@ -109,6 +114,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
     private let customProviderDomain: String
     private let authFileState: (any ManagedAuthFileStateRepository)?
     private let localization: @MainActor @Sendable () -> (bundle: Bundle, locale: Locale)
+    private static let knownNativeSourcesKey = "quotioCLI.knownNativeSources.v1"
 
     public init(
         session: URLSession? = nil,
@@ -216,6 +222,49 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         snapshot.refreshingProviders.removeAll()
         for continuation in continuations.values { continuation.finish() }
         continuations.removeAll()
+    }
+
+    public func registerDetectedNativeAccounts() async {
+        guard let client,
+              let response: QuotioCLIProviderList = try? await client.request("v1/providers"),
+              response.schemaVersion == 1 else { return }
+        var known = Set(userDefaults.stringArray(forKey: Self.knownNativeSourcesKey) ?? [])
+        for provider in response.providers {
+            for source in provider.capabilities.sourceReferences
+            where source.origin == "borrowed_native" && source.platforms.contains("macos") {
+                let sourceKey = provider.id + ":" + source.kind
+                guard !known.contains(sourceKey) else { continue }
+                do {
+                    var discovered = try await discoverNativeSource(
+                        client: client, provider: provider.id, kind: source.kind, inspect: false
+                    )
+                    if discovered.status == "not_checked", discovered.candidates.isEmpty {
+                        discovered = try await discoverNativeSource(
+                            client: client, provider: provider.id, kind: source.kind, inspect: true
+                        )
+                    }
+                    for candidate in discovered.candidates {
+                        let body = try JSONEncoder.quotioCLI.encode(candidate.source)
+                        try? await mutate(
+                            client: client,
+                            path: "v1/account-sources",
+                            method: "POST",
+                            body: body,
+                            idempotencyKey: "quotio-native-v1-" + Self.sourceID([
+                                sourceKey,
+                                candidate.source.kind,
+                                candidate.source.location ?? "",
+                                candidate.source.discoveryRef ?? "",
+                            ])
+                        )
+                    }
+                    known.insert(sourceKey)
+                    userDefaults.set(known.sorted(), forKey: Self.knownNativeSourcesKey)
+                } catch {
+                    continue
+                }
+            }
+        }
     }
 
     public func accounts() async -> [Account] {
@@ -592,6 +641,26 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
                 Self.sourceID(["cli_proxy_auth_file", $0, name])
             }
         })
+    }
+
+    private func discoverNativeSource(
+        client: QuotioCLIHTTPClient,
+        provider: String,
+        kind: String,
+        inspect: Bool
+    ) async throws -> QuotioCLISourceDiscovery {
+        let body = try JSONEncoder.quotioCLI.encode(SourceDiscoveryBody(
+            provider: provider,
+            kind: kind,
+            inspect: inspect
+        ))
+        let response: QuotioCLISourceDiscovery = try await client.request(
+            "v1/account-sources/discover",
+            method: "POST",
+            body: body
+        )
+        guard response.schemaVersion == 1 else { throw QuotioCLIBackendError.incompatible }
+        return response
     }
 
     private func removeDisabledProxyQuotas() {

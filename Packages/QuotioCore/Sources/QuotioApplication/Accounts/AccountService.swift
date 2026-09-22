@@ -8,6 +8,7 @@ public enum AccountServiceFailure: Error, Equatable, Sendable {
 }
 
 public protocol AccountManaging: Sendable {
+    func registerDetectedNativeAccounts() async
     func accounts() async -> [Account]
     func setDisabled(_ disabled: Bool, accountID: String) async
     func delete(accountID: String) async throws

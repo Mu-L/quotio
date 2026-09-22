@@ -240,6 +240,7 @@ private actor QuotaFeatureAccountService: AccountManaging {
         storedAccounts = accounts
     }
 
+    func registerDetectedNativeAccounts() {}
     func accounts() -> [Account] { storedAccounts }
 
     func setDisabled(_ disabled: Bool, accountID: String) {

@@ -175,6 +175,7 @@ private actor AccountScreenModelService: AccountManaging {
         storedAccounts = accounts
     }
 
+    func registerDetectedNativeAccounts() {}
     func accounts() -> [Account] { storedAccounts }
     func setDisabled(_ disabled: Bool, accountID: String) { lastDisabledID = accountID }
     func delete(accountID: String) { lastDeletedID = accountID }

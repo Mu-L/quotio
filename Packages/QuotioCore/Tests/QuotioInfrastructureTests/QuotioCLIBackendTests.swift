@@ -188,6 +188,41 @@ final class QuotioCLIBackendTests: XCTestCase {
         XCTAssertNotNil(request.value(forHTTPHeaderField: "Idempotency-Key"))
     }
 
+    func testNativeDiscoveryRegistersUnseenMacOSSourcesOnce() async throws {
+        let suite = "QuotioCLIBackendTests.nativeDiscovery.\(UUID().uuidString)"
+        defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
+        let providers = #"{"schema_version":1,"providers":[{"id":"codex","capabilities":{"source_references":[{"kind":"codex_native","platforms":["macos"],"origin":"borrowed_native"},{"kind":"cli_proxy_auth_file","platforms":["macos"],"origin":"borrowed_proxy"}]}},{"id":"cursor","capabilities":{"source_references":[{"kind":"cursor_native","platforms":["macos"],"origin":"borrowed_native"}]}},{"id":"amp","capabilities":{"source_references":[{"kind":"amp_native","platforms":["linux"],"origin":"borrowed_native"}]}},{"id":"grok","capabilities":{"source_references":[{"kind":"grok_native","platforms":["macos","linux"],"origin":"borrowed_native"}]}}]}"#
+        QuotioCLIURLProtocol.enqueue(providers)
+        QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"status":"not_checked","candidates":[{"label":"Native source","status":"not_checked","source":{"kind":"codex_native","location":"default"}}]}"#)
+        QuotioCLIURLProtocol.enqueue(#"{"id":"codex-source","status":"completed"}"#)
+        QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"status":"not_checked","candidates":[{"label":"Native source","status":"not_checked","source":{"kind":"cursor_native"}}]}"#)
+        QuotioCLIURLProtocol.enqueue(#"{"id":"cursor-source","status":"failed","error":"account_not_found"}"#)
+        QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"status":"not_checked","candidates":[]}"#)
+        QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"status":"checked","candidates":[{"label":"Native entry 1","status":"available","source":{"kind":"discovered","discovery_ref":"opaque-reference"}}]}"#)
+        QuotioCLIURLProtocol.enqueue(#"{"id":"grok-source","status":"failed","error":"duplicate_account"}"#)
+        QuotioCLIURLProtocol.enqueue(providers)
+        let backend = QuotioCLIBackend(
+            session: stubSession(),
+            userDefaults: try XCTUnwrap(UserDefaults(suiteName: suite))
+        )
+        await backend.connect(QuotioCLIConnection(
+            baseURL: URL(string: "http://127.0.0.1:43210")!, token: "private-token"
+        ))
+
+        await backend.registerDetectedNativeAccounts()
+        await backend.registerDetectedNativeAccounts()
+
+        let requests = QuotioCLIURLProtocol.requests()
+        XCTAssertEqual(requests.filter { $0.url?.path == "/v1/providers" }.count, 2)
+        XCTAssertEqual(requests.filter { $0.url?.path == "/v1/account-sources/discover" }.count, 4)
+        XCTAssertEqual(requests.filter { $0.url?.path == "/v1/account-sources" }.count, 3)
+        XCTAssertFalse(requests.contains { $0.httpMethod == "PATCH" })
+        let discoveryBodies = try QuotioCLIURLProtocol.bodies(forPath: "/v1/account-sources/discover")
+            .map { try XCTUnwrap(JSONSerialization.jsonObject(with: $0) as? [String: Any]) }
+        XCTAssertEqual(discoveryBodies.filter { $0["provider"] as? String == "grok" }.count, 2)
+        XCTAssertEqual(discoveryBodies.last?["inspect"] as? Bool, true)
+    }
+
     func testLegacyImportUsesStableReceiptAndUnixExpiry() async throws {
         let backend = QuotioCLIBackend(session: stubSession())
         await backend.connect(QuotioCLIConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "private-token"))
@@ -824,6 +859,14 @@ private final class QuotioCLIURLProtocol: URLProtocol, @unchecked Sendable {
     static func body(forPath path: String) -> Data? {
         lock.withLock {
             zip(recordedRequests, recordedBodies).first { $0.0.url?.path == path }?.1
+        }
+    }
+
+    static func bodies(forPath path: String) -> [Data] {
+        lock.withLock {
+            zip(recordedRequests, recordedBodies).compactMap {
+                $0.0.url?.path == path ? $0.1 : nil
+            }
         }
     }
 

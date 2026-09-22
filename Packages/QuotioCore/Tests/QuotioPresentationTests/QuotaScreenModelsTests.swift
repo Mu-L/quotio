@@ -87,6 +87,7 @@ private struct PresentationClock: DateProviding {
 }
 
 private actor EmptyAccountManager: AccountManaging {
+    func registerDetectedNativeAccounts() {}
     func accounts() -> [Account] { [] }
     func saveAPIKey(
         providerID: AccountProviderID,

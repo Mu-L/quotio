@@ -120,6 +120,42 @@ struct QuotioCLIAccountList: Decodable, Sendable {
     let accounts: [QuotioCLIAccount]
 }
 
+struct QuotioCLIProviderList: Decodable, Sendable {
+    struct Provider: Decodable, Sendable {
+        struct Capabilities: Decodable, Sendable {
+            struct SourceReference: Decodable, Sendable {
+                let kind: String
+                let platforms: [String]
+                let origin: String
+            }
+
+            let sourceReferences: [SourceReference]
+        }
+
+        let id: String
+        let capabilities: Capabilities
+    }
+
+    let schemaVersion: Int
+    let providers: [Provider]
+}
+
+struct QuotioCLISourceDiscovery: Decodable, Sendable {
+    struct Candidate: Decodable, Sendable {
+        struct Source: Codable, Sendable {
+            let kind: String
+            let location: String?
+            let discoveryRef: String?
+        }
+
+        let source: Source
+    }
+
+    let schemaVersion: Int
+    let status: String
+    let candidates: [Candidate]
+}
+
 struct QuotioCLIAccount: Decodable, Sendable {
     let id: String
     let provider: String
