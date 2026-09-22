@@ -114,7 +114,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
     private let customProviderDomain: String
     private let authFileState: (any ManagedAuthFileStateRepository)?
     private let localization: @MainActor @Sendable () -> (bundle: Bundle, locale: Locale)
-    private static let knownNativeSourcesKey = "quotioCLI.knownNativeSources.v1"
+    private static let knownNativeSourcesKey = "quotioCLI.knownNativeSources.v2"
 
     public init(
         session: URLSession? = nil,
@@ -235,15 +235,10 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
                 let sourceKey = provider.id + ":" + source.kind
                 guard !known.contains(sourceKey) else { continue }
                 do {
-                    var discovered = try await discoverNativeSource(
-                        client: client, provider: provider.id, kind: source.kind, inspect: false
+                    let discovered = try await discoverNativeSource(
+                        client: client, provider: provider.id, kind: source.kind, inspect: true
                     )
-                    if discovered.status == "not_checked", discovered.candidates.isEmpty {
-                        discovered = try await discoverNativeSource(
-                            client: client, provider: provider.id, kind: source.kind, inspect: true
-                        )
-                    }
-                    for candidate in discovered.candidates {
+                    for candidate in discovered.candidates where candidate.status == "available" {
                         let body = try JSONEncoder.quotioCLI.encode(candidate.source)
                         try? await mutate(
                             client: client,

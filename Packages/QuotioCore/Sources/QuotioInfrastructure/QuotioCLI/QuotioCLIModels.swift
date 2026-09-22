@@ -148,6 +148,7 @@ struct QuotioCLISourceDiscovery: Decodable, Sendable {
             let discoveryRef: String?
         }
 
+        let status: String
         let source: Source
     }
 
