@@ -140,23 +140,30 @@ final class QuotioCLIBackendTests: XCTestCase {
         XCTAssertEqual(localized.models[2].presentation, .status(text: "Plafond de 5 USD"))
     }
 
-    func testLocalCodexUsesFetchedEmailAsDisplayName() throws {
+    func testLocalProvidersUseFetchedAccountLabelAsDisplayName() throws {
         let data = Data(#"""
         {
           "schema_version":1,"generated_at":"2026-09-16T12:00:00Z","failures":[],
-          "providers":[{
-            "provider":"codex",
-            "account_ref":{"origin":null,"id":"local","label":"Local Codex"},
-            "account":{"id":"person@example.com","label":"person@example.com","plan":"pro"},
-            "windows":[]
-          }]
+          "providers":[
+            {"provider":"codex","account_ref":{"origin":null,"id":"local","label":"Local Codex"},"account":{"id":"codex","label":"codex@example.com","plan":"pro"},"windows":[]},
+            {"provider":"amp","account_ref":{"origin":null,"id":"local","label":"Local Amp account"},"account":{"id":"amp","label":"amp@example.com"},"windows":[]},
+            {"provider":"factory","account_ref":{"origin":null,"id":"local","label":"Local Factory account"},"account":{"id":"factory","label":"factory@example.com"},"windows":[]},
+            {"provider":"antigravity","account_ref":{"origin":null,"id":"local","label":"Local or environment Antigravity account"},"account":{"id":"antigravity","label":"antigravity@example.com"},"windows":[]},
+            {"provider":"claude","account_ref":{"origin":null,"id":"local","label":"Local or environment account"},"account":{"id":"claude","label":"Claude OAuth token"},"windows":[]},
+            {"provider":"openrouter","account_ref":{"origin":null,"id":"local","label":"Environment API key"},"account":{"id":"openrouter","label":"openrouter API key"},"windows":[]}
+          ]
         }
         """#.utf8)
 
         let report = try makeQuotioCLIDecoder().decode(QuotioCLIUsageReport.self, from: data)
-        let quota = try XCTUnwrap(QuotioCLIUsageMapper.snapshot(report).quotas[.codex]?["Local Codex"])
+        let snapshot = QuotioCLIUsageMapper.snapshot(report)
 
-        XCTAssertEqual(quota.accountDisplayName, "person@example.com")
+        XCTAssertEqual(snapshot.quotas[.codex]?["Local Codex"]?.accountDisplayName, "codex@example.com")
+        XCTAssertEqual(snapshot.quotas[.amp]?["Local Amp account"]?.accountDisplayName, "amp@example.com")
+        XCTAssertEqual(snapshot.quotas[.factoryDroid]?["Local Factory account"]?.accountDisplayName, "factory@example.com")
+        XCTAssertEqual(snapshot.quotas[.antigravity]?["Local or environment Antigravity account"]?.accountDisplayName, "antigravity@example.com")
+        XCTAssertEqual(snapshot.quotas[.claude]?["Local or environment account"]?.accountDisplayName, "Claude OAuth token")
+        XCTAssertEqual(snapshot.quotas[.openRouter]?["Environment API key"]?.accountDisplayName, "openrouter API key")
     }
 
     func testAccountCreateUsesBearerAndIdempotencyHeaders() async throws {

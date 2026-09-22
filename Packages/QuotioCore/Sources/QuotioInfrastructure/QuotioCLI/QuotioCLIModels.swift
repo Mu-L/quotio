@@ -277,7 +277,7 @@ struct QuotioCLIUsageMapper {
             lastUpdated: updatedAt.min() ?? .distantPast,
             planType: usage.account.plan,
             analytics: analytics(usage),
-            accountDisplayName: usage.provider == "codex" && usage.accountRef?.id == "local"
+            accountDisplayName: usage.accountRef?.id == "local"
                 ? usage.account.label
                 : usage.accountRef.map {
                     QuotioCLIWarpMirror.displayLabel($0.label, provider: usage.provider)
