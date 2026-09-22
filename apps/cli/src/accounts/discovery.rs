@@ -228,7 +228,7 @@ impl Registry {
     }
     fn probe(&self, kind: &str, location: Option<&str>) -> Option<&'static str> {
         let home = self.home.as_deref()?;
-        let file = |relative: &str| read_native(&home.join(relative)).is_ok();
+        let file = |relative: &str| native_file_exists(&home.join(relative));
         let keychain = |service, account| {
             crate::providers::catalog::common::keychain_item_exists(service, account).ok()
                 == Some(true)
@@ -241,7 +241,7 @@ impl Registry {
             ("codex_native", Some("codex_home"))
                 if std::env::var_os("CODEX_HOME")
                     .map(PathBuf::from)
-                    .is_some_and(|path| read_native(&path.join("auth.json")).is_ok()) =>
+                    .is_some_and(|path| native_file_exists(&path.join("auth.json"))) =>
             {
                 Some("available")
             }
@@ -427,8 +427,7 @@ fn custom_references(
 }
 // Walk every path component with openat: neither parent nor leaf symlinks may
 // redirect this explicit inspection into another credential store.
-fn read_native(path: &Path) -> Result<Vec<u8>, AccountError> {
-    use std::io::Read;
+fn open_native(path: &Path) -> Result<std::fs::File, AccountError> {
     #[cfg(unix)]
     {
         use std::os::fd::{AsRawFd, FromRawFd};
@@ -464,24 +463,36 @@ fn read_native(path: &Path) -> Result<Vec<u8>, AccountError> {
             }
             file = unsafe { std::fs::File::from_raw_fd(fd) };
         }
-        let metadata = file.metadata().map_err(|_| AccountError::Storage)?;
-        if !metadata.is_file() || metadata.len() > 1024 * 1024 {
-            return Err(AccountError::Corrupt);
-        }
-        let mut bytes = Vec::new();
-        file.take(1024 * 1024 + 1)
-            .read_to_end(&mut bytes)
-            .map_err(|_| AccountError::Storage)?;
-        if bytes.len() > 1024 * 1024 {
-            return Err(AccountError::Corrupt);
-        }
-        Ok(bytes)
+        Ok(file)
     }
     #[cfg(not(unix))]
     {
         let _ = path;
         Err(AccountError::Unsupported)
     }
+}
+
+fn native_file_exists(path: &Path) -> bool {
+    open_native(path)
+        .and_then(|file| file.metadata().map_err(|_| AccountError::Storage))
+        .is_ok_and(|metadata| metadata.is_file())
+}
+
+fn read_native(path: &Path) -> Result<Vec<u8>, AccountError> {
+    use std::io::Read;
+    let file = open_native(path)?;
+    let metadata = file.metadata().map_err(|_| AccountError::Storage)?;
+    if !metadata.is_file() || metadata.len() > 1024 * 1024 {
+        return Err(AccountError::Corrupt);
+    }
+    let mut bytes = Vec::new();
+    file.take(1024 * 1024 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| AccountError::Storage)?;
+    if bytes.len() > 1024 * 1024 {
+        return Err(AccountError::Corrupt);
+    }
+    Ok(bytes)
 }
 
 #[cfg(test)]
@@ -571,6 +582,31 @@ mod tests {
             candidate["source"]["location"] == "v2_login_keychain"
                 && candidate["status"] == "available"
         }));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn cursor_discovery_accepts_large_database_without_reading_it() {
+        let dir = std::env::temp_dir().join(super::super::random_string().unwrap());
+        let database =
+            dir.join("Library/Application Support/Cursor/User/globalStorage/state.vscdb");
+        std::fs::create_dir_all(database.parent().unwrap()).unwrap();
+        std::fs::File::create(&database)
+            .unwrap()
+            .set_len(2 * 1024 * 1024)
+            .unwrap();
+        let mut registry = Registry {
+            home: Some(dir.canonicalize().unwrap()),
+            ..Default::default()
+        };
+        let request = serde_json::from_value(json!({
+            "provider":"cursor",
+            "kind":"cursor_native",
+            "inspect":true
+        }))
+        .unwrap();
+        let discovered = registry.inspect(request).unwrap();
+        assert_eq!(discovered["status"], "checked");
+        assert_eq!(discovered["candidates"][0]["status"], "available");
         std::fs::remove_dir_all(dir).unwrap();
     }
     #[tokio::test]
