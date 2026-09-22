@@ -162,13 +162,28 @@ impl Registry {
         if !inspect {
             return Ok(json!({"schema_version":1,"status":"not_checked","candidates":[]}));
         }
-        if kind == "copilot_native" && location.is_none() {
-            return Err(AccountError::Input);
-        }
         if location.as_deref() == Some("gh_keychain") {
             return Ok(json!({"schema_version":1,"status":"unsupported","candidates":[]}));
         }
-        let result = self.enumerate(provider, &kind, location.as_deref(), domain);
+        let result = if kind == "copilot_native" && location.is_none() {
+            let mut references = Vec::new();
+            let mut failure = None;
+            for location in ["apps", "hosts", "gh_hosts"] {
+                match self.enumerate(provider, &kind, Some(location), None) {
+                    Ok(mut found) => references.append(&mut found),
+                    Err(AccountError::NotFound) => (),
+                    Err(error) if failure.is_none() => failure = Some(error),
+                    Err(_) => (),
+                }
+            }
+            if references.is_empty() {
+                Err(failure.unwrap_or(AccountError::NotFound))
+            } else {
+                Ok(references)
+            }
+        } else {
+            self.enumerate(provider, &kind, location.as_deref(), domain)
+        };
         let references = match result {
             Ok(r) => r,
             Err(e) => {
