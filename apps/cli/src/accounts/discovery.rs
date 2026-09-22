@@ -138,9 +138,6 @@ impl Registry {
             "grok_native" | "copilot_native" | "quotio_custom_provider"
         );
         if !exact {
-            if inspect {
-                return Err(AccountError::Unsupported);
-            }
             let choices: Vec<Value> = if locations.is_empty() {
                 vec![json!({"kind":kind})]
             } else {
@@ -154,6 +151,29 @@ impl Registry {
             for choice in &choices {
                 serde_json::from_value::<SourceInput>(choice.clone())
                     .map_err(|_| AccountError::Input)?;
+            }
+            if inspect {
+                let candidates = choices
+                    .into_iter()
+                    .filter_map(|source| {
+                        let status = self.probe(&kind, source["location"].as_str())?;
+                        Some(json!({"label":"Native source","status":status,"source":source}))
+                    })
+                    .collect::<Vec<_>>();
+                let status = if candidates
+                    .iter()
+                    .any(|candidate| candidate["status"] == "available")
+                {
+                    "checked"
+                } else if candidates
+                    .iter()
+                    .any(|candidate| candidate["status"] == "permission_required")
+                {
+                    "permission_required"
+                } else {
+                    "unavailable"
+                };
+                return Ok(json!({"schema_version":1,"status":status,"candidates":candidates}));
             }
             return Ok(
                 json!({"schema_version":1,"status":"not_checked","candidates":choices.into_iter().map(|source| json!({"label":"Native source","status":"not_checked","source":source})).collect::<Vec<_>>() }),
@@ -205,6 +225,94 @@ impl Registry {
         Ok(
             json!({"schema_version":1,"status":"checked","expires_in_seconds":600,"candidates":candidates}),
         )
+    }
+    fn probe(&self, kind: &str, location: Option<&str>) -> Option<&'static str> {
+        let home = self.home.as_deref()?;
+        let file = |relative: &str| read_native(&home.join(relative)).is_ok();
+        let keychain = |service, account| {
+            crate::providers::catalog::common::keychain_item_exists(service, account).ok()
+                == Some(true)
+        };
+        match (kind, location) {
+            ("codex_native", Some("default")) if file(".codex/auth.json") => Some("available"),
+            ("codex_native", Some("config")) if file(".config/codex/auth.json") => {
+                Some("available")
+            }
+            ("codex_native", Some("codex_home"))
+                if std::env::var_os("CODEX_HOME")
+                    .map(PathBuf::from)
+                    .is_some_and(|path| read_native(&path.join("auth.json")).is_ok()) =>
+            {
+                Some("available")
+            }
+            ("claude_native", Some("code_file")) if file(".claude/.credentials.json") => {
+                Some("available")
+            }
+            ("claude_native", Some("code_keychain"))
+                if keychain("Claude Code-credentials", None) =>
+            {
+                Some("permission_required")
+            }
+            ("factory_native", Some(location)) => {
+                let name = match location {
+                    "v2_file" => "auth.v2.file",
+                    "v2_login_keychain" => "auth.v2.loginkeychain",
+                    "v2_keyring" => "auth.v2.keyring",
+                    "legacy" => "auth.encrypted",
+                    _ => return None,
+                };
+                if !file(&format!(".factory/{name}")) {
+                    return None;
+                }
+                if location == "v2_file" && file(".factory/auth.v2.key") {
+                    Some("available")
+                } else if location != "v2_file"
+                    && [
+                        Some("auth-encryption-key-security-cli"),
+                        None,
+                        Some("auth-encryption-key"),
+                    ]
+                    .into_iter()
+                    .any(|account| keychain("Factory CLI", account))
+                {
+                    Some("permission_required")
+                } else {
+                    None
+                }
+            }
+            ("devin_desktop_native", Some("credentials_toml"))
+                if file(".local/share/devin/credentials.toml") =>
+            {
+                Some("available")
+            }
+            ("devin_desktop_native", Some("state_database"))
+                if file("Library/Application Support/Devin/User/globalStorage/state.vscdb") =>
+            {
+                Some("available")
+            }
+            ("antigravity_native", Some("gemini_keychain"))
+                if keychain("gemini", Some("antigravity")) =>
+            {
+                Some("permission_required")
+            }
+            ("antigravity_native", Some("state_db"))
+                if file(
+                    "Library/Application Support/Antigravity/User/globalStorage/state.vscdb",
+                ) =>
+            {
+                Some("available")
+            }
+            ("kiro_native", None) if file(".aws/sso/cache/kiro-auth-token.json") => {
+                Some("available")
+            }
+            ("cursor_native", None)
+                if file("Library/Application Support/Cursor/User/globalStorage/state.vscdb") =>
+            {
+                Some("available")
+            }
+            ("amp_native", None) if file(".local/share/amp/secrets.json") => Some("available"),
+            _ => None,
+        }
     }
     fn enumerate(
         &self,
@@ -433,6 +541,36 @@ mod tests {
                 "unreadable"
             );
         }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn factory_discovery_never_marks_keychain_sources_available() {
+        let dir = std::env::temp_dir().join(super::super::random_string().unwrap());
+        std::fs::create_dir_all(dir.join(".factory")).unwrap();
+        let home = dir.canonicalize().unwrap();
+        std::fs::write(home.join(".factory/auth.v2.file"), b"encrypted").unwrap();
+        std::fs::write(home.join(".factory/auth.v2.key"), [7; 32]).unwrap();
+        std::fs::write(home.join(".factory/auth.v2.loginkeychain"), b"encrypted").unwrap();
+        let mut registry = Registry {
+            home: Some(home),
+            ..Default::default()
+        };
+        let request = serde_json::from_value(json!({
+            "provider":"factory",
+            "kind":"factory_native",
+            "inspect":true
+        }))
+        .unwrap();
+        let discovered = registry.inspect(request).unwrap();
+        assert_eq!(discovered["status"], "checked");
+        let candidates = discovered["candidates"].as_array().unwrap();
+        assert!(candidates.iter().any(|candidate| {
+            candidate["source"]["location"] == "v2_file" && candidate["status"] == "available"
+        }));
+        assert!(!candidates.iter().any(|candidate| {
+            candidate["source"]["location"] == "v2_login_keychain"
+                && candidate["status"] == "available"
+        }));
         std::fs::remove_dir_all(dir).unwrap();
     }
     #[tokio::test]
