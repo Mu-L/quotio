@@ -12333,6 +12333,10 @@
         }
       }
     },
+    "providers.nativePermission.failedMessage" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Quotio could not access this provider's Keychain credential." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Quotio n’a pas pu accéder aux identifiants de ce fournisseur dans le trousseau." } }, "vi" : { "stringUnit" : { "state" : "translated", "value" : "Quotio không thể truy cập thông tin đăng nhập của nhà cung cấp này trong Keychain." } }, "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Quotio 无法访问此提供商的钥匙串凭据。" } } } },
+    "providers.nativePermission.failedTitle" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Connection Failed" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Échec de la connexion" } }, "vi" : { "stringUnit" : { "state" : "translated", "value" : "Kết nối thất bại" } }, "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "连接失败" } } } },
+    "providers.nativePermission.message" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Requires permission to read its Keychain credential" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Nécessite l’autorisation de lire ses identifiants dans le trousseau" } }, "vi" : { "stringUnit" : { "state" : "translated", "value" : "Cần quyền đọc thông tin đăng nhập trong Keychain" } }, "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "需要权限读取钥匙串凭据" } } } },
+    "providers.nativePermission.title" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Permission Required" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Autorisation requise" } }, "vi" : { "stringUnit" : { "state" : "translated", "value" : "Cần cấp quyền" } }, "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "需要权限" } } } },
     "providers.proxyRequired.message" : {
       "extractionState" : "stale",
       "localizations" : {

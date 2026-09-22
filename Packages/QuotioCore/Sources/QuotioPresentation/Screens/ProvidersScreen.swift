@@ -37,6 +37,7 @@ struct ProvidersScreen: View {
     @State private var editingMonitorAPIKeyAccount: Account?
     @State private var showAddProviderPopover = false
     @State private var switchingAccount: AccountRowData?
+    @State private var showNativePermissionError = false
     
     // MARK: - Computed Properties
     
@@ -173,6 +174,10 @@ struct ProvidersScreen: View {
     
     var body: some View {
         List {
+            if modeManager.isMonitorMode, !accounts.nativeSourcePermissions.isEmpty {
+                nativePermissionsSection
+            }
+
             // Section 1: Your Accounts (grouped by provider)
             accountsSection
             
@@ -213,6 +218,11 @@ struct ProvidersScreen: View {
             Button("action.cancel".localized(), role: .cancel) {}
         } message: {
             Text("providers.proxyRequired.message".localized())
+        }
+        .alert("providers.nativePermission.failedTitle".localized(), isPresented: $showNativePermissionError) {
+            Button("action.ok".localized(), role: .cancel) {}
+        } message: {
+            Text("providers.nativePermission.failedMessage".localized())
         }
         .sheet(isPresented: $showIDEScanSheet) {
             IDEScanSheet {}
@@ -337,6 +347,37 @@ struct ProvidersScreen: View {
     }
     
     // MARK: - Accounts Section
+
+    private var nativePermissionsSection: some View {
+        Section {
+            ForEach(accounts.nativeSourcePermissions) { permission in
+                HStack(spacing: 12) {
+                    ProviderIcon(provider: permission.provider, size: 24)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(permission.provider.displayName)
+                            .font(.body.weight(.medium))
+                        Text("providers.nativePermission.message".localized())
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("action.connect".localized()) {
+                        Task {
+                            do {
+                                try await accounts.authorizeNativeSource(permission)
+                                await quotaController.refresh(provider: permission.provider)
+                            } catch {
+                                showNativePermissionError = true
+                            }
+                        }
+                    }
+                    .disabled(accounts.authorizingNativeSourceID != nil)
+                }
+            }
+        } header: {
+            Label("providers.nativePermission.title".localized(), systemImage: "key.fill")
+        }
+    }
     
     @ViewBuilder
     private var accountsSection: some View {

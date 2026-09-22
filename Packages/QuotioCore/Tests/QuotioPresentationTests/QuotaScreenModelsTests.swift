@@ -114,6 +114,8 @@ private struct PresentationClock: DateProviding {
 
 private actor EmptyAccountManager: AccountManaging {
     func registerDetectedNativeAccounts() {}
+    func nativeSourcesRequiringPermission() -> [NativeSourcePermission] { [] }
+    func authorizeNativeSource(_ source: NativeSourcePermission) {}
     func accounts() -> [Account] { [] }
     func saveAPIKey(
         providerID: AccountProviderID,

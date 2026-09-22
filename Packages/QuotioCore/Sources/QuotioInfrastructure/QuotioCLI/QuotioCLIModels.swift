@@ -142,10 +142,16 @@ struct QuotioCLIProviderList: Decodable, Sendable {
 
 struct QuotioCLISourceDiscovery: Decodable, Sendable {
     struct Candidate: Decodable, Sendable {
-        struct Source: Codable, Sendable {
+        struct Source: Codable, Hashable, Sendable {
             let kind: String
             let location: String?
             let discoveryRef: String?
+
+            init(kind: String, location: String?, discoveryRef: String?) {
+                self.kind = kind
+                self.location = location
+                self.discoveryRef = discoveryRef
+            }
         }
 
         let status: String

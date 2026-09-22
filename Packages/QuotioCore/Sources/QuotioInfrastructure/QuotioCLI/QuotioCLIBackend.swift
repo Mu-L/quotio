@@ -115,6 +115,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
     private let authFileState: (any ManagedAuthFileStateRepository)?
     private let localization: @MainActor @Sendable () -> (bundle: Bundle, locale: Locale)
     private static let knownNativeSourcesKey = "quotioCLI.knownNativeSources.v2"
+    private static let pendingNativeSourcesKey = "quotioCLI.pendingNativeSources.v1"
 
     public init(
         session: URLSession? = nil,
@@ -229,6 +230,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
               let response: QuotioCLIProviderList = try? await client.request("v1/providers"),
               response.schemaVersion == 1 else { return }
         var known = Set(userDefaults.stringArray(forKey: Self.knownNativeSourcesKey) ?? [])
+        var pending = Set(pendingNativeSources())
         for provider in response.providers {
             for source in provider.capabilities.sourceReferences
             where source.origin == "borrowed_native" && source.platforms.contains("macos") {
@@ -238,6 +240,17 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
                     let discovered = try await discoverNativeSource(
                         client: client, provider: provider.id, kind: source.kind, inspect: true
                     )
+                    pending = pending.filter { $0.kind != source.kind }
+                    if let domainProvider = QuotioCLIProviderMap.domain(provider.id) {
+                        pending.formUnion(discovered.candidates.compactMap { candidate in
+                            guard candidate.status == "permission_required" else { return nil }
+                            return NativeSourcePermission(
+                                provider: domainProvider,
+                                kind: candidate.source.kind,
+                                location: candidate.source.location
+                            )
+                        })
+                    }
                     for candidate in discovered.candidates where candidate.status == "available" {
                         let body = try JSONEncoder.quotioCLI.encode(candidate.source)
                         try? await mutate(
@@ -255,11 +268,40 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
                     }
                     known.insert(sourceKey)
                     userDefaults.set(known.sorted(), forKey: Self.knownNativeSourcesKey)
+                    savePendingNativeSources(pending)
                 } catch {
                     continue
                 }
             }
         }
+    }
+
+    public func nativeSourcesRequiringPermission() async -> [NativeSourcePermission] {
+        let pending = pendingNativeSources()
+        guard let client,
+              let response: QuotioCLIAccountList = try? await client.request("v1/accounts"),
+              response.schemaVersion == 1 else { return pending }
+        let registeredKinds = Set(response.accounts.compactMap(\.sourceKind))
+        return pending.filter { !registeredKinds.contains($0.kind) }
+    }
+
+    public func authorizeNativeSource(_ source: NativeSourcePermission) async throws {
+        guard let client else { throw QuotioCLIBackendError.disconnected }
+        let body = try JSONEncoder.quotioCLI.encode(QuotioCLISourceDiscovery.Candidate.Source(
+            kind: source.kind,
+            location: source.location,
+            discoveryRef: nil
+        ))
+        try await mutate(
+            client: client,
+            path: "v1/account-sources",
+            method: "POST",
+            body: body,
+            idempotencyKey: "quotio-native-permission-v1-" + Self.sourceID([
+                source.provider.rawValue, source.kind, source.location ?? "",
+            ])
+        )
+        savePendingNativeSources(Set(pendingNativeSources()).subtracting([source]))
     }
 
     public func accounts() async -> [Account] {
@@ -656,6 +698,16 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         )
         guard response.schemaVersion == 1 else { throw QuotioCLIBackendError.incompatible }
         return response
+    }
+
+    private func pendingNativeSources() -> [NativeSourcePermission] {
+        guard let data = userDefaults.data(forKey: Self.pendingNativeSourcesKey) else { return [] }
+        return (try? JSONDecoder().decode([NativeSourcePermission].self, from: data)) ?? []
+    }
+
+    private func savePendingNativeSources(_ sources: Set<NativeSourcePermission>) {
+        let ordered = sources.sorted { $0.id < $1.id }
+        userDefaults.set(try? JSONEncoder().encode(ordered), forKey: Self.pendingNativeSourcesKey)
     }
 
     private func removeDisabledProxyQuotas() {

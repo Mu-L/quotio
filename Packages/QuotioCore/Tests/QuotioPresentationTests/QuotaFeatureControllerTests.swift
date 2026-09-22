@@ -258,6 +258,8 @@ private actor QuotaFeatureAccountService: AccountManaging {
     }
 
     func registerDetectedNativeAccounts() { recordedEvents.append("discover") }
+    func nativeSourcesRequiringPermission() -> [NativeSourcePermission] { [] }
+    func authorizeNativeSource(_ source: NativeSourcePermission) {}
     func accounts() -> [Account] {
         recordedEvents.append("accounts")
         return storedAccounts
