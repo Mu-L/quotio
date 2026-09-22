@@ -140,6 +140,25 @@ final class QuotioCLIBackendTests: XCTestCase {
         XCTAssertEqual(localized.models[2].presentation, .status(text: "Plafond de 5 USD"))
     }
 
+    func testLocalCodexUsesFetchedEmailAsDisplayName() throws {
+        let data = Data(#"""
+        {
+          "schema_version":1,"generated_at":"2026-09-16T12:00:00Z","failures":[],
+          "providers":[{
+            "provider":"codex",
+            "account_ref":{"origin":null,"id":"local","label":"Local Codex"},
+            "account":{"id":"person@example.com","label":"person@example.com","plan":"pro"},
+            "windows":[]
+          }]
+        }
+        """#.utf8)
+
+        let report = try makeQuotioCLIDecoder().decode(QuotioCLIUsageReport.self, from: data)
+        let quota = try XCTUnwrap(QuotioCLIUsageMapper.snapshot(report).quotas[.codex]?["Local Codex"])
+
+        XCTAssertEqual(quota.accountDisplayName, "person@example.com")
+    }
+
     func testAccountCreateUsesBearerAndIdempotencyHeaders() async throws {
         QuotioCLIURLProtocol.enqueue(#"{"id":"operation-1","status":"completed","error":null}"#)
         let backend = QuotioCLIBackend(session: stubSession())
