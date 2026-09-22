@@ -356,7 +356,7 @@ struct ProvidersScreen: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(permission.provider.displayName)
                             .font(.body.weight(.medium))
-                        Text("providers.nativePermission.message".localized())
+                        Text(permission.explanationLocalizationKey.localized())
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -697,6 +697,21 @@ struct ProvidersScreen: View {
         try? providersModel.synchronizeCustomProviders(
             at: proxyManagement.proxy.configPath
         )
+    }
+}
+
+extension NativeSourcePermission {
+    var explanationLocalizationKey: String {
+        switch (kind, location) {
+        case ("antigravity_native", "gemini_keychain"):
+            "providers.nativePermission.antigravity"
+        case ("factory_native", _):
+            "providers.nativePermission.factory"
+        case ("claude_native", "code_keychain"):
+            "providers.nativePermission.claude"
+        default:
+            "providers.nativePermission.message"
+        }
     }
 }
 

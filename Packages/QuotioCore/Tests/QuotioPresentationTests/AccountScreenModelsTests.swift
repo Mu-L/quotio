@@ -57,6 +57,25 @@ final class AccountScreenModelsTests: XCTestCase {
         XCTAssertEqual(authorized, permission)
     }
 
+    func testNativePermissionExplainsProviderSpecificKeychainReason() {
+        XCTAssertEqual(
+            NativeSourcePermission(
+                provider: .antigravity,
+                kind: "antigravity_native",
+                location: "gemini_keychain"
+            ).explanationLocalizationKey,
+            "providers.nativePermission.antigravity"
+        )
+        XCTAssertEqual(
+            NativeSourcePermission(
+                provider: .factoryDroid,
+                kind: "factory_native",
+                location: "v2_login_keychain"
+            ).explanationLocalizationKey,
+            "providers.nativePermission.factory"
+        )
+    }
+
     func testAccountsModelReloadMergesQuotaDerivedAccounts() async {
         let model = AccountsScreenModel(
             accountService: AccountScreenModelService(accounts: []),
