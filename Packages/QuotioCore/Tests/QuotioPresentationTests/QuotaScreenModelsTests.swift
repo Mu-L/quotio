@@ -52,6 +52,32 @@ final class QuotaScreenModelsTests: XCTestCase {
         await quota.shutdown()
     }
 
+    func testDashboardModelHidesDisabledAccounts() {
+        let quota = QuotaScreenModel(coordinator: TestQuotaCoordinator())
+        let accounts = AccountsScreenModel(
+            accountService: EmptyAccountManager(),
+            authFileRepository: EmptyAuthFileRepository()
+        )
+        accounts.replaceAccounts([
+            Account.make(
+                providerID: AccountProviderID(rawValue: QuotaProvider.codex.rawValue),
+                accountKey: "enabled@example.com",
+                source: .nativeCredential
+            ),
+            Account.make(
+                providerID: AccountProviderID(rawValue: QuotaProvider.claude.rawValue),
+                accountKey: "disabled@example.com",
+                source: .nativeCredential,
+                status: .disabled
+            ),
+        ])
+        let dashboard = DashboardScreenModel(quota: quota, accounts: accounts)
+
+        XCTAssertEqual(dashboard.trackedAccounts.map(\.accountKey), ["enabled@example.com"])
+        XCTAssertEqual(dashboard.trackedAccountCount, 1)
+        XCTAssertEqual(dashboard.connectedProviderCount, 1)
+    }
+
     func testShutdownPreventsSuspendedRefreshFromRestartingObservation() async {
         let gate = TestAsyncGate()
         let coordinator = TestQuotaCoordinator(refreshGate: gate)

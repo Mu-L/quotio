@@ -7,6 +7,22 @@ import XCTest
 
 @MainActor
 final class QuotaFeatureControllerTests: XCTestCase {
+    func testInitializeDiscoversNativeAccountsBeforeReloadingAccounts() async {
+        let account = Account.make(
+            providerID: AccountProviderID(rawValue: QuotaProvider.codex.rawValue),
+            accountKey: "person@example.com",
+            source: .nativeCredential
+        )
+        let fixture = await makeFixture(account: account, provider: .codex)
+        await fixture.accountService.clearEvents()
+
+        await fixture.controller.initialize()
+
+        let events = await fixture.accountService.events()
+        XCTAssertEqual(Array(events.prefix(2)), ["discover", "accounts"])
+        await fixture.controller.shutdown()
+    }
+
     func testAutomaticRefreshProvidersPreserveOperatingModeBehavior() {
         XCTAssertEqual(
             QuotaFeatureController.automaticallyRefreshedProviders(for: .localProxy),
@@ -235,13 +251,17 @@ private actor QuotaFeatureAccountService: AccountManaging {
     private var storedAccounts: [Account]
     private var recordedDisabledUpdates: [DisabledUpdate] = []
     private var recordedDeletedAccountIDs: [String] = []
+    private var recordedEvents: [String] = []
 
     init(accounts: [Account]) {
         storedAccounts = accounts
     }
 
-    func registerDetectedNativeAccounts() {}
-    func accounts() -> [Account] { storedAccounts }
+    func registerDetectedNativeAccounts() { recordedEvents.append("discover") }
+    func accounts() -> [Account] {
+        recordedEvents.append("accounts")
+        return storedAccounts
+    }
 
     func setDisabled(_ disabled: Bool, accountID: String) {
         recordedDisabledUpdates.append(DisabledUpdate(accountID: accountID, disabled: disabled))
@@ -261,6 +281,8 @@ private actor QuotaFeatureAccountService: AccountManaging {
 
     func disabledUpdates() -> [DisabledUpdate] { recordedDisabledUpdates }
     func deletedAccountIDs() -> [String] { recordedDeletedAccountIDs }
+    func events() -> [String] { recordedEvents }
+    func clearEvents() { recordedEvents = [] }
 }
 
 private actor QuotaFeatureAuthFileRepository: AuthFileRepository {

@@ -26,6 +26,10 @@ public final class AccountsScreenModel {
         accounts = canonicalized(await accountService.accounts())
     }
 
+    public func registerDetectedNativeAccounts() async {
+        await accountService.registerDetectedNativeAccounts()
+    }
+
     public func reloadAccounts(
         merging quotas: [QuotaProvider: [String: ProviderQuota]],
         aliases: [QuotaProvider: [String: String]] = [:]

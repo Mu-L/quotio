@@ -87,6 +87,7 @@ public final class QuotaFeatureController {
     }
 
     public func initialize() async {
+        await accounts.registerDetectedNativeAccounts()
         await quota.bootstrap(mode: operatingMode)
         await accounts.reloadAuthFiles()
         await reloadAccounts()
