@@ -780,9 +780,6 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
             proxyPort: proxyManagement.proxy.port,
             isProxyRunning: proxyManagement.proxy.proxyStatus.running,
             tunnel: tunnel.tunnelState,
-            directAuthProviders: Set(proxyManagement.directAuthFiles.compactMap {
-                QuotaProvider(rawValue: $0.providerID.rawValue)
-            }),
             monitorAccounts: accountsScreenModel.accounts,
             quota: quotaScreenModel.state,
             installedAgents: installedAgents,
