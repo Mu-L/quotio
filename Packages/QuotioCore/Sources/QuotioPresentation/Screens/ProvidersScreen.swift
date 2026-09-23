@@ -260,7 +260,7 @@ struct ProvidersScreen: View {
         .alert("providers.nativePermission.failedTitle".localized(), isPresented: $showNativePermissionError) {
             Button("action.ok".localized(), role: .cancel) {}
         } message: {
-            Text("providers.nativePermission.failedMessage".localized())
+            Text((accounts.nativeAuthorizationFailure ?? .unknown).message)
         }
         .sheet(isPresented: $showIDEScanSheet) {
             IDEScanSheet {}

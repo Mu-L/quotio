@@ -85,6 +85,7 @@ enum CompositionRoot {
         let authFileState = UserDefaultsManagedAuthFileStateRepository()
         let providerTrackingRepository = UserDefaultsProviderTrackingPreferencesRepository()
         let quotioBackend = QuotioCLIBackend(
+            logger: OSApplicationLogger(subsystem: AppIdentity.bundleIdentifier, category: "NativeQuota"),
             trackingPreferences: providerTrackingRepository,
             customProviders: customProviderRepository.load,
             customProviderDomain: AppIdentity.bundleIdentifier,
@@ -669,7 +670,7 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
                     if settingsScreenModel.appShellPreferences.showInDock {
                         statusBarManager?.closeMenu()
                     }
-                    navigationScreenModel.currentPage = .settings
+                    navigationScreenModel.currentPage = .general
                     windowPresenter.showMainWindow()
                 },
                 quit: { [applicationPlatform] in

@@ -45,6 +45,7 @@ public final class ProxyScreenModel {
     public var proxyStatus: ProxyStatus { state.status }
     public var port: UInt16 { state.status.port }
     public var baseURL: String { "http://127.0.0.1:\(port)" }
+    public var managementPageURL: URL? { URL(string: "\(baseURL)/management.html") }
     public var managementURL: String { "\(baseURL)/v0/management" }
     public var managementKey: String { state.managementKey }
     public var binaryPath: String { state.paths.legacyBinaryPath }

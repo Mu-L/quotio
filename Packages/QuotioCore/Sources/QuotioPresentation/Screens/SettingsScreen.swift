@@ -956,7 +956,7 @@ struct ProxyUpdateSettingsSection: View {
 
 struct ProxyVersionManagerSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(ProxyManagementScreenModel.self) private var viewModel
+    @Environment(ProxyScreenModel.self) private var proxyManager
     
     @State private var availableVersions: [ProxyVersionInfo] = []
     @State private var installedVersions: [InstalledProxyVersion] = []
@@ -970,10 +970,6 @@ struct ProxyVersionManagerSheet: View {
     @State private var pendingInstallVersion: ProxyVersionInfo?
     @State private var versionsToDelete: [String] = []
     
-    private var proxyManager: ProxyScreenModel {
-        viewModel.proxy
-    }
-
     private var installedVersionItems: [NamespacedInstalledVersionItem] {
         installedVersions.map { version in
             NamespacedInstalledVersionItem(id: "installed-\(version.id)", version: version)
@@ -1374,21 +1370,6 @@ struct MenuBarSettingsSection: View {
         )
     }
 
-    private var showInDockBinding: Binding<Bool> {
-        Binding(
-            get: { settingsModel.appShellPreferences.showInDock },
-            set: { newValue in
-                // Prevent disabling both dock and menu bar icon (user would have no way to access app)
-                if !newValue && !settings.showMenuBarIcon {
-                    // Re-enable menu bar icon if user tries to disable dock while menu bar is already disabled
-                    settings.showMenuBarIcon = true
-                }
-
-                settingsModel.setShowInDock(newValue)
-            }
-        )
-    }
-    
     private var showQuotaBinding: Binding<Bool> {
         Binding(
             get: { settings.showQuotaInMenuBar },
@@ -1430,8 +1411,6 @@ struct MenuBarSettingsSection: View {
     
     var body: some View {
         Section {
-            Toggle("settings.showInDock".localized(), isOn: showInDockBinding)
-            
             Toggle("settings.menubar.showIcon".localized(), isOn: showMenuBarIconBinding)
             
             if settings.showMenuBarIcon {

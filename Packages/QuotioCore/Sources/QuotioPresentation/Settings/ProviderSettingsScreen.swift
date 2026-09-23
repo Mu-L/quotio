@@ -1,0 +1,284 @@
+import QuotioApplication
+import QuotioDomain
+import SwiftUI
+
+struct ProviderSettingsScreen: View {
+    let provider: QuotaProvider
+    @Environment(AccountsScreenModel.self) private var accounts
+    @Environment(QuotaScreenModel.self) private var quota
+    @Environment(QuotaFeatureController.self) private var controller
+    @Environment(RefreshSettingsManager.self) private var refreshSettings
+    @Environment(MenuBarSettingsManager.self) private var menuBar
+    @State private var oauthPresented = false
+    @State private var apiKeyPresented = false
+    @State private var editingAccount: Account?
+    @State private var removingAccount: Account?
+    @State private var switchingAccount: Account?
+    @State private var permission: NativeSourcePermission?
+    @State private var actionFailed = false
+
+    private var supportsOAuth: Bool { [.claude, .codex, .copilot].contains(provider) }
+    private var tracked: Bool { controller.trackingPreferences.isEnabled(provider) }
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 30)) { context in
+            let state = ProviderSettingsState(provider: provider, accounts: accounts.accounts,
+                permissions: accounts.nativeSourcePermissions, quota: quota.state,
+                tracking: controller.trackingPreferences, cadence: refreshSettings.refreshCadence, now: context.date)
+            Form {
+                AccountStorageAccessSection()
+                Section {
+                    HStack(alignment: .top, spacing: 12) {
+                        ProviderIcon(provider: provider, size: 40)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(provider.displayName).font(.title2.weight(.semibold))
+                            Label(state.connection.title, systemImage: state.connection.symbol)
+                                .foregroundStyle(state.connection.color)
+                            Text(String(format: "settings.accountsCount".localized(), state.accounts.count))
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Toggle("settings.track".localized(), isOn: Binding(get: { tracked }, set: { enabled in
+                            Task { await controller.setProviderEnabled(enabled, provider: provider) }
+                        }))
+                        .toggleStyle(.switch)
+                        .fixedSize()
+                    }
+                }
+                if !tracked {
+                    Section {
+                        Label("settings.trackingPaused".localized(), systemImage: "pause.circle")
+                    }
+                } else {
+                    ForEach(state.permissions) { source in
+                        Section {
+                            Text(source.explanationLocalizationKey.localized())
+                            Button("settings.authorize".localized()) { permission = source }
+                        }
+                    }
+                    if let issue = state.latestIssue, issue.reason != nil {
+                        Section {
+                            Label(issue.explanation, systemImage: "exclamationmark.triangle")
+                                .foregroundStyle(.orange)
+                            if let account = state.accounts.first(where: { $0.id == state.latestIssueAccountID }) {
+                                Text(account.displayName.masked(if: menuBar.hideSensitiveInfo)).font(.caption)
+                            }
+                            recoveryAction(issue, accounts: state.accounts.filter { $0.id == state.latestIssueAccountID }, sourceID: state.latestIssueSourceID)
+                        }
+                    }
+                }
+                Section(String(format: "settings.accountsCount".localized(), state.accounts.count)) {
+                    if state.accounts.isEmpty {
+                        Text("connections.noAccount".localized()).foregroundStyle(.secondary)
+                    }
+                    ForEach(state.accounts) { account in
+                        DisclosureGroup {
+                            ForEach(account.sources) { source in
+                                HStack(alignment: .top) {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(source.title)
+                                        Text(source.locationLabel).font(.caption).foregroundStyle(.secondary)
+                                        if quota.state.accountIDs[provider]?[account.accountKey] == source.accountID {
+                                            Text("settings.sources.active".localized()).font(.caption).foregroundStyle(.secondary)
+                                        }
+                                    }
+                                    Spacer()
+                                    if source.status == .disabled {
+                                        Text(ConnectionState.disabled.title).font(.caption)
+                                    } else if let issue = state.sourceIssues[source.accountID] {
+                                        Text(issue.explanation).font(.caption).foregroundStyle(.orange)
+                                    } else if quota.state.accountIDs[provider]?[account.accountKey] == source.accountID {
+                                        Text(state.accountStates[account.id]?.connection.title ?? "settings.sources.unchecked".localized()).font(.caption)
+                                    } else {
+                                        Text("settings.sources.unchecked".localized()).font(.caption).foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(account.displayName.masked(if: menuBar.hideSensitiveInfo))
+                                    if let monitoring = state.accountStates[account.id] {
+                                        Text(monitoring.connection.title + " · " + monitoring.quota.title)
+                                            .font(.caption).foregroundStyle(.secondary)
+                                        if let updated = quota.providerQuotas[provider]?[account.accountKey]?.lastUpdated {
+                                            Text(updated, style: .relative).font(.caption).foregroundStyle(.secondary)
+                                        }
+                                        if case .failed(nil) = monitoring.quota {
+                                            Text("connections.failure.unknown".localized()).font(.caption)
+                                            Text("settings.reasonMissing".localized()).font(.caption).foregroundStyle(.secondary)
+                                        }
+                                    }
+                                }
+                                Spacer()
+                                accountMenu(account)
+                            }
+                        }
+                    }
+                }
+                Section("settings.connectMore".localized()) {
+                    if supportsOAuth {
+                        LabeledContent("settings.browserLogin".localized()) {
+                            Button("action.login".localized()) { oauthPresented = true }
+                        }
+                    }
+                    if provider.usesAPIKeyAuth {
+                        LabeledContent("settings.apiKey".localized()) {
+                            Button("settings.addAPIKey".localized()) {
+                                editingAccount = nil
+                                apiKeyPresented = true
+                            }
+                        }
+                    }
+                    if provider.hasDiscoverableNativeLogin {
+                        LabeledContent("settings.existingLogin".localized()) {
+                            Button("settings.rescan".localized()) {
+                                Task {
+                                    await accounts.rescanNativeAccounts(for: provider)
+                                    await controller.refresh(provider: provider)
+                                }
+                            }
+                            .disabled(accounts.discoveringProvider != nil)
+                        }
+                        if let scanned = accounts.lastScannedAt[provider] {
+                            Text(String(format: "settings.scanResult".localized(),
+                                state.accounts.count + state.permissions.count,
+                                scanned.formatted(date: .abbreviated, time: .shortened)))
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .disabled(!tracked)
+            }
+            .formStyle(.grouped)
+        }
+        .navigationTitle(provider.displayName)
+        .sheet(isPresented: $oauthPresented) {
+            OAuthSheet(provider: provider) { oauthPresented = false }
+        }
+        .sheet(isPresented: $apiKeyPresented) {
+            MonitorAPIKeyConnectionSheet(provider: provider, account: editingAccount) { label, key in
+                try await controller.saveAPIKey(provider: provider, label: label, apiKey: key, existingAccountID: editingAccount?.id)
+            }
+        }
+        .sheet(item: $permission) { source in NativePermissionSheet(source: source) }
+        .sheet(item: $switchingAccount) { account in
+            SwitchAccountSheet(accountEmail: account.displayName) { switchingAccount = nil }
+        }
+        .alert("settings.removeAccount".localized(), isPresented: Binding(
+            get: { removingAccount != nil }, set: { if !$0 { removingAccount = nil } }
+        )) {
+            Button("action.cancel".localized(), role: .cancel) { removingAccount = nil }
+            Button("action.remove".localized(), role: .destructive) {
+                guard let account = removingAccount else { return }
+                Task {
+                    do {
+                        try await accounts.delete(accountID: account.id)
+                        await controller.refresh(provider: provider)
+                    } catch { actionFailed = true }
+                    removingAccount = nil
+                }
+            }
+        }
+        .alert("settings.actionFailed".localized(), isPresented: $actionFailed) {
+            Button("action.ok".localized(), role: .cancel) {}
+        }
+    }
+
+    private func accountMenu(_ account: Account) -> some View {
+        let item = MenuBarQuotaItem(provider: provider.rawValue, accountKey: account.accountKey)
+        return Menu {
+            Toggle("settings.pinAccount".localized(), isOn: Binding(
+                get: { menuBar.isSelected(item) }, set: { _ in menuBar.toggleItem(item) }
+            ))
+            Toggle("settings.pauseAccount".localized(), isOn: Binding(
+                get: { account.isDisabled }, set: { disabled in Task { await controller.setAccountDisabled(disabled, accountID: account.id) } }
+            ))
+            .disabled(!account.capabilities.contains(.disable))
+            if account.capabilities.contains(.edit), provider.usesAPIKeyAuth {
+                Button("action.edit".localized()) { editingAccount = account; apiKeyPresented = true }
+            }
+            if provider == .antigravity {
+                Button("antigravity.useInIDE".localized()) { switchingAccount = account }
+            }
+            if account.canDelete {
+                Button("action.remove".localized(), role: .destructive) { removingAccount = account }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .accessibilityLabel("settings.accountActions".localized())
+    }
+
+    @ViewBuilder
+    private func recoveryAction(_ issue: QuotaRefreshIssue, accounts: [Account], sourceID: String?) -> some View {
+        switch issue.reason?.recoveryAction {
+        case .signIn:
+            if supportsOAuth, accounts.flatMap(\.sources).contains(where: { $0.accountID == sourceID && $0.source == .quotioKeychain }) {
+                Button("action.login".localized()) { oauthPresented = true }
+            } else {
+                Text("connections.signInOwner".localized())
+                Button("action.retry".localized()) { Task { await controller.refresh(provider: provider) } }
+            }
+        case .authorize:
+            if let source = accounts.flatMap(\.sources).first(where: {
+                $0.accountID == sourceID && ["code_keychain", "gemini_keychain", "v2_login_keychain", "v2_keyring", "legacy"].contains($0.location ?? "")
+            }), let kind = source.credentialReference {
+                Button("settings.authorize".localized()) {
+                    permission = NativeSourcePermission(provider: provider, kind: kind, location: source.location)
+                }
+            }
+        case .refreshInSourceApp:
+            Text("connections.signInOwner".localized())
+            Button("action.retry".localized()) { Task { await controller.refresh(provider: provider) } }
+        case .retry:
+            Button("action.retry".localized()) { Task { await controller.refresh(provider: provider) } }
+        case nil: EmptyView()
+        }
+    }
+}
+
+struct NativePermissionSheet: View {
+    let source: NativeSourcePermission
+    @Environment(\.dismiss) private var dismiss
+    @Environment(AccountsScreenModel.self) private var accounts
+    @Environment(QuotaFeatureController.self) private var controller
+    @State private var failed = false
+    @State private var isSubmitting = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("settings.authorize".localized()).font(.title2)
+            Text(String(format: "settings.permissionExplanation".localized(), source.keychainItemName, source.provider.displayName))
+                .fixedSize(horizontal: false, vertical: true)
+            if failed { Text((accounts.nativeAuthorizationFailure ?? .unknown).message).foregroundStyle(.red) }
+            if isSubmitting {
+                ProgressView("settings.authorization.pending".localized())
+                    .controlSize(.small)
+            }
+            HStack {
+                Spacer()
+                Button((isSubmitting ? "action.close" : "action.cancel").localized()) { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("onboarding.button.continue".localized()) {
+                    isSubmitting = true
+                    failed = false
+                    Task {
+                        defer { isSubmitting = false }
+                        do {
+                            try await accounts.authorizeNativeSource(source)
+                            await controller.refresh(provider: source.provider)
+                            dismiss()
+                        } catch { failed = true }
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+                .disabled(isSubmitting || accounts.authorizingNativeSourceID != nil)
+            }
+        }
+        .padding(24)
+        .frame(width: 460)
+    }
+}

@@ -46,19 +46,19 @@ struct QuotioApp: App {
                     }
             }
         }
-        .defaultSize(width: 1000, height: 700)
+        .defaultSize(width: 900, height: 640)
         .commands {
             CommandGroup(replacing: .newItem) { }
             CommandGroup(replacing: .appInfo) {
                 Button("nav.about".localized()) {
-                    runtime.navigationScreenModel.currentPage = .about
+                    runtime.navigationScreenModel.currentPage = .updates
                     openWindow(id: "main")
                 }
             }
 
             CommandGroup(replacing: .appSettings) {
                 Button("action.openApp".localized()) {
-                    runtime.navigationScreenModel.currentPage = .settings
+                    runtime.navigationScreenModel.currentPage = .general
                     openWindow(id: "main")
                 }
                 .keyboardShortcut(",", modifiers: .command)
@@ -77,6 +77,7 @@ struct QuotioApp: App {
         content
             .id(runtime.languageManager.currentLanguage)
             .environment(runtime.proxyManagement)
+            .environment(runtime.proxyManagement.proxy)
             .environment(runtime.quotaController)
             .environment(runtime.quotaScreenModel)
             .environment(runtime.accountsScreenModel)

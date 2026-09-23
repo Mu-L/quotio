@@ -9,6 +9,12 @@ public enum AppConstants {
 }
 
 public enum NavigationPage: String, CaseIterable, Identifiable, Sendable {
+    case general = "General"
+    case menuBar = "Menu Bar"
+    case notifications = "Notifications"
+    case privacy = "Privacy"
+    case proxy = "CLIProxyAPI"
+    case updates = "About & Updates"
     case dashboard = "Dashboard"
     case quota = "Quota"
     case providers = "Providers"
@@ -22,6 +28,12 @@ public enum NavigationPage: String, CaseIterable, Identifiable, Sendable {
 
     public var icon: String {
         switch self {
+        case .general: "gearshape"
+        case .menuBar: "menubar.rectangle"
+        case .notifications: "bell"
+        case .privacy: "hand.raised"
+        case .proxy: "network"
+        case .updates: "info.circle"
         case .dashboard: "gauge.with.dots.needle.33percent"
         case .quota: "chart.bar.fill"
         case .providers: "person.2.badge.key"

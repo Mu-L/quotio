@@ -3,20 +3,16 @@ import QuotioDomain
 import SwiftUI
 
 public struct RootNavigationView: View {
-    let logsScreenModel: LogsScreenModel
-
-    public init(logsScreenModel: LogsScreenModel) {
-        self.logsScreenModel = logsScreenModel
-    }
+    public init(logsScreenModel: LogsScreenModel) {}
 
     @Environment(NavigationScreenModel.self) private var navigation
-    @Environment(ProxyManagementScreenModel.self) private var proxyManagement
     @Environment(AccountsScreenModel.self) private var accounts
     @Environment(QuotaScreenModel.self) private var quota
-    @Environment(OperatingModeManager.self) private var modeManager
-    @Environment(SettingsScreenModel.self) private var settingsModel
+    @Environment(QuotaFeatureController.self) private var controller
+    @Environment(RefreshSettingsManager.self) private var refreshSettings
     @State private var search = ""
-    @State private var showAllProviders = false
+    @State private var showUnconnected = false
+    @State private var showDisabled = false
 
     private enum Selection: Hashable {
         case page(NavigationPage)
@@ -29,179 +25,91 @@ public struct RootNavigationView: View {
         } set: { value in
             switch value {
             case .provider(let provider): navigation.selectProvider(provider)
-            case .page(let page):
-                navigation.selectedProvider = nil
-                navigation.currentPage = page
+            case .page(let page): navigation.currentPage = page
             case nil: break
             }
         }
     }
 
-    private var visibleProviders: [QuotaProvider] {
-        let configured: Set<QuotaProvider>
-        if modeManager.isMonitorMode {
-            configured = Set(accounts.accounts.filter { !$0.isDisabled }.map(\.provider))
-                .union(accounts.nativeSourcePermissions.map(\.provider))
-        } else {
-            configured = Set(proxyManagement.authFiles.compactMap(\.providerID))
-                .union(proxyManagement.directAuthFiles.compactMap { QuotaProvider(rawValue: $0.providerID.rawValue) })
-                .union(quota.providerQuotas.keys.filter { !$0.supportsManualAuth })
+    private var providers: [ProviderSettingsState] {
+        QuotaProvider.allCases.filter {
+            $0.supportsQuotaOnlyMode && (search.isEmpty || $0.displayName.localizedCaseInsensitiveContains(search))
+        }.map { provider in
+            ProviderSettingsState(provider: provider, accounts: accounts.accounts,
+                permissions: accounts.nativeSourcePermissions, quota: quota.state,
+                tracking: controller.trackingPreferences, cadence: refreshSettings.refreshCadence, now: Date())
+        }.sorted {
+            if $0.needsAttention != $1.needsAttention { return $0.needsAttention }
+            return $0.provider.displayName.localizedStandardCompare($1.provider.displayName) == .orderedAscending
         }
-        return QuotaProvider.allCases.filter {
-            (!modeManager.isMonitorMode || $0.supportsQuotaOnlyMode)
-                && (showAllProviders || !search.isEmpty || configured.contains($0) || navigation.selectedProvider == $0)
-                && (search.isEmpty || $0.displayName.localizedCaseInsensitiveContains(search))
-        }.sorted { $0.displayName < $1.displayName }
     }
 
     public var body: some View {
         NavigationSplitView {
-            VStack(spacing: 0) {
-                List(selection: selection) {
-                    Section {
-                        Label("connections.overview".localized(), systemImage: "gauge.with.dots.needle.33percent")
-                            .tag(Selection.page(.dashboard))
-                        Label("connections.usage".localized(), systemImage: "chart.bar")
-                            .tag(Selection.page(.quota))
-                        Label("connections.all".localized(), systemImage: "square.grid.2x2")
-                            .tag(Selection.page(.providers))
-                    }
-                    Section("nav.providers".localized()) {
-                        ForEach(visibleProviders) { provider in
-                            HStack {
-                                ProviderIcon(provider: provider, size: 18)
-                                Text(provider.displayName)
-                                Spacer()
-                                if modeManager.isMonitorMode, accounts.nativeSourcePermissions.contains(where: { $0.provider == provider }) {
-                                    Image(systemName: "lock")
-                                        .foregroundStyle(.orange)
-                                        .accessibilityLabel("providers.nativePermission.title".localized())
-                                } else if modeManager.isMonitorMode, accounts.accounts.contains(where: { $0.provider == provider && !$0.isDisabled }),
-                                          quota.state.accountIssues.keys.contains(where: { $0.provider == provider })
-                                            || quota.state.issues[provider] != nil {
-                                    Image(systemName: "exclamationmark.triangle")
-                                        .foregroundStyle(.orange)
-                                        .accessibilityLabel("connections.attention".localized())
-                                }
-                            }
-                            .tag(Selection.provider(provider))
-                        }
-                        Toggle("connections.showAll".localized(), isOn: $showAllProviders)
-                            .toggleStyle(.checkbox)
-                            .font(.caption)
-                    }
-                    if modeManager.isLocalProxyMode {
-                        Section("connections.gateway".localized()) {
-                            Label("nav.agents".localized(), systemImage: "terminal").tag(Selection.page(.agents))
-                            Label("nav.apiKeys".localized(), systemImage: "key").tag(Selection.page(.apiKeys))
-                            if settingsModel.proxyPreferences.loggingToFile {
-                                Label("nav.logs".localized(), systemImage: "doc.text").tag(Selection.page(.logs))
-                            }
-                        }
+            List(selection: selection) {
+                Section("nav.providers".localized()) {
+                    ForEach(providers.filter { $0.connection != .disabled && !$0.isUnconnected }, id: \.provider) { state in
+                        providerRow(state)
                     }
                 }
-                .searchable(text: $search, placement: .sidebar, prompt: "connections.search".localized())
-                Divider()
-                HStack {
-                    Text(modeManager.isMonitorMode ? "connections.monitor".localized() : "connections.gateway".localized())
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button { navigation.currentPage = .settings } label: { Image(systemName: "gearshape") }
-                        .buttonStyle(.plain)
-                        .help("nav.settings".localized())
-                        .accessibilityLabel("nav.settings".localized())
+                let unconnected = providers.filter { $0.connection != .disabled && $0.isUnconnected }
+                Section(isExpanded: Binding(get: { showUnconnected || !search.isEmpty }, set: { showUnconnected = $0 })) {
+                    ForEach(unconnected, id: \.provider) { providerRow($0) }
+                } header: {
+                    Text(String(format: "settings.unconnectedCount".localized(), unconnected.count))
                 }
-                .padding(12)
+                let disabled = providers.filter { $0.connection == .disabled }
+                Section(isExpanded: Binding(get: { showDisabled || !search.isEmpty }, set: { showDisabled = $0 })) {
+                    ForEach(disabled, id: \.provider) { providerRow($0) }
+                } header: {
+                    Text(String(format: "settings.disabledCount".localized(), disabled.count))
+                }
+                Section("settings.application".localized()) {
+                    ForEach(NavigationPage.settingsPages.filter {
+                        search.isEmpty || $0.settingsTitle.localizedCaseInsensitiveContains(search)
+                    }) { page in
+                        Label(page.settingsTitle, systemImage: page.icon).tag(Selection.page(page))
+                    }
+                }
             }
-            .navigationSplitViewColumnWidth(min: 200, ideal: 235, max: 300)
+            .listStyle(.sidebar)
+            .searchable(text: $search, placement: .sidebar, prompt: "settings.search".localized())
+            .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 280)
         } detail: {
-            switch navigation.currentPage {
-            case .dashboard: DashboardScreen()
-            case .quota: QuotaScreen()
-            case .providers:
-                ProvidersScreen(provider: navigation.selectedProvider)
-                    .id(navigation.selectedProvider)
-            case .agents: AgentSetupScreen()
-            case .apiKeys: APIKeysScreen()
-            case .logs:
-                if proxyManagement.proxy.proxyStatus.running {
-                    LogsScreen(model: logsScreenModel)
-                } else {
-                    ProxyRequiredView(description: "logs.startProxy".localized()) {
-                        await proxyManagement.startProxy()
-                    }
-                    .navigationTitle("nav.logs".localized())
-                }
-            case .settings: SettingsScreen()
-            case .about: AboutScreen()
+            if let provider = navigation.selectedProvider {
+                ProviderSettingsScreen(provider: provider).id(provider)
+            } else {
+                AppSettingsPage(page: navigation.currentPage)
             }
         }
-        .onChange(of: modeManager.currentMode) {
-            if modeManager.isMonitorMode {
-                navigation.showProviders()
-            }
+        .frame(minWidth: 680, minHeight: 480)
+    }
+
+    private func providerRow(_ state: ProviderSettingsState) -> some View {
+        HStack {
+            ProviderIcon(provider: state.provider, size: 18)
+            Text(state.provider.displayName)
+            Spacer()
+            Image(systemName: state.needsAttention ? "exclamationmark.triangle" : state.connection.symbol)
+                .foregroundStyle(state.needsAttention ? Color.orange : state.connection.color)
+                .accessibilityLabel(state.needsAttention ? "connections.attention".localized() : state.connection.title)
         }
+        .tag(Selection.provider(state.provider))
     }
 }
 
-struct ProxyStatusRow: View {
-    let proxyManagement: ProxyManagementScreenModel
+extension NavigationPage {
+    static let settingsPages: [Self] = [.general, .menuBar, .notifications, .privacy, .proxy, .updates]
 
-    var body: some View {
-        HStack {
-            if proxyManagement.proxy.isStarting {
-                SmallProgressView(size: 8)
-            } else {
-                Circle()
-                    .fill(proxyManagement.proxy.proxyStatus.running ? .green : .gray)
-                    .frame(width: 8, height: 8)
-            }
-
-            Text(
-                proxyManagement.proxy.isStarting
-                    ? "status.starting".localized()
-                    : proxyManagement.proxy.proxyStatus.running
-                        ? "status.running".localized()
-                        : "status.stopped".localized()
-            )
-            .font(.caption)
-
-            Spacer()
-
-            Text(":" + String(proxyManagement.proxy.port))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-}
-
-struct QuotaRefreshStatusRow: View {
-    let quota: QuotaScreenModel
-
-    var body: some View {
-        HStack {
-            if quota.isLoadingQuotas {
-                SmallProgressView(size: 8)
-                Text("status.refreshing".localized())
-                    .font(.caption)
-            } else {
-                Image(systemName: "clock")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-
-                if let lastRefresh = quota.lastRefreshTime {
-                    Text("status.updatedAgo \(lastRefresh, style: .relative)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("status.notRefreshed".localized())
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Spacer()
+    @MainActor var settingsTitle: String {
+        switch self {
+        case .general, .settings: "settings.general".localized()
+        case .menuBar: "connections.menuBar".localized()
+        case .notifications: "settings.notifications.title".localized()
+        case .privacy: "connections.privacy".localized()
+        case .proxy: "CLIProxyAPI"
+        case .updates, .about: "settings.aboutUpdates".localized()
+        default: "settings.general".localized()
         }
     }
 }

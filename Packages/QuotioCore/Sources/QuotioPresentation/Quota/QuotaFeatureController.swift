@@ -93,12 +93,23 @@ public final class QuotaFeatureController {
     }
 
     public func initialize() async {
-        await accounts.registerDetectedNativeAccounts()
+        if trackingPreferences.automaticallyDiscoverLogins {
+            await accounts.registerDetectedNativeAccounts()
+        }
         await quota.bootstrap(mode: operatingMode)
         await accounts.reloadAuthFiles()
         await reloadAccounts()
         await refreshAll()
         restartAutomaticRefresh()
+    }
+
+    public func setAutomaticDiscovery(_ enabled: Bool) async {
+        trackingPreferences.automaticallyDiscoverLogins = enabled
+        trackingRepository?.save(trackingPreferences)
+        if enabled {
+            await accounts.scanAllNativeAccounts()
+            await refreshAll()
+        }
     }
 
     public func setProviderEnabled(_ enabled: Bool, provider: QuotaProvider) async {

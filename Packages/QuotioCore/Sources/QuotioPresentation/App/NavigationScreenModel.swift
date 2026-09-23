@@ -4,7 +4,7 @@ import QuotioDomain
 @MainActor
 @Observable
 public final class NavigationScreenModel {
-    public var currentPage: NavigationPage = .providers {
+    public var currentPage: NavigationPage = .general {
         didSet {
             if currentPage != .providers { selectedProvider = nil }
         }

@@ -15,13 +15,6 @@ struct MonitorAPIKeyConnectionSheet: View {
     @State private var isSaving = false
 
     private var isEditing: Bool { account != nil }
-    private var localizationPrefix: String {
-        switch provider {
-        case .factoryDroid: "factory"
-        case .amp: "amp"
-        default: "openrouter"
-        }
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -42,7 +35,7 @@ struct MonitorAPIKeyConnectionSheet: View {
 
             VStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("customProviders.providerName".localized())
+                    Text("settings.accountLabel".localized())
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                     TextField(localized("label.placeholder"), text: $label)
@@ -91,7 +84,7 @@ struct MonitorAPIKeyConnectionSheet: View {
     }
 
     private func localized(_ suffix: String) -> String {
-        (localizationPrefix + "." + suffix).localized()
+        String(format: ("settings.apiKey." + suffix).localized(), provider.displayName)
     }
 
     private func save() async {
