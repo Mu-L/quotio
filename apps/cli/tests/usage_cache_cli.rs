@@ -53,6 +53,8 @@ for line in sys.stdin:
         let mut cmd = self.command();
         cmd.args([
             "usage",
+            "--provider",
+            "codex",
             "--format",
             "json",
             "--no-saved-accounts",
