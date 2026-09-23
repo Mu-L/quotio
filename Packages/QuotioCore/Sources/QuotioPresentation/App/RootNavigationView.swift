@@ -15,7 +15,6 @@ public struct RootNavigationView: View {
     @Environment(QuotaScreenModel.self) private var quota
     @Environment(OperatingModeManager.self) private var modeManager
     @Environment(SettingsScreenModel.self) private var settingsModel
-    @Environment(\.openSettings) private var openSettings
     @State private var search = ""
     @State private var showAllProviders = false
 
@@ -108,7 +107,7 @@ public struct RootNavigationView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button { openSettings() } label: { Image(systemName: "gearshape") }
+                    Button { navigation.currentPage = .settings } label: { Image(systemName: "gearshape") }
                         .buttonStyle(.plain)
                         .help("nav.settings".localized())
                         .accessibilityLabel("nav.settings".localized())

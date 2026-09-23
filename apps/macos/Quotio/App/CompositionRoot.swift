@@ -665,10 +665,11 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
                 selectProvider: { [menuBarSettings] provider in
                     menuBarSettings.selectProvider(provider)
                 },
-                openApp: { [weak statusBarManager, settingsScreenModel, windowPresenter] in
+                openApp: { [weak statusBarManager, settingsScreenModel, windowPresenter, navigationScreenModel] in
                     if settingsScreenModel.appShellPreferences.showInDock {
                         statusBarManager?.closeMenu()
                     }
+                    navigationScreenModel.currentPage = .settings
                     windowPresenter.showMainWindow()
                 },
                 quit: { [applicationPlatform] in

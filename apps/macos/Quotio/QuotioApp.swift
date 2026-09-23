@@ -50,30 +50,29 @@ struct QuotioApp: App {
         .commands {
             CommandGroup(replacing: .newItem) { }
             CommandGroup(replacing: .appInfo) {
-                Button("nav.about".localized()) { openWindow(id: "about") }
+                Button("nav.about".localized()) {
+                    runtime.navigationScreenModel.currentPage = .about
+                    openWindow(id: "main")
+                }
+            }
+
+            CommandGroup(replacing: .appSettings) {
+                Button("action.openApp".localized()) {
+                    runtime.navigationScreenModel.currentPage = .settings
+                    openWindow(id: "main")
+                }
+                .keyboardShortcut(",", modifiers: .command)
             }
 
             CommandGroup(after: .appInfo) {
-                Button("Check for Updates...") {
+                Button("action.checkUpdates".localized()) {
                     runtime.checkForUpdates()
                 }
                 .disabled(!runtime.canCheckForUpdates)
             }
         }
-        Settings {
-            if !AppEnvironment.isRunningUnitTests {
-                configured(SettingsScreen())
-                    .frame(width: 640, height: 600)
-            }
-        }
-        Window("nav.about".localized(), id: "about") {
-            if !AppEnvironment.isRunningUnitTests {
-                configured(AboutScreen())
-                    .frame(minWidth: 520, minHeight: 480)
-            }
-        }
-        .defaultSize(width: 600, height: 650)
     }
+
     private func configured<Content: View>(_ content: Content) -> some View {
         content
             .id(runtime.languageManager.currentLanguage)

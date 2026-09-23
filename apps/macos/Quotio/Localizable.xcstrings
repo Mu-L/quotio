@@ -1,6 +1,7 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "action.checkUpdates" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Check for Updates…"}}, "vi": {"stringUnit": {"state": "translated", "value": "Kiểm tra cập nhật…"}}, "fr": {"stringUnit": {"state": "translated", "value": "Rechercher des mises à jour…"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "检查更新…"}}}},
     "connections.rescan" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Detect local login"}}, "vi": {"stringUnit": {"state": "translated", "value": "Dò đăng nhập cục bộ"}}, "fr": {"stringUnit": {"state": "translated", "value": "Détecter la connexion locale"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "检测本地登录"}}}},
     "connections.usage" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Usage"}}, "vi": {"stringUnit": {"state": "translated", "value": "Mức sử dụng"}}, "fr": {"stringUnit": {"state": "translated", "value": "Utilisation"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "用量"}}}},
     "connections.overview" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Overview"}}, "vi": {"stringUnit": {"state": "translated", "value": "Tổng quan"}}, "fr": {"stringUnit": {"state": "translated", "value": "Vue d’ensemble"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "概览"}}}},
@@ -868,25 +869,25 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open Quotio"
+            "value" : "Settings…"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ouvrir Quotio"
+            "value" : "Réglages…"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mở Quotio"
+            "value" : "Cài đặt…"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "打开 Quotio"
+            "value" : "设置…"
           }
         }
       }
