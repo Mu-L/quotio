@@ -67,7 +67,12 @@ pub(super) async fn list(State(state): State<Arc<ApiState>>) -> Result<Json<Valu
     let accounts = tokio::time::timeout(Duration::from_secs(10), api::list(vault(&state)?))
         .await
         .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "account_busy"))?
-        .map_err(account_error)?;
+        .map_err(|error| match error {
+            AccountError::Corrupt => {
+                ApiError(StatusCode::SERVICE_UNAVAILABLE, "account_storage_corrupt")
+            }
+            error => account_error(error),
+        })?;
     Ok(Json(json!({"schema_version":1,"accounts":accounts})))
 }
 pub(super) async fn get_account(
@@ -104,6 +109,7 @@ enum Mutation {
     Migrate(api::migration::Input),
     Reference(api::SourceInput),
     Authorize(api::SourceInput),
+    AuthorizeVault,
     Update(String, api::AccountPatch),
     Remove(String),
 }
@@ -195,6 +201,25 @@ pub(super) async fn authorize(
     .await
 }
 
+pub(super) async fn authorize_vault(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    ApiJson(body): ApiJson<Value>,
+) -> Result<(StatusCode, Json<Operation>), ApiError> {
+    if body != json!({}) {
+        return Err(ApiError(StatusCode::BAD_REQUEST, "invalid_request"));
+    }
+    mutate(
+        state,
+        headers,
+        "account_vault_authorize",
+        "",
+        body,
+        Mutation::AuthorizeVault,
+    )
+    .await
+}
+
 pub(super) async fn reference(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
@@ -273,7 +298,7 @@ async fn mutate(
         .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "invalid_idempotency_key"))?;
     // Durable receipts survive both discovery expiry and server restart. Validate
     // the body fingerprint before attempting to read a live native source.
-    let authorize = matches!(&mutation, Mutation::Authorize(_));
+    let authorize = matches!(&mutation, Mutation::Authorize(_) | Mutation::AuthorizeVault);
     let receipt = if authorize {
         None
     } else {
@@ -302,6 +327,7 @@ async fn mutate(
                     return Ok(json!({"account_id":id}));
                 }
                 match mutation {
+                    Mutation::AuthorizeVault => Ok(json!({})),
                     Mutation::Migrate(input) => {
                         let (prepared, enabled) = api::migration::prepare(input, &work.context)
                             .map_err(|e| account_code(&e))?;

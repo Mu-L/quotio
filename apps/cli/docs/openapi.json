@@ -1520,6 +1520,91 @@
         }
       }
     },
+    "/v1/account-vault/authorize": {
+      "post": {
+        "summary": "Authorize access to Quotio account storage after an explicit user action",
+        "responses": {
+          "202": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "500": {
+            "$ref": "#/components/responses/BadRequest",
+            "description": "Internal error"
+          },
+          "408": {
+            "$ref": "#/components/responses/BadRequest",
+            "description": "Request body timeout"
+          },
+          "413": {
+            "$ref": "#/components/responses/BadRequest",
+            "description": "JSON body exceeds 64 KiB"
+          },
+          "415": {
+            "$ref": "#/components/responses/BadRequest",
+            "description": "JSON content type required"
+          },
+          "422": {
+            "$ref": "#/components/responses/BadRequest",
+            "description": "Invalid JSON request"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "macOS only. May prompt for access to the fixed Quotio vault selected by the server. Does not accept a Keychain service or account from the caller. Does not return credentials. Background discovery and refresh must never call this operation."
+      }
+    },
     "/v1/account-sources/authorize": {
       "post": {
         "summary": "Authorize a native Keychain source after an explicit user action",
@@ -2497,6 +2582,7 @@
           "enabled": {
             "type": "boolean"
           },
+          "source_location": {"type": "string", "description": "Native source location identifier; never a credential or full filesystem path."},
           "source_kind": {
             "type": "string",
             "enum": [

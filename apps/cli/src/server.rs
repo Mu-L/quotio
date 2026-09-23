@@ -163,6 +163,10 @@ fn router(state: Arc<ApiState>, policy: Arc<security::Policy>) -> Router {
         .route("/v1/account-sources", post(management::reference))
         .route("/v1/account-sources/discover", post(management::discover))
         .route("/v1/account-sources/authorize", post(management::authorize))
+        .route(
+            "/v1/account-vault/authorize",
+            post(management::authorize_vault),
+        )
         .route("/v1/accounts/{id}/usage", get(management::usage))
         .route("/v1/auth/sessions", post(management::begin))
         .route(

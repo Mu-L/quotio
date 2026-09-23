@@ -274,7 +274,8 @@ mod tests {
             "operation",
         );
         let account = crate::accounts::api::AccountDto {
-            source_kind: Some("quotio_custom_provider"),
+            source_kind: Some("claude_native"),
+            source_location: Some("code_keychain".into()),
             source_id: Some("opaque-source-id".into()),
             enabled: true,
             origin: crate::accounts::AccountOrigin::Owned,

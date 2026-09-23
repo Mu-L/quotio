@@ -169,7 +169,10 @@ impl Backend for Keychain {
             }) {
                 Ok(bytes) => Ok(Some(bytes)),
                 Err(e) if e.code() == -25300 => Ok(None),
-                Err(_) => Err(AccountError::Storage),
+                Err(error) => {
+                    tracing::warn!(status = error.code(), "vault_keychain_read_failed");
+                    Err(AccountError::Storage)
+                }
             }
         }
         #[cfg(not(target_os = "macos"))]

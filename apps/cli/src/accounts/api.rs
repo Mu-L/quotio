@@ -17,6 +17,8 @@ pub struct AccountDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_kind: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_location: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub source_id: Option<String>,
 }
 impl From<&super::Account> for AccountDto {
@@ -42,6 +44,19 @@ impl From<&super::Account> for AccountDto {
                 Credential::QuotioCustomProvider { .. } => Some("quotio_custom_provider"),
                 _ => None,
             },
+            source_location: (match &account.credential {
+                Credential::ClaudeNative { source } => Some(serde_json::json!(source.location)),
+                Credential::FactoryNative { source } => Some(serde_json::json!(source.location)),
+                Credential::AntigravityNative { source } => {
+                    Some(serde_json::json!(source.location))
+                }
+                Credential::CopilotNative { source } => Some(serde_json::json!(source.location)),
+                Credential::DevinDesktopNative { source } => {
+                    Some(serde_json::json!(source.location))
+                }
+                _ => None,
+            })
+            .and_then(|value| value.as_str().map(str::to_owned)),
             source_id: matches!(account.credential, Credential::QuotioCustomProvider { .. })
                 .then(|| account.identity.clone()),
         }

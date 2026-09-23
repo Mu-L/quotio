@@ -450,3 +450,26 @@ async fn native_authorization_requires_authentication_management_and_storage() {
         }
     }
 }
+
+#[tokio::test]
+async fn vault_authorization_requires_management_and_a_configured_vault() {
+    for (arguments, expected) in [(vec![], 405), (vec!["--manage"], 503)] {
+        let server = Server::start(&arguments).await;
+        let unauthorized = server
+            .client
+            .post(format!("{}/v1/account-vault/authorize", server.base))
+            .json(&json!({}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(unauthorized.status(), 401);
+        let response = server
+            .request(reqwest::Method::POST, "/v1/account-vault/authorize")
+            .header("Idempotency-Key", "vault-authorization-fixture")
+            .json(&json!({}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status().as_u16(), expected);
+    }
+}
