@@ -1,5 +1,10 @@
 import QuotioDomain
 
+public protocol ProviderTrackingPreferencesRepository: Sendable {
+    func load() -> ProviderTrackingPreferences
+    func save(_ preferences: ProviderTrackingPreferences)
+}
+
 public protocol OperatingModePreferencesRepository: Sendable {
     func load() -> OperatingModePreferences
     func save(_ preferences: OperatingModePreferences)

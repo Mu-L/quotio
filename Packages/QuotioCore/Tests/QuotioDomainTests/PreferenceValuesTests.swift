@@ -2,6 +2,16 @@ import XCTest
 @testable import QuotioDomain
 
 final class PreferenceValuesTests: XCTestCase {
+    func testProviderTrackingDefaultsToEnabledAndCanBeRestored() {
+        var preferences = ProviderTrackingPreferences()
+        XCTAssertTrue(preferences.isEnabled(.claude))
+        preferences.disabledProviders.insert(.claude)
+        XCTAssertFalse(preferences.isEnabled(.claude))
+        XCTAssertTrue(preferences.isEnabled(.codex))
+        preferences.disabledProviders.remove(.claude)
+        XCTAssertTrue(preferences.isEnabled(.claude))
+    }
+
     func testLegacyOperatingModesMapToSupportedModes() {
         XCTAssertEqual(OperatingMode.fromLegacy(appModeRaw: nil, connectionModeRaw: nil), .monitor)
         XCTAssertEqual(OperatingMode.fromLegacy(appModeRaw: "quotaOnly", connectionModeRaw: nil), .monitor)

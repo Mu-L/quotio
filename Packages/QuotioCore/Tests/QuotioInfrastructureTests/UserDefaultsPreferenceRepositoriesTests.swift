@@ -4,6 +4,19 @@ import XCTest
 @testable import QuotioInfrastructure
 
 final class UserDefaultsPreferenceRepositoriesTests: XCTestCase {
+    func testProviderTrackingRoundTripsWithoutChangingAccountsOrProxyPreferences() {
+        defaults.set(["existing-account"], forKey: "disabledAccountIDs")
+        defaults.set(true, forKey: "autoStartProxy")
+        let repository = UserDefaultsProviderTrackingPreferencesRepository(defaults: defaults)
+        XCTAssertEqual(repository.load(), ProviderTrackingPreferences())
+        repository.save(ProviderTrackingPreferences(disabledProviders: [.claude, .codex]))
+        XCTAssertEqual(repository.load().disabledProviders, [.claude, .codex])
+        repository.save(ProviderTrackingPreferences())
+        XCTAssertTrue(repository.load().isEnabled(.claude))
+        XCTAssertEqual(defaults.stringArray(forKey: "disabledAccountIDs"), ["existing-account"])
+        XCTAssertTrue(defaults.bool(forKey: "autoStartProxy"))
+    }
+
     private var suiteName: String!
     private var defaults: UserDefaults!
 

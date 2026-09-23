@@ -251,8 +251,12 @@ public final class QuotaFeatureController {
             return (issue.kind == .partial ? "partial" : "failed", issue.explanation)
         }
         guard let updated else { return (nil, nil) }
-        let staleAfter = refreshSettings.refreshCadence.intervalSeconds ?? 600
-        if Date().timeIntervalSince(updated) > staleAfter {
+        let monitoring = AccountMonitoringState.resolve(
+            isTracked: !account.isDisabled, hasSource: true, needsPermission: false,
+            lastUpdated: updated, issue: nil, isRefreshing: false,
+            cadence: refreshSettings.refreshCadence, now: Date()
+        )
+        if monitoring.quota == .stale {
             return (
                 "outdated",
                 String(format: "monitor.status.outdated".localized(), updated.formatted(date: .abbreviated, time: .shortened))

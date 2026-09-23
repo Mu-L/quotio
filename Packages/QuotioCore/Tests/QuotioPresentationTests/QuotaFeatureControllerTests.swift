@@ -7,6 +7,18 @@ import XCTest
 
 @MainActor
 final class QuotaFeatureControllerTests: XCTestCase {
+    func testMonitorStatusKeepsQuotaFreshForTwoRefreshIntervals() async {
+        let account = Account.make(
+            providerID: AccountProviderID(rawValue: QuotaProvider.codex.rawValue),
+            accountKey: "person@example.com", source: .nativeCredential
+        )
+        let fixture = await makeFixture(
+            account: account, provider: .codex, lastUpdated: Date().addingTimeInterval(-900)
+        )
+        XCTAssertEqual(fixture.controller.monitorStatus(for: account).status, "ready")
+        await fixture.controller.shutdown()
+    }
+
     func testInitializeDiscoversNativeAccountsBeforeReloadingAccounts() async {
         let account = Account.make(
             providerID: AccountProviderID(rawValue: QuotaProvider.codex.rawValue),
@@ -168,7 +180,8 @@ final class QuotaFeatureControllerTests: XCTestCase {
         quotaAccountKey: String? = nil,
         aliases: [String: String] = [:],
         authFiles: [AuthFileDescriptor] = [],
-        disabledFiles: Set<String> = []
+        disabledFiles: Set<String> = [],
+        lastUpdated: Date = Date(timeIntervalSince1970: 1_000)
     ) async -> (
         controller: QuotaFeatureController,
         accountService: QuotaFeatureAccountService,
@@ -185,7 +198,7 @@ final class QuotaFeatureControllerTests: XCTestCase {
                 quotas: [
                 provider: [
                     quotaAccountKey ?? account.accountKey: ProviderQuota(
-                        lastUpdated: Date(timeIntervalSince1970: 1_000)
+                        lastUpdated: lastUpdated
                     ),
                 ],
                 ],
