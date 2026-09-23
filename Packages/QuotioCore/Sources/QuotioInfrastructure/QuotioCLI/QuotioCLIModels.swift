@@ -295,7 +295,8 @@ struct QuotioCLIUsageMapper {
                     && usage.accountRef?.id == failure.accountRef?.id
                     && usage.diagnostics?.contains(where: { $0.code == failure.code }) == true
             }
-            let issue = QuotaRefreshIssue(kind: isDiagnostic ? .partial : .failed, occurredAt: report.generatedAt)
+            let issue = QuotaRefreshIssue(kind: isDiagnostic ? .partial : .failed, occurredAt: report.generatedAt,
+                reason: QuotaRefreshFailureReason(rawValue: failure.code))
             if let account = failure.accountRef {
                 let label = QuotioCLIWarpMirror.displayLabel(account.label, provider: failure.provider)
                 let key = snapshot.accountAliases[provider]?[account.id]

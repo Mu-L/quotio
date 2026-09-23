@@ -241,13 +241,14 @@ public final class QuotaFeatureController {
 
     func monitorStatus(for account: Account) -> (status: String?, message: String?) {
         guard let provider = QuotaProvider(rawValue: account.providerID.rawValue) else { return (nil, nil) }
+        if account.isDisabled { return ("disabled", nil) }
         let accountID = QuotaAccountID(provider: provider, accountKey: account.accountKey)
         let updated = QuotaPolicy.lastUpdated(for: accountID, in: quota.providerQuotas)
         if let issue = quota.state.accountIssues[accountID], updated == nil || updated! <= issue.occurredAt {
-            return ("outdated", message(for: issue))
+            return (issue.kind == .partial ? "partial" : "failed", issue.explanation)
         }
         if let issue = quota.state.issues[provider], updated == nil || updated! <= issue.occurredAt {
-            return ("outdated", message(for: issue))
+            return (issue.kind == .partial ? "partial" : "failed", issue.explanation)
         }
         guard let updated else { return (nil, nil) }
         let staleAfter = refreshSettings.refreshCadence.intervalSeconds ?? 600
@@ -396,12 +397,7 @@ public final class QuotaFeatureController {
         }
     }
 
-    private func message(for issue: QuotaRefreshIssue) -> String {
-        switch issue.kind {
-        case .failed: "monitor.refresh.failed".localized()
-        case .partial: "monitor.refresh.partial".localized()
-        }
-    }
+
 }
 
 private enum QuotaCredentialInputError: LocalizedError {

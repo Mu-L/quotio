@@ -11,131 +11,136 @@ public struct RootNavigationView: View {
 
     @Environment(NavigationScreenModel.self) private var navigation
     @Environment(ProxyManagementScreenModel.self) private var proxyManagement
+    @Environment(AccountsScreenModel.self) private var accounts
     @Environment(QuotaScreenModel.self) private var quota
-    @Environment(QuotaFeatureController.self) private var quotaController
     @Environment(OperatingModeManager.self) private var modeManager
     @Environment(SettingsScreenModel.self) private var settingsModel
+    @Environment(\.openSettings) private var openSettings
+    @State private var search = ""
+    @State private var showAllProviders = false
+
+    private enum Selection: Hashable {
+        case page(NavigationPage)
+        case provider(QuotaProvider)
+    }
+
+    private var selection: Binding<Selection?> {
+        Binding {
+            navigation.selectedProvider.map(Selection.provider) ?? .page(navigation.currentPage)
+        } set: { value in
+            switch value {
+            case .provider(let provider): navigation.selectProvider(provider)
+            case .page(let page):
+                navigation.selectedProvider = nil
+                navigation.currentPage = page
+            case nil: break
+            }
+        }
+    }
+
+    private var visibleProviders: [QuotaProvider] {
+        let configured: Set<QuotaProvider>
+        if modeManager.isMonitorMode {
+            configured = Set(accounts.accounts.filter { !$0.isDisabled }.map(\.provider))
+                .union(accounts.nativeSourcePermissions.map(\.provider))
+        } else {
+            configured = Set(proxyManagement.authFiles.compactMap(\.providerID))
+                .union(proxyManagement.directAuthFiles.compactMap { QuotaProvider(rawValue: $0.providerID.rawValue) })
+                .union(quota.providerQuotas.keys.filter { !$0.supportsManualAuth })
+        }
+        return QuotaProvider.allCases.filter {
+            (!modeManager.isMonitorMode || $0.supportsQuotaOnlyMode)
+                && (showAllProviders || !search.isEmpty || configured.contains($0) || navigation.selectedProvider == $0)
+                && (search.isEmpty || $0.displayName.localizedCaseInsensitiveContains(search))
+        }.sorted { $0.displayName < $1.displayName }
+    }
 
     public var body: some View {
-        @Bindable var navigation = navigation
-
         NavigationSplitView {
             VStack(spacing: 0) {
-                List(selection: $navigation.currentPage) {
+                List(selection: selection) {
                     Section {
                         Label("nav.dashboard".localized(), systemImage: "gauge.with.dots.needle.33percent")
-                            .tag(NavigationPage.dashboard)
-
-                        Label("nav.quota".localized(), systemImage: "chart.bar.fill")
-                            .tag(NavigationPage.quota)
-
-                        Label(
-                            modeManager.isMonitorMode ? "nav.accounts".localized() : "nav.providers".localized(),
-                            systemImage: "person.2.badge.key"
-                        )
-                        .tag(NavigationPage.providers)
-
-                        if modeManager.isLocalProxyMode {
-                            Label("nav.agents".localized(), systemImage: "terminal")
-                                .tag(NavigationPage.agents)
-
-                            Label("nav.apiKeys".localized(), systemImage: "key.horizontal")
-                                .tag(NavigationPage.apiKeys)
-
-                            if settingsModel.proxyPreferences.loggingToFile {
-                                Label("nav.logs".localized(), systemImage: "doc.text")
-                                    .tag(NavigationPage.logs)
+                            .tag(Selection.page(.dashboard))
+                        Label("nav.quota".localized(), systemImage: "chart.bar")
+                            .tag(Selection.page(.quota))
+                        Label("connections.all".localized(), systemImage: "square.grid.2x2")
+                            .tag(Selection.page(.providers))
+                    }
+                    Section("nav.providers".localized()) {
+                        ForEach(visibleProviders) { provider in
+                            HStack {
+                                ProviderIcon(provider: provider, size: 18)
+                                Text(provider.displayName)
+                                Spacer()
+                                if modeManager.isMonitorMode, accounts.nativeSourcePermissions.contains(where: { $0.provider == provider }) {
+                                    Image(systemName: "lock")
+                                        .foregroundStyle(.orange)
+                                        .accessibilityLabel("providers.nativePermission.title".localized())
+                                } else if modeManager.isMonitorMode, accounts.accounts.contains(where: { $0.provider == provider && !$0.isDisabled }),
+                                          quota.state.accountIssues.keys.contains(where: { $0.provider == provider })
+                                            || quota.state.issues[provider] != nil {
+                                    Image(systemName: "exclamationmark.triangle")
+                                        .foregroundStyle(.orange)
+                                        .accessibilityLabel("connections.attention".localized())
+                                }
                             }
+                            .tag(Selection.provider(provider))
                         }
-
-                        Label("nav.settings".localized(), systemImage: "gearshape")
-                            .tag(NavigationPage.settings)
-
-                        Label("nav.about".localized(), systemImage: "info.circle")
-                            .tag(NavigationPage.about)
+                        Toggle("connections.showAll".localized(), isOn: $showAllProviders)
+                            .toggleStyle(.checkbox)
+                            .font(.caption)
                     }
-                }
-
-                VStack(spacing: 0) {
-                    Divider()
-
-                    CurrentModeBadge()
-                        .padding(.horizontal, 16)
-                        .padding(.top, 10)
-                        .padding(.bottom, 6)
-
-                    Group {
-                        if modeManager.isLocalProxyMode {
-                            ProxyStatusRow(proxyManagement: proxyManagement)
-                        } else {
-                            QuotaRefreshStatusRow(quota: quota)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 10)
-                }
-                .background(.regularMaterial)
-            }
-            .navigationTitle("Quotio")
-            .toolbar {
-                ToolbarItem {
                     if modeManager.isLocalProxyMode {
-                        if proxyManagement.proxy.isStarting {
-                            SmallProgressView()
-                        } else {
-                            Button {
-                                Task { await proxyManagement.toggleProxy() }
-                            } label: {
-                                Image(
-                                    systemName: proxyManagement.proxy.proxyStatus.running
-                                        ? "stop.fill"
-                                        : "play.fill"
-                                )
+                        Section("connections.gateway".localized()) {
+                            Label("nav.agents".localized(), systemImage: "terminal").tag(Selection.page(.agents))
+                            Label("nav.apiKeys".localized(), systemImage: "key").tag(Selection.page(.apiKeys))
+                            if settingsModel.proxyPreferences.loggingToFile {
+                                Label("nav.logs".localized(), systemImage: "doc.text").tag(Selection.page(.logs))
                             }
-                            .help(
-                                proxyManagement.proxy.proxyStatus.running
-                                    ? "action.stopProxy".localized()
-                                    : "action.startProxy".localized()
-                            )
                         }
-                    } else {
-                        Button {
-                            Task { await quotaController.refreshAll(force: true) }
-                        } label: {
-                            Image(systemName: "arrow.clockwise")
-                        }
-                        .help("action.refreshQuota".localized())
-                        .disabled(quota.isLoadingQuotas)
                     }
                 }
+                .searchable(text: $search, placement: .sidebar, prompt: "connections.search".localized())
+                Divider()
+                HStack {
+                    Text(modeManager.isMonitorMode ? "connections.monitor".localized() : "connections.gateway".localized())
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button { openSettings() } label: { Image(systemName: "gearshape") }
+                        .buttonStyle(.plain)
+                        .help("nav.settings".localized())
+                        .accessibilityLabel("nav.settings".localized())
+                }
+                .padding(12)
             }
+            .navigationSplitViewColumnWidth(min: 200, ideal: 235, max: 300)
         } detail: {
             switch navigation.currentPage {
-            case .dashboard:
-                DashboardScreen()
-            case .quota:
-                QuotaScreen()
+            case .dashboard: DashboardScreen()
+            case .quota: QuotaScreen()
             case .providers:
-                ProvidersScreen()
-            case .agents:
-                AgentSetupScreen()
-            case .apiKeys:
-                APIKeysScreen()
+                ProvidersScreen(provider: navigation.selectedProvider)
+                    .id(navigation.selectedProvider)
+            case .agents: AgentSetupScreen()
+            case .apiKeys: APIKeysScreen()
             case .logs:
                 if proxyManagement.proxy.proxyStatus.running {
                     LogsScreen(model: logsScreenModel)
                 } else {
-                    ProxyRequiredView(
-                        description: "logs.startProxy".localized()
-                    ) {
+                    ProxyRequiredView(description: "logs.startProxy".localized()) {
                         await proxyManagement.startProxy()
                     }
                     .navigationTitle("nav.logs".localized())
                 }
-            case .settings:
-                SettingsScreen()
-            case .about:
-                AboutScreen()
+            case .settings: SettingsScreen()
+            case .about: AboutScreen()
+            }
+        }
+        .onChange(of: modeManager.currentMode) {
+            if modeManager.isMonitorMode {
+                navigation.showProviders()
             }
         }
     }

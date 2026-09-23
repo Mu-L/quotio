@@ -368,7 +368,7 @@ private struct QuotaStatusDot: View {
 
 // MARK: - Provider Quota View
 
-private struct ProviderQuotaView: View {
+struct ProviderQuotaView: View {
     @Environment(AccountsScreenModel.self) private var accountsModel
     @Environment(AntigravityAccountScreenModel.self) private var antigravityAccounts
     let provider: QuotaProvider

@@ -1,14 +1,3 @@
-//
-//  ProvidersScreen.swift
-//  Quotio
-//
-//  Redesigned ProvidersScreen with improved UI/UX:
-//  - Consolidated from 5-6 sections to 2 main sections
-//  - Accounts grouped by provider using DisclosureGroup
-//  - Add Provider moved to toolbar popover
-//  - IDE Scan integrated into toolbar and empty state
-//
-
 import AppKit
 import QuotioApplication
 import QuotioDomain
@@ -16,6 +5,11 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct ProvidersScreen: View {
+    let provider: QuotaProvider?
+    @Environment(NavigationScreenModel.self) private var navigation
+
+    init(provider: QuotaProvider? = nil) { self.provider = provider }
+
     @Environment(ProxyManagementScreenModel.self) private var proxyManagement
     @Environment(QuotaScreenModel.self) private var quota
     @Environment(AccountsScreenModel.self) private var accounts
@@ -74,7 +68,7 @@ struct ProvidersScreen: View {
                 let data = AccountRowData.from(
                     monitorAccount: account,
                     status: state.status,
-                    statusMessage: state.message
+                    statusMessage: state.status == "failed" || state.status == "partial" ? nil : state.message
                 )
                 groups[account.provider, default: []].append(data)
             }
@@ -155,16 +149,6 @@ struct ProvidersScreen: View {
         return groups
     }
     
-    /// Sorted providers for consistent display order
-    private var sortedProviders: [QuotaProvider] {
-        groupedAccounts.keys.sorted { $0.displayName < $1.displayName }
-    }
-    
-    /// Total account count across all providers
-    private var totalAccountCount: Int {
-        groupedAccounts.values.reduce(0) { $0 + $1.count }
-    }
-
     /// Account count per provider (for AddProviderPopover badge display)
     private var providerAccountCounts: [QuotaProvider: Int] {
         groupedAccounts.mapValues { $0.count }
@@ -174,19 +158,58 @@ struct ProvidersScreen: View {
     
     var body: some View {
         List {
-            if modeManager.isMonitorMode, !accounts.nativeSourcePermissions.isEmpty {
-                nativePermissionsSection
-            }
-
-            // Section 1: Your Accounts (grouped by provider)
-            accountsSection
-            
-            // Section 2: Custom Providers (Local Proxy Mode only)
-            if modeManager.isLocalProxyMode {
-                customProvidersSection
+            if let provider {
+                providerHeader(provider)
+                if modeManager.isMonitorMode, !permissions(for: provider).isEmpty {
+                    nativePermissionsSection
+                }
+                if let issue = latestIssue(for: provider) {
+                    Section {
+                        Label(issue.explanation, systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(.orange)
+                            .textSelection(.enabled)
+                    } header: {
+                        Text("connections.quotaStatus".localized())
+                    } footer: {
+                        Text("connections.quotaFailureHint".localized())
+                    }
+                }
+                Section("connections.sources".localized()) {
+                    ForEach(groupedAccounts[provider] ?? []) { account in
+                        connectionRow(account)
+                    }
+                    if groupedAccounts[provider, default: []].isEmpty {
+                        Text("connections.noAccount".localized())
+                            .foregroundStyle(.secondary)
+                    }
+                    if addableProviders.contains(provider) {
+                        Button("providers.addAccount".localized()) { handleAddProvider(provider) }
+                    } else if groupedAccounts[provider, default: []].isEmpty {
+                        Text("connections.signInOwner".localized())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if !(quota.providerQuotas[provider] ?? [:]).isEmpty {
+                    Section {
+                        DisclosureGroup("nav.quota".localized()) {
+                            ProviderQuotaView(
+                                provider: provider,
+                                authFiles: proxyManagement.authFiles.filter { $0.providerID == provider },
+                                quotaData: quota.providerQuotas[provider] ?? [:],
+                                subscriptionInfos: quota.subscriptionInfos[provider] ?? [:],
+                                aliases: quota.state.accountAliases[provider] ?? [:],
+                                isLoading: quota.isRefreshing(provider: provider)
+                            )
+                        }
+                    }
+                }
+            } else {
+                providerDirectory
+                if modeManager.isLocalProxyMode { customProvidersSection }
             }
         }
-        .navigationTitle(modeManager.isMonitorMode ? "nav.accounts".localized() : "nav.providers".localized())
+        .listStyle(.inset)
+        .navigationTitle(provider?.displayName ?? "connections.all".localized())
         .toolbar {
             toolbarContent
         }
@@ -303,18 +326,30 @@ struct ProvidersScreen: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
-            Button {
-                showAddProviderPopover = true
+            Menu {
+                if let provider, addableProviders.contains(provider) {
+                    Button("providers.addAccount".localized()) { handleAddProvider(provider) }
+                } else {
+                    Button("providers.addAccount".localized()) { showAddProviderPopover = true }
+                }
+                Button("action.upload".localized()) { uploadAuthFile() }
+                Button("connections.scan".localized()) { showIDEScanSheet = true }
+                if modeManager.isLocalProxyMode {
+                    Button("customProviders.title".localized()) {
+                        customProviderSheetMode = .add(.openaiCompatibility)
+                    }
+                }
             } label: {
-                Image(systemName: "plus")
+                Label("connections.add".localized(), systemImage: "plus")
             }
-            .help("providers.addAccount".localized())
         }
-        
+
         ToolbarItem(placement: .automatic) {
             Button {
                 Task {
-                    if modeManager.isMonitorMode {
+                    if let provider {
+                        await quotaController.refresh(provider: provider)
+                    } else if modeManager.isMonitorMode {
                         await quotaController.refreshAll(force: true)
                     } else if modeManager.isLocalProxyMode && proxyManagement.proxy.proxyStatus.running {
                         await proxyManagement.refreshData()
@@ -336,21 +371,14 @@ struct ProvidersScreen: View {
             .help("action.refresh".localized())
         }
 
-        ToolbarItem(placement: .automatic) {
-            Button {
-                uploadAuthFile()
-            } label: {
-                Image(systemName: "arrow.up.circle")
-            }
-            .help("action.upload".localized())
-        }
+
     }
     
     // MARK: - Accounts Section
 
     private var nativePermissionsSection: some View {
         Section {
-            ForEach(accounts.nativeSourcePermissions) { permission in
+            ForEach(accounts.nativeSourcePermissions.filter { provider == nil || $0.provider == provider }) { permission in
                 HStack(spacing: 12) {
                     ProviderIcon(provider: permission.provider, size: 24)
                     VStack(alignment: .leading, spacing: 2) {
@@ -379,77 +407,120 @@ struct ProvidersScreen: View {
         }
     }
     
+    private func permissions(for provider: QuotaProvider) -> [NativeSourcePermission] {
+        modeManager.isMonitorMode ? accounts.nativeSourcePermissions.filter { $0.provider == provider } : []
+    }
+
+    private func latestIssue(for provider: QuotaProvider) -> QuotaRefreshIssue? {
+        let rows = groupedAccounts[provider, default: []].filter { !$0.isDisabled }
+        guard !rows.isEmpty else { return nil }
+        let issues = rows.compactMap { row -> QuotaRefreshIssue? in
+            let id = QuotaAccountID(provider: provider, accountKey: row.menuBarAccountKey)
+            guard let issue = quota.state.accountIssues[id] ?? quota.state.issues[provider] else { return nil }
+            let updated = quota.providerQuotas[provider]?[row.menuBarAccountKey]?.lastUpdated
+            return updated == nil || updated! <= issue.occurredAt ? issue : nil
+        }
+        return issues.max { $0.occurredAt < $1.occurredAt }
+    }
+
+    private func connectionState(for provider: QuotaProvider) -> ProviderConnectionState {
+        let rows = groupedAccounts[provider, default: []]
+        return .resolve(
+            hasAccounts: !rows.isEmpty,
+            hasEnabledAccounts: rows.contains { !$0.isDisabled },
+            needsPermission: !permissions(for: provider).isEmpty,
+            hasIssue: latestIssue(for: provider) != nil
+        )
+    }
+
+    private var directoryProviders: [QuotaProvider] {
+        QuotaProvider.allCases.filter { !modeManager.isMonitorMode || $0.supportsQuotaOnlyMode }
+            .sorted { $0.displayName < $1.displayName }
+    }
+
+    private var providerDirectory: some View {
+        Group {
+            directorySection("connections.configured", states: [.configured])
+            directorySection("connections.attention", states: [.permissionRequired, .attention])
+            directorySection("connections.available", states: [.available])
+            directorySection("connections.disabled", states: [.disabled])
+        }
+    }
+
     @ViewBuilder
-    private var accountsSection: some View {
-        Section {
-            if groupedAccounts.isEmpty {
-                // Empty state
-                AccountsEmptyState(
-                    onScanIDEs: {
-                        showIDEScanSheet = true
-                    },
-                    onAddProvider: {
-                        showAddProviderPopover = true
-                    }
-                )
-            } else {
-                // Grouped accounts by provider
-                ForEach(sortedProviders, id: \.self) { provider in
-                    ProviderDisclosureGroup(
-                        provider: provider,
-                        accounts: groupedAccounts[provider] ?? [],
-                        onDeleteAccount: { account in
-                            Task { await deleteAccount(account) }
-                        },
-                        onEditAccount: { account in
-                            if modeManager.isMonitorMode {
-                                handleEditMonitorAPIKeyAccount(account)
-                            } else if provider == .glm {
-                                handleEditGlmAccount(account)
-                            } else if provider == .clinePass {
-                                handleEditClinePassAccount(account)
-                            } else if provider == .warp {
-                                handleEditWarpAccount(account)
-                            } else if [.factoryDroid, .openRouter, .amp].contains(provider) {
-                                handleEditMonitorAPIKeyAccount(account)
+    private func directorySection(_ title: String, states: [ProviderConnectionState]) -> some View {
+        let providers = directoryProviders.filter { states.contains(connectionState(for: $0)) }
+        if !providers.isEmpty {
+            Section(title.localized()) {
+                ForEach(providers) { provider in
+                    Button { navigation.selectProvider(provider) } label: {
+                        HStack(spacing: 12) {
+                            ProviderIcon(provider: provider, size: 24)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(provider.displayName).fontWeight(.medium)
+                                if let row = groupedAccounts[provider]?.first {
+                                    Text(row.sourceLabel).font(.caption).foregroundStyle(.secondary)
+                                }
                             }
-                        },
-                        onSwitchAccount: provider == .antigravity ? { account in
-                            switchingAccount = account
-                        } : nil,
-                        onToggleDisabled: { account in
-                            Task { await toggleAccountDisabled(account) }
-                        },
-                        onDownloadAccount: { account in
-                            Task { await downloadAccountAuthFile(account) }
-                        },
-                        isAccountActive: provider == .antigravity ? { account in
-                            antigravityAccounts.isActive(email: account.displayName)
-                        } : nil
-                    )
+                            Spacer()
+                            let state = connectionState(for: provider)
+                            Label(state.localizationKey.localized(), systemImage: state.symbol)
+                                .font(.caption).foregroundStyle(state.color)
+                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                        }
+                        .padding(.vertical, 6)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
-            }
-        } header: {
-            HStack {
-                Label("providers.yourAccounts".localized(), systemImage: "person.2.badge.key")
-                
-                if totalAccountCount > 0 {
-                    Spacer()
-                    Text("\(totalAccountCount)")
-                        .font(.caption2.bold())
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.secondary.opacity(0.2))
-                        .clipShape(Capsule())
-                }
-            }
-        } footer: {
-            if !groupedAccounts.isEmpty {
-                MenuBarHintView()
             }
         }
     }
-    
+
+    private func providerHeader(_ provider: QuotaProvider) -> some View {
+        Section {
+            HStack(spacing: 12) {
+                ProviderIcon(provider: provider, size: 32)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(provider.displayName).font(.title2.weight(.semibold))
+                    Text("connections.providerHint".localized())
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+                Spacer()
+                let state = connectionState(for: provider)
+                Label(state.localizationKey.localized(), systemImage: state.symbol)
+                    .foregroundStyle(state.color)
+            }
+            .padding(.vertical, 12)
+        }
+    }
+
+    private func connectionRow(_ account: AccountRowData) -> some View {
+        AccountRow(
+            account: account,
+            onDelete: { Task { await deleteAccount(account) } },
+            onEdit: {
+                if modeManager.isMonitorMode {
+                    handleEditMonitorAPIKeyAccount(account)
+                } else if account.provider == .glm {
+                    handleEditGlmAccount(account)
+                } else if account.provider == .clinePass {
+                    handleEditClinePassAccount(account)
+                } else if account.provider == .warp {
+                    handleEditWarpAccount(account)
+                } else {
+                    handleEditMonitorAPIKeyAccount(account)
+                }
+            },
+            onSwitch: account.provider == .antigravity && account.displayName.contains("@")
+                ? { switchingAccount = account } : nil,
+            onToggleDisabled: { Task { await toggleAccountDisabled(account) } },
+            onDownload: account.canDownloadAuthFile ? { Task { await downloadAccountAuthFile(account) } } : nil,
+            isActiveInIDE: account.provider == .antigravity && antigravityAccounts.isActive(email: account.displayName)
+        )
+        .padding(.vertical, 6)
+    }
+
     // MARK: - Custom Providers Section
 
     @ViewBuilder
@@ -716,621 +787,6 @@ extension NativeSourcePermission {
 }
 
 // MARK: - Custom Provider Row
-
-struct CustomProviderRow: View {
-    let provider: CustomProvider
-    let onEdit: () -> Void
-    let onDelete: () -> Void
-    let onToggle: () -> Void
-    
-    @State private var showDeleteConfirmation = false
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            // Provider type icon
-            ZStack {
-                Circle()
-                    .fill(provider.type.color.opacity(0.1))
-                    .frame(width: 32, height: 32)
-                
-                Image(provider.type.providerIconName)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 18, height: 18)
-            }
-            
-            // Provider info
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(provider.name)
-                        .fontWeight(.medium)
-                    
-                    if !provider.isEnabled {
-                        Text("customProviders.disabled".localized())
-                            .font(.caption2)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.secondary.opacity(0.2))
-                            .foregroundStyle(.secondary)
-                            .clipShape(Capsule())
-                    }
-                }
-                
-                HStack(spacing: 6) {
-                    Text(provider.type.localizedDisplayName)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    
-                    Text("•")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                    
-                    let keyCount = provider.apiKeys.count
-                    Text("\(keyCount) \(keyCount == 1 ? "customProviders.key".localized() : "customProviders.keys".localized())")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-            
-            Spacer()
-            
-            // Toggle button
-            Button {
-                onToggle()
-            } label: {
-                Image(systemName: provider.isEnabled ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(provider.isEnabled ? .green : .secondary)
-            }
-            .buttonStyle(.subtle)
-            .help(provider.isEnabled ? "customProviders.disable".localized() : "customProviders.enable".localized())
-        }
-        .contextMenu {
-            Button {
-                onEdit()
-            } label: {
-                Label("action.edit".localized(), systemImage: "pencil")
-            }
-            
-            Button {
-                onToggle()
-            } label: {
-                Label(provider.isEnabled ? "customProviders.disable".localized() : "customProviders.enable".localized(), systemImage: provider.isEnabled ? "xmark.circle" : "checkmark.circle")
-            }
-            
-            Divider()
-            
-            Button(role: .destructive) {
-                showDeleteConfirmation = true
-            } label: {
-                Label("action.delete".localized(), systemImage: "trash")
-            }
-        }
-        .confirmationDialog("customProviders.deleteConfirm".localized(), isPresented: $showDeleteConfirmation) {
-            Button("action.delete".localized(), role: .destructive) {
-                onDelete()
-            }
-            Button("action.cancel".localized(), role: .cancel) {}
-        } message: {
-            Text("customProviders.deleteMessage".localized())
-        }
-    }
-}
-
-// MARK: - Menu Bar Badge Component
-
-struct MenuBarBadge: View {
-    let isSelected: Bool
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(isSelected ? Color.blue.opacity(0.1) : Color.clear)
-                    .frame(width: 28, height: 28)
-
-                Image(systemName: isSelected ? "chart.bar.fill" : "chart.bar")
-                    .font(.system(size: 14))
-                    .foregroundStyle(isSelected ? .blue : .secondary)
-            }
-        }
-        .buttonStyle(.plain)
-        .nativeTooltip(isSelected ? "menubar.hideFromMenuBar".localized() : "menubar.showOnMenuBar".localized())
-    }
-}
-
-// MARK: - Native Tooltip Support
-
-private class TooltipWindow: NSWindow {
-    private let label: NSTextField = {
-        let label = NSTextField(labelWithString: "")
-        label.font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
-        label.textColor = .labelColor
-        label.backgroundColor = .clear
-        label.isBezeled = false
-        label.isEditable = false
-        return label
-    }()
-
-    init() {
-        super.init(
-            contentRect: .zero,
-            styleMask: .borderless,
-            backing: .buffered,
-            defer: true
-        )
-        self.isOpaque = false
-        self.backgroundColor = .clear
-        self.level = .floating
-        self.ignoresMouseEvents = true
-
-        let visualEffect = NSVisualEffectView()
-        visualEffect.material = .toolTip
-        visualEffect.state = .active
-        visualEffect.wantsLayer = true
-        visualEffect.layer?.cornerRadius = 4
-
-        label.translatesAutoresizingMaskIntoConstraints = false
-        visualEffect.addSubview(label)
-        NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: visualEffect.leadingAnchor, constant: 8),
-            label.trailingAnchor.constraint(equalTo: visualEffect.trailingAnchor, constant: -8),
-            label.topAnchor.constraint(equalTo: visualEffect.topAnchor, constant: 4),
-            label.bottomAnchor.constraint(equalTo: visualEffect.bottomAnchor, constant: -4)
-        ])
-
-        self.contentView = visualEffect
-    }
-
-    func show(text: String, near view: NSView) {
-        label.stringValue = text
-        label.sizeToFit()
-
-        let labelSize = label.fittingSize
-        let windowSize = NSSize(width: labelSize.width + 16, height: labelSize.height + 8)
-
-        guard let screen = view.window?.screen ?? NSScreen.main else { return }
-        let viewFrameInScreen = view.window?.convertToScreen(view.convert(view.bounds, to: nil)) ?? .zero
-        var origin = NSPoint(
-            x: viewFrameInScreen.midX - windowSize.width / 2,
-            y: viewFrameInScreen.minY - windowSize.height - 4
-        )
-
-        // Keep tooltip on screen
-        if origin.x < screen.visibleFrame.minX {
-            origin.x = screen.visibleFrame.minX
-        }
-        if origin.x + windowSize.width > screen.visibleFrame.maxX {
-            origin.x = screen.visibleFrame.maxX - windowSize.width
-        }
-        if origin.y < screen.visibleFrame.minY {
-            origin.y = viewFrameInScreen.maxY + 4
-        }
-
-        setFrame(NSRect(origin: origin, size: windowSize), display: true)
-        orderFront(nil)
-    }
-
-    func hide() {
-        orderOut(nil)
-    }
-}
-
-private class TooltipTrackingView: NSView {
-    var text: String = ""
-    weak var tooltipWindow: TooltipWindow?
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        trackingAreas.forEach { removeTrackingArea($0) }
-        addTrackingArea(NSTrackingArea(
-            rect: bounds,
-            options: [.mouseEnteredAndExited, .activeInActiveApp],
-            owner: self,
-            userInfo: nil
-        ))
-    }
-
-    override func mouseEntered(with event: NSEvent) {
-        tooltipWindow?.show(text: text, near: self)
-    }
-
-    override func mouseExited(with event: NSEvent) {
-        tooltipWindow?.hide()
-    }
-
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        return nil
-    }
-}
-
-private struct NativeTooltipView: NSViewRepresentable {
-    let text: String
-
-    @MainActor
-    final class Coordinator {
-        let tooltipWindow = TooltipWindow()
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-
-    func makeNSView(context: Context) -> TooltipTrackingView {
-        let view = TooltipTrackingView()
-        view.text = text
-        view.tooltipWindow = context.coordinator.tooltipWindow
-        return view
-    }
-
-    func updateNSView(_ nsView: TooltipTrackingView, context: Context) {
-        nsView.text = text
-        nsView.tooltipWindow = context.coordinator.tooltipWindow
-    }
-
-    static func dismantleNSView(_ nsView: TooltipTrackingView, coordinator: Coordinator) {
-        coordinator.tooltipWindow.hide()
-    }
-}
-
-private extension View {
-    func nativeTooltip(_ text: String) -> some View {
-        self.overlay(NativeTooltipView(text: text))
-    }
-}
-
-// MARK: - Menu Bar Hint View
-
-struct MenuBarHintView: View {
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "chart.bar.fill")
-                .foregroundStyle(.blue)
-                .font(.caption2)
-            Text("menubar.hint".localized())
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-    }
-}
-
-// MARK: - OAuth Sheet
-
-struct OAuthSheet: View {
-    @Environment(ProxyManagementScreenModel.self) private var proxyManagement
-    @Environment(QuotaFeatureController.self) private var viewModel
-    @Environment(OperatingModeManager.self) private var modeManager
-    let provider: QuotaProvider
-    let onDismiss: () -> Void
-    
-    @State private var hasStartedAuth = false
-    @State private var selectedKiroMethod: OAuthAuthorizationMethod = .kiroImport
-    @State private var manualOAuthCode = ""
-    
-    private var isPolling: Bool {
-        viewModel.oauthState?.status == .polling || viewModel.oauthState?.status == .waiting
-    }
-    
-    private var isSuccess: Bool {
-        viewModel.oauthState?.status == .success
-    }
-    
-    private var isError: Bool {
-        viewModel.oauthState?.status == .error
-    }
-    
-    private var kiroAuthMethods: [OAuthAuthorizationMethod] {
-        if modeManager.isMonitorMode { return [.kiroAWSDeviceCode] }
-        return [.kiroImport, .kiroGoogle, .kiroAWSBrowser, .kiroAWSDeviceCode]
-    }
-    
-    var body: some View {
-        VStack(spacing: 28) {
-            ProviderIcon(provider: provider, size: 64)
-            
-            VStack(spacing: 8) {
-                Text("oauth.connect".localized() + " " + provider.displayName)
-                    .font(.title2)
-                    .fontWeight(.bold)
-                
-                Text("oauth.authenticateWith".localized() + " " + provider.displayName)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            
-            if provider == .kiro {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("oauth.authMethod".localized())
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                    Picker("", selection: $selectedKiroMethod) {
-                        ForEach(kiroAuthMethods, id: \.self) { method in
-                            Text(method.displayName).tag(method)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                    
-
-                }
-                .frame(maxWidth: 320)
-            }
-
-            if !modeManager.isMonitorMode,
-               proxyManagement.isLegacyAuthWarningNeeded(for: provider) {
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                    Text(proxyManagement.upstreamCompatibilityWarning)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: 320, alignment: .leading)
-                .padding(12)
-                .background(Color.orange.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-            }
-            
-            if let state = viewModel.oauthState, state.provider == provider {
-                OAuthStatusView(status: state.status, error: state.error, state: state.state, authURL: state.authURL, provider: provider)
-                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
-            }
-
-            if modeManager.isMonitorMode, provider == .claude, viewModel.oauthState?.status == .polling {
-                HStack(spacing: 8) {
-                    TextField("oauth.authorizationCode".localized(), text: $manualOAuthCode)
-                        .textFieldStyle(.roundedBorder)
-                    Button("oauth.complete".localized()) {
-                        Task { await viewModel.completeMonitorOAuthCode(manualOAuthCode, provider: provider) }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(manualOAuthCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-                .frame(maxWidth: 360)
-            }
-            
-            HStack(spacing: 16) {
-                Button("action.cancel".localized(), role: .cancel) {
-                    viewModel.cancelOAuth()
-                    onDismiss()
-                }
-                .buttonStyle(.bordered)
-                
-                if isError {
-                    Button {
-                        hasStartedAuth = false
-                        Task {
-                            await viewModel.startOAuth(
-                                for: provider,
-                                method: provider == .kiro ? selectedKiroMethod : .providerDefault
-                            )
-                        }
-                    } label: {
-                        Label("oauth.retry".localized(), systemImage: "arrow.clockwise")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.orange)
-                } else if !isSuccess {
-                    Button {
-                        hasStartedAuth = true
-                        Task {
-                            await viewModel.startOAuth(
-                                for: provider,
-                                method: provider == .kiro ? selectedKiroMethod : .providerDefault
-                            )
-                        }
-                    } label: {
-                        if isPolling {
-                            SmallProgressView()
-                        } else {
-                            Label("oauth.authenticate".localized(), systemImage: "key.fill")
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(provider.color)
-                    .disabled(isPolling)
-                }
-            }
-        }
-        .padding(40)
-        .frame(width: 480)
-        .frame(minHeight: 350)
-        .fixedSize(horizontal: false, vertical: true)
-        .animation(.easeInOut(duration: 0.2), value: viewModel.oauthState?.status)
-        .onChange(of: viewModel.oauthState?.status) { _, newStatus in
-            if newStatus == .success {
-                Task {
-                    try? await Task.sleep(nanoseconds: 1_500_000_000)
-                    onDismiss()
-                }
-            }
-        }
-    }
-}
-
-private extension OAuthAuthorizationMethod {
-    var displayName: String {
-        switch self {
-        case .providerDefault: "Default"
-        case .kiroGoogle: "Google OAuth"
-        case .kiroAWSDeviceCode: "AWS Builder ID (Device Code)"
-        case .kiroAWSBrowser: "AWS Builder ID (Browser)"
-        case .kiroImport: "Import from Kiro IDE"
-        }
-    }
-}
-
-private struct OAuthStatusView: View {
-    let status: QuotaOAuthState.OAuthStatus
-    let error: String?
-    let state: String?
-    let authURL: String?
-    let provider: QuotaProvider
-    @Environment(PasteboardScreenModel.self) private var pasteboard
-    @Environment(PlatformActionScreenModel.self) private var platformActions
-    
-    /// Stable rotation angle for spinner animation (fixes UUID() infinite re-render)
-    @State private var rotationAngle: Double = 0
-    
-    /// Visual feedback for copy action
-    @State private var copied = false
-    
-    var body: some View {
-        Group {
-            switch status {
-            case .waiting:
-                VStack(spacing: 12) {
-                    ProgressView()
-                        .controlSize(.large)
-                    Text("oauth.openingBrowser".localized())
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.vertical, 16)
-                
-            case .polling:
-                VStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .stroke(provider.color.opacity(0.2), lineWidth: 4)
-                            .frame(width: 60, height: 60)
-                        
-                        Circle()
-                            .trim(from: 0, to: 0.7)
-                            .stroke(provider.color, style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                            .frame(width: 60, height: 60)
-                            .rotationEffect(.degrees(rotationAngle - 90))
-                            .onAppear {
-                                withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) {
-                                    rotationAngle = 360
-                                }
-                            }
-                        
-                        Image(systemName: "person.badge.key.fill")
-                            .font(.title2)
-                            .foregroundStyle(provider.color)
-                    }
-                    
-                    // For Copilot Device Code flow, show device code with copy button
-                    if (provider == .copilot || provider == .kiro), let deviceCode = state, !deviceCode.isEmpty {
-                        VStack(spacing: 8) {
-                            Text("oauth.enterCodeInBrowser".localized())
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                            
-                            HStack(spacing: 12) {
-                                Text(deviceCode)
-                                    .font(.system(size: 24, weight: .bold, design: .monospaced))
-                                    .foregroundStyle(provider.color)
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 8)
-                                    .background(provider.color.opacity(0.1))
-                                    .cornerRadius(8)
-                                
-                                Button {
-                                    pasteboard.copy(deviceCode)
-                                } label: {
-                                    Image(systemName: "doc.on.doc")
-                                        .font(.title3)
-                                }
-                                .buttonStyle(.subtle)
-                                .help("action.copyCode".localized())
-                            }
-                            
-                            Text("oauth.waitingForAuth".localized())
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    } else if (provider == .copilot || provider == .kiro), let message = error {
-                        Text(message)
-                            .font(.caption)
-                            .foregroundStyle(.primary)
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: 350)
-                    } else {
-                        Text("oauth.waitingForAuth".localized())
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                        
-                        // Show auth URL with copy/open buttons
-                        if let urlString = authURL, let url = URL(string: urlString) {
-                            VStack(spacing: 12) {
-                                Text("oauth.copyLinkOrOpen".localized())
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                
-                                HStack(spacing: 12) {
-                                    Button {
-                                        pasteboard.copy(urlString)
-                                        copied = true
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                            copied = false
-                                        }
-                                    } label: {
-                                        Label(copied ? "oauth.copied".localized() : "oauth.copyLink".localized(), systemImage: copied ? "checkmark" : "doc.on.doc")
-                                    }
-                                    .buttonStyle(.bordered)
-                                    
-                                    Button {
-                                        platformActions.open(url)
-                                    } label: {
-                                        Label("oauth.openLink".localized(), systemImage: "safari")
-                                    }
-                                    .buttonStyle(.borderedProminent)
-                                    .tint(provider.color)
-                                }
-                            }
-                        } else {
-                            Text("oauth.completeBrowser".localized())
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                .padding(.vertical, 16)
-                
-            case .success:
-                VStack(spacing: 12) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 48))
-                        .foregroundStyle(.green)
-                    
-                    Text("oauth.success".localized())
-                        .font(.headline)
-                        .foregroundStyle(.green)
-                    
-                    Text("oauth.closingSheet".localized())
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.vertical, 16)
-                
-            case .error:
-                VStack(spacing: 12) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 48))
-                        .foregroundStyle(.red)
-                    
-                    Text("oauth.failed".localized())
-                        .font(.headline)
-                        .foregroundStyle(.red)
-                    
-                    if let error = error {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: 300)
-                    }
-                }
-                .padding(.vertical, 16)
-            }
-        }
-        .frame(minHeight: 100)
-    }
-}
-
-// MARK: - Custom Provider Sheet Mode
 
 enum CustomProviderSheetMode: Identifiable {
     case add(CustomProviderType)

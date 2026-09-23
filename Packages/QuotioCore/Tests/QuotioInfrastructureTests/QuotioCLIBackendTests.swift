@@ -310,7 +310,8 @@ final class QuotioCLIBackendTests: XCTestCase {
         let snapshot = await backend.bootstrap(mode: .monitor)
         let accounts = await backend.accounts()
         XCTAssertTrue(accounts.isEmpty)
-        XCTAssertFalse(snapshot.accountIssues.isEmpty)
+        XCTAssertEqual(snapshot.accountIssues[QuotaAccountID(provider: .claude, accountKey: "Local or environment account")]?.reason, .authentication)
+        XCTAssertEqual(snapshot.accountIssues[QuotaAccountID(provider: .clinePass, accountKey: "Local or environment account")]?.reason, .unavailable)
     }
 
     func testSameLabelAccountsKeepTheirOwnIDsAndSources() async throws {

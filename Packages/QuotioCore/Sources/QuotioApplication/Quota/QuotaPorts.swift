@@ -36,13 +36,29 @@ public enum QuotaRefreshIssueKind: Equatable, Sendable {
     case partial
 }
 
+public enum QuotaRefreshFailureReason: String, Sendable {
+    case authentication
+    case ownerRefreshRequired = "owner_refresh_required"
+    case sourceDisabled = "source_disabled"
+    case timeout
+    case transient
+    case rateLimited = "rate_limited"
+    case unavailable
+    case credentialStorage = "credential_storage"
+    case localCredentialStorage = "local_credential_storage"
+    case quotaUnavailable = "quota_unavailable"
+    case invalidData = "invalid_data"
+}
+
 public struct QuotaRefreshIssue: Equatable, Sendable {
     public let kind: QuotaRefreshIssueKind
     public let occurredAt: Date
+    public let reason: QuotaRefreshFailureReason?
 
-    public init(kind: QuotaRefreshIssueKind, occurredAt: Date) {
+    public init(kind: QuotaRefreshIssueKind, occurredAt: Date, reason: QuotaRefreshFailureReason? = nil) {
         self.kind = kind
         self.occurredAt = occurredAt
+        self.reason = reason
     }
 }
 

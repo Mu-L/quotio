@@ -36,6 +36,7 @@ struct AccountRowData: Identifiable, Hashable {
     let menuBarAccountKey: String
     let authFileName: String?
     let source: AccountRowSource
+    let sourceKind: String?
     let status: String?           // "ready", "cooling", "error", etc.
     let statusMessage: String?
     let isDisabled: Bool
@@ -58,7 +59,8 @@ struct AccountRowData: Identifiable, Hashable {
         canDelete: Bool,
         canEdit: Bool = false,
         canSwitch: Bool = false,
-        canDisable: Bool? = nil
+        canDisable: Bool? = nil,
+        sourceKind: String? = nil
     ) {
         self.id = id
         self.provider = provider
@@ -66,6 +68,7 @@ struct AccountRowData: Identifiable, Hashable {
         self.menuBarAccountKey = menuBarAccountKey ?? displayName
         self.authFileName = authFileName
         self.source = source
+        self.sourceKind = sourceKind
         self.status = status
         self.statusMessage = statusMessage
         self.isDisabled = isDisabled
@@ -156,7 +159,8 @@ struct AccountRowData: Identifiable, Hashable {
             isDisabled: monitorAccount.isDisabled,
             canDelete: monitorAccount.canDelete,
             canEdit: monitorAccount.capabilities.contains(.edit),
-            canDisable: monitorAccount.capabilities.contains(.disable)
+            canDisable: monitorAccount.capabilities.contains(.disable),
+            sourceKind: monitorAccount.credentialReference
         )
     }
 
@@ -171,7 +175,10 @@ struct AccountRowData: Identifiable, Hashable {
         lhs.id == rhs.id &&
         lhs.authFileName == rhs.authFileName &&
         lhs.isDisabled == rhs.isDisabled &&
-        lhs.status == rhs.status
+        lhs.status == rhs.status &&
+        lhs.displayName == rhs.displayName &&
+        lhs.statusMessage == rhs.statusMessage &&
+        lhs.sourceKind == rhs.sourceKind
     }
 }
 
@@ -202,7 +209,7 @@ struct AccountRow: View {
     private var statusColor: Color {
         switch account.status {
         case "ready": return account.isDisabled ? .gray : .green
-        case "cooling", "outdated": return .orange
+        case "cooling", "outdated", "failed", "partial": return .orange
         case "error": return .red
         default: return .gray
         }
@@ -220,31 +227,15 @@ struct AccountRow: View {
                     .lineLimit(1)
                 
                 HStack(spacing: 6) {
-                    // Provider name
-                    Text(account.provider.displayName)
-                        .font(.caption)
+                    Text(account.sourceLabel)
                         .foregroundStyle(.secondary)
-                    
-                    // Status indicator (only for proxy accounts)
                     if let status = account.status {
-                        Circle()
-                            .fill(statusColor)
-                            .frame(width: 6, height: 6)
-                        
-                        Text(status)
-                            .font(.caption)
+                        Text("·")
+                        Text(("connections.status." + status).localized())
                             .foregroundStyle(statusColor)
-                    } else {
-                        // Source indicator for non-proxy accounts
-                        Text("•")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                        
-                        Text(account.source.displayName)
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
                     }
                 }
+                .font(.caption)
 
                 if let message = account.statusMessage, !message.isEmpty {
                     Text(message)
@@ -279,7 +270,7 @@ struct AccountRow: View {
             }
             
             // Switch button (Antigravity only, for proxy/direct accounts that are not active)
-            if account.provider == .antigravity && !isActiveInIDE && account.source != .autoDetected {
+            if onSwitch != nil && !isActiveInIDE && account.source != .autoDetected {
                 Button {
                     onSwitch?()
                 } label: {
@@ -305,54 +296,35 @@ struct AccountRow: View {
                 onTap: handleMenuBarToggle
             )
 
-            // Disable/Enable toggle button
-            if account.canDisable, let onToggleDisabled = onToggleDisabled {
-                Button {
-                    onToggleDisabled()
-                } label: {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(account.isDisabled ? Color.red.opacity(0.1) : Color.clear)
-                            .frame(width: 28, height: 28)
-
-                        Image(systemName: account.isDisabled ? "xmark.circle.fill" : "checkmark.circle")
-                            .font(.system(size: 14))
-                            .foregroundStyle(account.isDisabled ? .red : .secondary)
+            Menu {
+                if account.canDisable, let onToggleDisabled {
+                    Button(account.isDisabled ? "providers.enable".localized() : "providers.disable".localized(),
+                           action: onToggleDisabled)
+                }
+                if account.canEdit, let onEdit {
+                    Button("action.edit".localized(), action: onEdit)
+                }
+                if let onDownload {
+                    Button("action.download".localized(), action: onDownload)
+                }
+                if account.canDelete, onDelete != nil {
+                    Divider()
+                    Button("action.delete".localized(), role: .destructive) {
+                        showDeleteConfirmation = true
                     }
                 }
-                .buttonStyle(.rowAction)
-                .help(account.isDisabled ? "providers.enable".localized() : "providers.disable".localized())
-                .accessibilityLabel(account.isDisabled ? "providers.enable".localized() : "providers.disable".localized())
+            } label: {
+                Image(systemName: "ellipsis")
             }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .accessibilityLabel("connections.actions".localized())
 
-            // Edit button (GLM only)
-            if account.canEdit, let onEdit = onEdit {
-                Button {
-                    onEdit()
-                } label: {
-                    Image(systemName: "pencil")
-                        .foregroundStyle(.blue)
-                }
-                .buttonStyle(.rowAction)
-                .help("action.edit".localized())
-            }
-
-            // Delete button (only for proxy accounts)
-            if account.canDelete, onDelete != nil {
-                Button(role: .destructive) {
-                    showDeleteConfirmation = true
-                } label: {
-                    Image(systemName: "trash")
-                        .foregroundStyle(.red.opacity(0.8))
-                }
-                .buttonStyle(.rowActionDestructive)
-                .help("action.delete".localized())
-            }
         }
         .contentShape(Rectangle())
         .contextMenu {
             // Switch account option (Antigravity only)
-            if account.provider == .antigravity && !isActiveInIDE && account.source != .autoDetected {
+            if onSwitch != nil && !isActiveInIDE && account.source != .autoDetected {
                 Button {
                     onSwitch?()
                 } label: {
