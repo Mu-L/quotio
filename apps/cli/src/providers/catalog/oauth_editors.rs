@@ -879,7 +879,7 @@ fn open_cursor_database_in(
     path: &Path,
     root: &Path,
 ) -> Result<Option<CursorDatabase>, ProviderError> {
-    open_cursor_database_at_with_hooks(path, root, || {}, || {})
+    open_cursor_database_at_with_hooks(path, root, || {}, || {}, || {})
 }
 
 #[cfg(all(test, unix))]
@@ -893,6 +893,7 @@ fn open_cursor_database_with_hooks(
         &cursor_snapshot_root()?,
         after_capture,
         after_database_read,
+        || {},
     )
 }
 
@@ -902,6 +903,7 @@ fn open_cursor_database_at_with_hooks(
     root: &Path,
     after_capture: impl FnOnce(),
     after_database_read: impl FnOnce(),
+    before_lock_acquired: impl FnOnce(),
 ) -> Result<Option<CursorDatabase>, ProviderError> {
     use std::{
         io::Write,
@@ -931,11 +933,12 @@ fn open_cursor_database_at_with_hooks(
     let mut after_database_read = Some(after_database_read);
     prepare_cursor_snapshot_root(root)?;
     recover_cursor_snapshots(root)?;
-    let directory = root.join(format!(
+    let name = format!(
         "{CURSOR_SNAPSHOT_PREFIX}{}-{}",
         std::process::id(),
         crate::accounts::random_string().map_err(|_| ProviderError::CredentialStorage)?
-    ));
+    );
+    let directory = root.join(format!(".pending-{name}"));
     std::fs::DirBuilder::new()
         .mode(0o700)
         .create(&directory)
@@ -947,14 +950,20 @@ fn open_cursor_database_at_with_hooks(
         .mode(0o600)
         .open(directory.join(CURSOR_SNAPSHOT_LOCK))
         .map_err(|_| ProviderError::CredentialStorage)?;
+    before_lock_acquired();
     if unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
         return Err(ProviderError::CredentialStorage);
     }
-    let snapshot = CursorDatabase {
+    let mut snapshot = CursorDatabase {
         directory,
         _lock: lock,
         sources,
     };
+    // Recovery must not see the snapshot until its lifetime lock is held.
+    let published = root.join(name);
+    std::fs::rename(&snapshot.directory, &published)
+        .map_err(|_| ProviderError::CredentialStorage)?;
+    snapshot.directory = published;
     let mut page_size = 0;
     let mut wal_mode = false;
     for (index, (source, metadata)) in snapshot.sources.iter().take(2).enumerate() {

@@ -494,3 +494,19 @@ fn cursor_wal_rejects_sidecar_removal_and_symlink_races() {
         }
     }
 }
+
+#[test]
+fn recovery_cannot_claim_a_snapshot_before_its_creator_acquires_the_lock() {
+    let fixture = Fixture::new();
+    let root = fixture.directory.join("snapshots");
+    let snapshot = open_cursor_database_at_with_hooks(
+        &fixture.path(""),
+        &root,
+        || {},
+        || {},
+        || recover_cursor_snapshots(&root).unwrap(),
+    )
+    .unwrap()
+    .unwrap();
+    assert!(snapshot.directory.join("state.vscdb").exists());
+}
