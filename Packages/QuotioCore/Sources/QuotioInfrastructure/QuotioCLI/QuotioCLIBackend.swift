@@ -108,6 +108,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
     private var reportedAccounts: [Account] = []
     private var activeMode: QuotaOperatingMode = .monitor
     private var continuations: [UUID: AsyncStream<QuotaSnapshot>.Continuation] = [:]
+    private let trackingPreferences: (any ProviderTrackingPreferencesRepository)?
     private let session: URLSession?
     private let userDefaults: UserDefaults
     private let customProviders: (@Sendable () throws -> [CustomProvider])?
@@ -119,6 +120,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
 
     public init(
         session: URLSession? = nil,
+        trackingPreferences: (any ProviderTrackingPreferencesRepository)? = nil,
         userDefaults: UserDefaults = .standard,
         customProviders: (@Sendable () throws -> [CustomProvider])? = nil,
         customProviderDomain: String = "production",
@@ -126,6 +128,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         localization: @escaping @MainActor @Sendable () -> (bundle: Bundle, locale: Locale) = { (.main, .current) }
     ) {
         self.session = session
+        self.trackingPreferences = trackingPreferences
         self.userDefaults = userDefaults
         self.customProviders = customProviders
         self.customProviderDomain = customProviderDomain
@@ -162,6 +165,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
 
     public func refresh(_ request: QuotaFetchRequest) async -> QuotaSnapshot {
         selectMode(request.mode)
+        guard isTracked(request.provider) else { return snapshot }
         guard let provider = QuotioCLIProviderMap.cli(request.provider) else { return snapshot }
         var resolvedAccountID: String?
         if case .account(let accountKey) = request.scope {
@@ -188,7 +192,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         force: Bool = false
     ) async -> QuotaSnapshot {
         selectMode(mode)
-        let selected = (providers ?? Set(Self.supportedProviders)).compactMap(QuotioCLIProviderMap.cli)
+        let selected = (providers ?? Set(Self.supportedProviders)).filter(isTracked).compactMap(QuotioCLIProviderMap.cli)
         await performRefresh(providers: selected, accountID: nil, mode: mode, force: force)
         return snapshot
     }
@@ -232,6 +236,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         var known = Set(userDefaults.stringArray(forKey: Self.knownNativeSourcesKey) ?? [])
         var pending = Set(pendingNativeSources())
         for provider in response.providers {
+            guard let domainProvider = QuotioCLIProviderMap.domain(provider.id), isTracked(domainProvider) else { continue }
             for source in provider.capabilities.sourceReferences
             where source.origin == "borrowed_native" && source.platforms.contains("macos") {
                 let sourceKey = provider.id + ":" + source.kind
@@ -277,14 +282,14 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
     }
 
     public func rescanNativeAccounts(for provider: QuotaProvider) async {
-        guard let providerID = QuotioCLIProviderMap.cli(provider) else { return }
+        guard isTracked(provider), let providerID = QuotioCLIProviderMap.cli(provider) else { return }
         let known = userDefaults.stringArray(forKey: Self.knownNativeSourcesKey) ?? []
         userDefaults.set(known.filter { !$0.hasPrefix(providerID + ":") }, forKey: Self.knownNativeSourcesKey)
         await registerDetectedNativeAccounts()
     }
 
     public func nativeSourcesRequiringPermission() async -> [NativeSourcePermission] {
-        let pending = pendingNativeSources()
+        let pending = pendingNativeSources().filter { isTracked($0.provider) }
         guard let client,
               let response: QuotioCLIAccountList = try? await client.request("v1/accounts"),
               response.schemaVersion == 1 else { return pending }
@@ -503,6 +508,10 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
             "v1/auth/sessions/\(id)",
             method: "DELETE"
         )
+    }
+
+    private func isTracked(_ provider: QuotaProvider) -> Bool {
+        trackingPreferences?.load().isEnabled(provider) != false
     }
 
     private func performRefresh(

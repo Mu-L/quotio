@@ -47,20 +47,6 @@ final class MonitorPresentationTests: XCTestCase {
         }
     }
 
-    func testMonitorProvidersDoNotRequireInstalledCLI() {
-        let providers: Set<QuotaProvider> = [
-            .codex, .claude, .factoryDroid, .devin, .grok, .openRouter, .amp,
-        ]
-
-        let filtered = StatusBarMenuSnapshotMapper.filterProviders(
-            providers,
-            isMonitorMode: true,
-            installedAgents: []
-        )
-
-        XCTAssertEqual(Set(filtered), providers)
-    }
-
     func testAccountSourcesPreserveLocalizationKeys() {
         XCTAssertEqual(
             Set(AccountSource.allCases.map(\.localizationKey)),

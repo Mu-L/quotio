@@ -11,6 +11,9 @@ public final class QuotaFeatureController {
         case autoOpen
     }
 
+    public private(set) var trackingPreferences: ProviderTrackingPreferences
+    @ObservationIgnored private let trackingRepository: (any ProviderTrackingPreferencesRepository)?
+
     let quota: QuotaScreenModel
     let accounts: AccountsScreenModel
     let oauth: OAuthScreenModel
@@ -51,8 +54,11 @@ public final class QuotaFeatureController {
         menuBarSettings: MenuBarSettingsManager,
         notifications: any NotificationRequesting,
         authFiles: @escaping () -> [ManagedAuthFile],
-        authFileState: (any ManagedAuthFileStateRepository)? = nil
+        authFileState: (any ManagedAuthFileStateRepository)? = nil,
+        trackingRepository: (any ProviderTrackingPreferencesRepository)? = nil
     ) {
+        self.trackingRepository = trackingRepository
+        self.trackingPreferences = trackingRepository?.load() ?? ProviderTrackingPreferences()
         self.quota = quota
         self.accounts = accounts
         self.oauth = oauth
@@ -95,10 +101,24 @@ public final class QuotaFeatureController {
         restartAutomaticRefresh()
     }
 
+    public func setProviderEnabled(_ enabled: Bool, provider: QuotaProvider) async {
+        if enabled {
+            trackingPreferences.disabledProviders.remove(provider)
+        } else {
+            trackingPreferences.disabledProviders.insert(provider)
+        }
+        trackingRepository?.save(trackingPreferences)
+        didChangeHandler?()
+        if enabled {
+            await accounts.rescanNativeAccounts(for: provider)
+            await refresh(provider: provider)
+        }
+    }
+
     public func refreshAll(force: Bool = false) async {
         await quota.refreshAll(
             mode: operatingMode,
-            providers: Self.automaticallyRefreshedProviders(for: operatingMode),
+            providers: Set(Self.automaticallyRefreshedProviders(for: operatingMode).filter(trackingPreferences.isEnabled)),
             force: force
         )
         await refreshImportedIDEQuotas()
@@ -107,7 +127,7 @@ public final class QuotaFeatureController {
     }
 
     public func refresh(provider: QuotaProvider, force: Bool = true) async {
-        guard provider.supportsQuotaOnlyMode else { return }
+        guard provider.supportsQuotaOnlyMode, trackingPreferences.isEnabled(provider) else { return }
         await quota.refresh(provider: provider, mode: operatingMode, force: force)
         if provider == .antigravity {
             await antigravityAccounts.detectActiveAccount()
@@ -116,7 +136,7 @@ public final class QuotaFeatureController {
     }
 
     public func refresh(account: QuotaAccountID) async {
-        guard account.provider.supportsQuotaOnlyMode else { return }
+        guard account.provider.supportsQuotaOnlyMode, trackingPreferences.isEnabled(account.provider) else { return }
         await quota.refresh(
             provider: account.provider,
             scope: .account(account.accountKey),
@@ -128,14 +148,14 @@ public final class QuotaFeatureController {
 
     func refreshAutoDetectedProviders() async {
         let providers = Self.automaticallyRefreshedProviders(for: operatingMode).filter {
-            !$0.supportsManualAuth && !$0.isImportedFromLocalIDE
+            trackingPreferences.isEnabled($0) && !$0.supportsManualAuth && !$0.isImportedFromLocalIDE
         }
         await quota.refreshAll(mode: operatingMode, providers: Set(providers), force: true)
         await finishRefresh()
     }
 
     func refreshImportedIDEQuotas() async {
-        for provider in [QuotaProvider.cursor, .trae] where provider.supportsQuotaOnlyMode {
+        for provider in [QuotaProvider.cursor, .trae] where provider.supportsQuotaOnlyMode && trackingPreferences.isEnabled(provider) {
             let keys = Set(quota.providerQuotas[provider]?.keys.map { $0 } ?? [])
             guard !keys.isEmpty else { continue }
             await quota.refresh(
@@ -148,7 +168,7 @@ public final class QuotaFeatureController {
     }
 
     func importIDEProvider(_ provider: QuotaProvider) async -> [String: ProviderQuota] {
-        guard provider.isImportedFromLocalIDE, provider.supportsQuotaOnlyMode else { return [:] }
+        guard trackingPreferences.isEnabled(provider), provider.isImportedFromLocalIDE, provider.supportsQuotaOnlyMode else { return [:] }
         await quota.refresh(provider: provider, mode: operatingMode, force: true)
         await finishRefresh()
         return quota.providerQuotas[provider] ?? [:]
@@ -378,7 +398,7 @@ public final class QuotaFeatureController {
 
     private func checkQuotaNotifications() {
         let threshold = notifications.snapshot.preferences.quotaAlertThreshold
-        for (provider, accountQuotas) in quota.providerQuotas {
+        for (provider, accountQuotas) in quota.providerQuotas where trackingPreferences.isEnabled(provider) {
             for (account, data) in accountQuotas {
                 let values = data.models.map(\.percentage).filter { $0 >= 0 }
                 guard let minimum = values.min() else { continue }

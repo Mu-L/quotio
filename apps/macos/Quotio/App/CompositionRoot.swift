@@ -83,7 +83,9 @@ enum CompositionRoot {
 
         let authFileRepository = FileAuthFileRepository()
         let authFileState = UserDefaultsManagedAuthFileStateRepository()
+        let providerTrackingRepository = UserDefaultsProviderTrackingPreferencesRepository()
         let quotioBackend = QuotioCLIBackend(
+            trackingPreferences: providerTrackingRepository,
             customProviders: customProviderRepository.load,
             customProviderDomain: AppIdentity.bundleIdentifier,
             authFileState: authFileState,
@@ -217,7 +219,8 @@ enum CompositionRoot {
             menuBarSettings: menuBarSettings,
             notifications: notificationController,
             authFiles: { [] },
-            authFileState: authFileState
+            authFileState: authFileState,
+            trackingRepository: providerTrackingRepository
         )
         antigravityAccountScreenModel.setDidSwitchHandler { [weak quotaController] in
             await quotaController?.refresh(provider: .antigravity)
@@ -786,7 +789,8 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
             activeAntigravityEmail: antigravityAccountScreenModel.snapshot.activeAccount?.email,
             menuBarPreferences: menuBarSettings.preferences,
             appearanceMode: appearanceManager.appearanceMode,
-            language: languageManager.currentLanguage
+            language: languageManager.currentLanguage,
+            trackingPreferences: quotaController.trackingPreferences
         )
     }
 
@@ -794,7 +798,8 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
         guard menuBarSettings.showQuotaInMenuBar else { return [] }
 
         return menuBarSettings.selectedItems.compactMap { selectedItem in
-            guard let provider = selectedItem.aiProvider else { return nil }
+            guard let provider = selectedItem.aiProvider,
+                  quotaController.trackingPreferences.isEnabled(provider) else { return nil }
 
             var displayPercent: Double = -1
             var isForbidden = false

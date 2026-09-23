@@ -7,6 +7,20 @@ import XCTest
 
 @MainActor
 final class StatusBarMenuSnapshotMapperTests: XCTestCase {
+    func testDisabledProviderIsHiddenDespiteCachedQuota() {
+        let snapshot = StatusBarMenuSnapshotMapper.makeSnapshot(
+            mode: .monitor, proxyPort: 8317, isProxyRunning: false,
+            tunnel: CloudflareTunnelSnapshot(), monitorAccounts: [],
+            quota: QuotaSnapshot(quotas: [.claude: ["Work": ProviderQuota()]]),
+            installedAgents: [], activeAntigravityEmail: nil,
+            menuBarPreferences: MenuBarPreferences(selectedProvider: .claude),
+            appearanceMode: .system, language: .english,
+            trackingPreferences: .init(disabledProviders: [.claude])
+        )
+        XCTAssertTrue(snapshot.providers.isEmpty)
+        XCTAssertNil(snapshot.selectedProvider)
+    }
+
     func testMonitorSnapshotMapsProvidersAccountsStateAndDisplaySettings() throws {
         let enabledMonitorAccount = Account.make(
             providerID: AccountProviderID(rawValue: QuotaProvider.amp.rawValue),
@@ -89,7 +103,7 @@ final class StatusBarMenuSnapshotMapperTests: XCTestCase {
         XCTAssertTrue(antigravity.accounts.allSatisfy(\.isRefreshBlocked))
     }
 
-    func testLocalProxySnapshotFiltersCLIProvidersByInstalledAgents() {
+    func testSnapshotDoesNotRequireAnInstalledCLIAgent() {
         let snapshot = StatusBarMenuSnapshotMapper.makeSnapshot(
             mode: .localProxy,
             proxyPort: 8317,
@@ -109,8 +123,8 @@ final class StatusBarMenuSnapshotMapperTests: XCTestCase {
         )
 
         XCTAssertTrue(snapshot.isLocalProxyMode)
-        XCTAssertEqual(snapshot.providers.map(\.provider), [.antigravity, .codex])
-        XCTAssertNil(snapshot.selectedProvider)
+        XCTAssertEqual(snapshot.providers.map(\.provider), [.antigravity, .claude, .codex])
+        XCTAssertEqual(snapshot.selectedProvider, .claude)
     }
 
     func testSnapshotOnlyIncludesEnabledAccountsWithQuota() {

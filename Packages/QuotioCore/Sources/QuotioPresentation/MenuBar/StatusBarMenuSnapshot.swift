@@ -63,22 +63,19 @@ public enum StatusBarMenuSnapshotMapper {
         activeAntigravityEmail: String?,
         menuBarPreferences: MenuBarPreferences,
         appearanceMode: AppearanceMode,
-        language: AppLanguage
+        language: AppLanguage,
+        trackingPreferences: ProviderTrackingPreferences = ProviderTrackingPreferences()
     ) -> StatusBarMenuSnapshot {
         let disabledAccounts = Set(monitorAccounts.lazy.filter(\.isDisabled).map {
             "\($0.providerID.rawValue):\($0.accountKey.lowercased())"
         })
         let availableProviders = Set(quota.quotas.compactMap { provider, accounts in
-            accounts.contains { accountKey, _ in
+            trackingPreferences.isEnabled(provider) && accounts.contains { accountKey, _ in
                 !disabledAccounts.contains("\(provider.rawValue):\(accountKey.lowercased())")
             } ? provider : nil
         })
 
-        let providers = filterProviders(
-            availableProviders,
-            isMonitorMode: mode == .monitor,
-            installedAgents: installedAgents
-        ).map { provider in
+        let providers = availableProviders.sorted { $0.displayName < $1.displayName }.map { provider in
             let accounts = orderedAccounts(
                 (quota.quotas[provider] ?? [:]).filter { accountKey, _ in
                     !disabledAccounts.contains("\(provider.rawValue):\(accountKey.lowercased())")
@@ -125,19 +122,6 @@ public enum StatusBarMenuSnapshotMapper {
             appearanceMode: appearanceMode,
             language: language
         )
-    }
-
-    nonisolated static func filterProviders(
-        _ providers: Set<QuotaProvider>,
-        isMonitorMode: Bool,
-        installedAgents: Set<CLIAgent>
-    ) -> [QuotaProvider] {
-        let sorted = providers.sorted { $0.displayName < $1.displayName }
-        guard !isMonitorMode else { return sorted }
-        return sorted.filter { provider in
-            guard let agent = provider.cliAgent else { return true }
-            return installedAgents.contains(agent)
-        }
     }
 
     nonisolated static func orderedAccounts(

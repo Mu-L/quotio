@@ -5,6 +5,33 @@ import XCTest
 @testable import QuotioInfrastructure
 
 final class QuotioCLIBackendTests: XCTestCase {
+    func testDisabledProviderDoesNotRefreshOrDiscoverAndAccountsRemainStored() async throws {
+        let suite = "QuotioCLIBackendTests.tracking.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let preferences = UserDefaultsProviderTrackingPreferencesRepository(defaults: defaults)
+        preferences.save(.init(disabledProviders: [.claude]))
+        let backend = QuotioCLIBackend(session: stubSession(), trackingPreferences: preferences, userDefaults: UserDefaults(suiteName: suite)!)
+        await backend.connect(QuotioCLIConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
+        _ = await backend.refresh(QuotaFetchRequest(provider: .claude, mode: .monitor))
+        _ = await backend.refreshAll(mode: .monitor, providers: [.claude])
+        await backend.rescanNativeAccounts(for: .claude)
+        XCTAssertTrue(QuotioCLIURLProtocol.requests().isEmpty)
+
+        QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"providers":[{"id":"claude","capabilities":{"source_references":[{"kind":"claude_native","platforms":["macos"],"origin":"borrowed_native"}]}}]}"#)
+        await backend.registerDetectedNativeAccounts()
+        XCTAssertEqual(QuotioCLIURLProtocol.requests().map { $0.url!.path }, ["/v1/providers"])
+        QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"accounts":[{"id":"owned","provider":"claude","origin":"owned","label":"Work","enabled":true}]}"#)
+        let accounts = await backend.accounts()
+        XCTAssertEqual(accounts.map(\.id), ["owned"])
+
+        preferences.save(.init())
+        QuotioCLIURLProtocol.enqueue(#"{"id":"refresh","status":"completed"}"#)
+        QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[],"failures":[]}"#)
+        _ = await backend.refresh(QuotaFetchRequest(provider: .claude, mode: .monitor))
+        XCTAssertNotNil(QuotioCLIURLProtocol.body(forPath: "/v1/refresh"))
+    }
+
     func testVerifiedIdentityMergesDifferentSourceLabelsButNotDifferentAccounts() throws {
         let data = Data(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[{"provider":"codex","account_ref":{"origin":"owned","id":"owned","label":"Work"},"account":{"id":"workspace-1","label":"person@example.com"},"windows":[]},{"provider":"codex","account_ref":{"origin":"borrowed_native","id":"native","label":"person@example.com"},"account":{"id":"workspace-1","label":"person@example.com"},"windows":[]},{"provider":"codex","account_ref":{"origin":"owned","id":"second","label":"Work"},"account":{"id":"workspace-2","label":"person@example.com"},"windows":[]}],"failures":[]}"#.utf8)
         let report = try makeQuotioCLIDecoder().decode(QuotioCLIUsageReport.self, from: data)
