@@ -123,6 +123,7 @@ private struct PresentationClock: DateProviding {
 
 private actor EmptyAccountManager: AccountManaging {
     func registerDetectedNativeAccounts() {}
+    func rescanNativeAccounts(for provider: QuotaProvider) {}
     func nativeSourcesRequiringPermission() -> [NativeSourcePermission] { [] }
     func authorizeNativeSource(_ source: NativeSourcePermission) {}
     func accounts() -> [Account] { [] }

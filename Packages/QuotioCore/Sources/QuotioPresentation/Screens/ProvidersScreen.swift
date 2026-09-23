@@ -182,6 +182,21 @@ struct ProvidersScreen: View {
                         Text("connections.noAccount".localized())
                             .foregroundStyle(.secondary)
                     }
+                    if modeManager.isMonitorMode, provider.hasDiscoverableNativeLogin {
+                        Button {
+                            Task {
+                                await accounts.rescanNativeAccounts(for: provider)
+                                await quotaController.refresh(provider: provider)
+                            }
+                        } label: {
+                            if accounts.discoveringProvider == provider {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Label("connections.rescan".localized(), systemImage: "magnifyingglass")
+                            }
+                        }
+                        .disabled(accounts.discoveringProvider != nil)
+                    }
                     if addableProviders.contains(provider) {
                         Button("providers.addAccount".localized()) { handleAddProvider(provider) }
                     } else if groupedAccounts[provider, default: []].isEmpty {

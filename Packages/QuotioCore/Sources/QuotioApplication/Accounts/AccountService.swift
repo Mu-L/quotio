@@ -23,6 +23,7 @@ public struct NativeSourcePermission: Codable, Hashable, Identifiable, Sendable 
 
 public protocol AccountManaging: Sendable {
     func registerDetectedNativeAccounts() async
+    func rescanNativeAccounts(for provider: QuotaProvider) async
     func nativeSourcesRequiringPermission() async -> [NativeSourcePermission]
     func authorizeNativeSource(_ source: NativeSourcePermission) async throws
     func accounts() async -> [Account]

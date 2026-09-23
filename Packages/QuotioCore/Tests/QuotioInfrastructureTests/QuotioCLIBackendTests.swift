@@ -220,6 +220,29 @@ final class QuotioCLIBackendTests: XCTestCase {
         XCTAssertTrue(discoveryBodies.allSatisfy { $0["inspect"] as? Bool == true })
     }
 
+    func testExplicitRescanRetriesOnlyRequestedKnownProviderWithoutEnablingAccounts() async throws {
+        let suite = "QuotioCLIBackendTests.rescan." + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(["kiro:kiro_native", "codex:codex_native"], forKey: "quotioCLI.knownNativeSources.v2")
+        QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"providers":[{"id":"kiro","capabilities":{"source_references":[{"kind":"kiro_native","platforms":["macos"],"origin":"borrowed_native"}]}},{"id":"codex","capabilities":{"source_references":[{"kind":"codex_native","platforms":["macos"],"origin":"borrowed_native"}]}}]}"#)
+        QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"status":"checked","candidates":[{"status":"available","source":{"kind":"kiro_native"}}]}"#)
+        QuotioCLIURLProtocol.enqueue(#"{"id":"existing","status":"failed","error":"duplicate_account"}"#)
+        let backend = QuotioCLIBackend(session: stubSession(), userDefaults: try XCTUnwrap(UserDefaults(suiteName: suite)))
+        await backend.connect(QuotioCLIConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
+
+        await backend.rescanNativeAccounts(for: .kiro)
+
+        let bodies = QuotioCLIURLProtocol.bodies(forPath: "/v1/account-sources/discover")
+        XCTAssertEqual(bodies.count, 1)
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: bodies[0]) as? [String: Any])
+        XCTAssertEqual(body["provider"] as? String, "kiro")
+        XCTAssertEqual(body["inspect"] as? Bool, true)
+        XCTAssertFalse(QuotioCLIURLProtocol.requests().contains { $0.httpMethod == "PATCH" })
+        XCTAssertEqual(Set(defaults.stringArray(forKey: "quotioCLI.knownNativeSources.v2") ?? []),
+                       ["kiro:kiro_native", "codex:codex_native"])
+    }
+
     func testNativePermissionWaitsForExplicitAuthorization() async throws {
         let suite = "QuotioCLIBackendTests.nativePermission.\(UUID().uuidString)"
         defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }

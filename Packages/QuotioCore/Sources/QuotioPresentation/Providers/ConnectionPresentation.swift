@@ -82,3 +82,12 @@ enum ProviderConnectionState {
         }
     }
 }
+
+extension QuotaProvider {
+    var hasDiscoverableNativeLogin: Bool {
+        switch self {
+        case .amp, .antigravity, .claude, .codex, .copilot, .cursor, .devin, .factoryDroid, .grok, .kiro: true
+        default: false
+        }
+    }
+}

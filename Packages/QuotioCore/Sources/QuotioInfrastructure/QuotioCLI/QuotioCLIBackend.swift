@@ -276,6 +276,13 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         }
     }
 
+    public func rescanNativeAccounts(for provider: QuotaProvider) async {
+        guard let providerID = QuotioCLIProviderMap.cli(provider) else { return }
+        let known = userDefaults.stringArray(forKey: Self.knownNativeSourcesKey) ?? []
+        userDefaults.set(known.filter { !$0.hasPrefix(providerID + ":") }, forKey: Self.knownNativeSourcesKey)
+        await registerDetectedNativeAccounts()
+    }
+
     public func nativeSourcesRequiringPermission() async -> [NativeSourcePermission] {
         let pending = pendingNativeSources()
         guard let client,

@@ -10,6 +10,7 @@ public final class AccountsScreenModel {
     public private(set) var authFiles: [AuthFileDescriptor] = []
     public private(set) var nativeSourcePermissions: [NativeSourcePermission] = []
     public private(set) var authorizingNativeSourceID: String?
+    public private(set) var discoveringProvider: QuotaProvider?
     public private(set) var failure: AccountServiceFailure?
 
     @ObservationIgnored private var accountAliases: [QuotaProvider: [String: String]] = [:]
@@ -31,6 +32,15 @@ public final class AccountsScreenModel {
     public func registerDetectedNativeAccounts() async {
         await accountService.registerDetectedNativeAccounts()
         nativeSourcePermissions = await accountService.nativeSourcesRequiringPermission()
+    }
+
+    public func rescanNativeAccounts(for provider: QuotaProvider) async {
+        guard discoveringProvider == nil else { return }
+        discoveringProvider = provider
+        defer { discoveringProvider = nil }
+        await accountService.rescanNativeAccounts(for: provider)
+        nativeSourcePermissions = await accountService.nativeSourcesRequiringPermission()
+        await reloadAccounts()
     }
 
     public func authorizeNativeSource(_ source: NativeSourcePermission) async throws {
