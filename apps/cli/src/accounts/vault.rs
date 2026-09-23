@@ -59,6 +59,9 @@ impl FromStr for VaultNamespace {
 
 pub trait Backend: Send + Sync {
     fn read(&self) -> Result<Option<Vec<u8>>, AccountError>;
+    fn authorize_interactively(&self) -> Result<(), AccountError> {
+        Ok(())
+    }
     /// Atomically replace this application's document. CommitUncertain means the
     /// replacement is visible but directory durability could not be confirmed.
     /// Other errors leave the previous document intact.
@@ -136,10 +139,34 @@ impl Keychain {
     }
 }
 impl Backend for Keychain {
+    fn authorize_interactively(&self) -> Result<(), AccountError> {
+        if self.read().is_ok() {
+            return Ok(());
+        }
+        #[cfg(target_os = "macos")]
+        {
+            crate::keychain::with_interaction(true, || {
+                security_framework::passwords::generic_password(
+                    security_framework::passwords::PasswordOptions::new_generic_password(
+                        &self.service,
+                        &self.account,
+                    ),
+                )
+            })
+            .map_err(|_| AccountError::Storage)?;
+            self.read().map(|_| ())
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            Err(AccountError::Unsupported)
+        }
+    }
     fn read(&self) -> Result<Option<Vec<u8>>, AccountError> {
         #[cfg(target_os = "macos")]
         {
-            match security_framework::passwords::generic_password(self.options()) {
+            match crate::keychain::with_interaction(self.interactive, || {
+                security_framework::passwords::generic_password(self.options())
+            }) {
                 Ok(bytes) => Ok(Some(bytes)),
                 Err(e) if e.code() == -25300 => Ok(None),
                 Err(_) => Err(AccountError::Storage),
@@ -153,8 +180,10 @@ impl Backend for Keychain {
     fn write(&self, bytes: &[u8]) -> Result<(), AccountError> {
         #[cfg(target_os = "macos")]
         {
-            security_framework::passwords::set_generic_password_options(bytes, self.options())
-                .map_err(|_| AccountError::Storage)
+            crate::keychain::with_interaction(self.interactive, || {
+                security_framework::passwords::set_generic_password_options(bytes, self.options())
+            })
+            .map_err(|_| AccountError::Storage)
         }
         #[cfg(not(target_os = "macos"))]
         {
@@ -220,6 +249,12 @@ pub struct Transaction {
     pub document: Document,
 }
 impl Vault {
+    pub(crate) async fn authorize_interactively(&self) -> Result<(), AccountError> {
+        let backend = self.backend.clone();
+        tokio::task::spawn_blocking(move || backend.authorize_interactively())
+            .await
+            .map_err(|_| AccountError::Storage)?
+    }
     pub fn system() -> Result<Self, AccountError> {
         Self::system_with_interaction(true, None, None)
     }

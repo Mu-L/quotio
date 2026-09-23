@@ -166,7 +166,10 @@ pub(crate) fn keychain_item_exists(
     }
     let query = CFDictionary::<CFString, CFType>::from_CFType_pairs(&query);
     use security_framework_sys::keychain_item::SecItemCopyMatching;
-    let status = unsafe { SecItemCopyMatching(query.as_concrete_TypeRef(), std::ptr::null_mut()) };
+    let status = crate::keychain::with_interaction(false, || {
+        Ok(unsafe { SecItemCopyMatching(query.as_concrete_TypeRef(), std::ptr::null_mut()) })
+    })
+    .map_err(|_| ProviderError::CredentialStorage)?;
     match status {
         0 => Ok(true),
         -25300 => Ok(false),
@@ -244,7 +247,10 @@ fn discover_keychain_account(service: &str) -> Result<Option<String>, ProviderEr
     let query = CFDictionary::from_CFType_pairs(&query);
     use security_framework_sys::keychain_item::SecItemCopyMatching;
     let mut result: core_foundation::base::CFTypeRef = std::ptr::null();
-    let status = unsafe { SecItemCopyMatching(query.as_concrete_TypeRef(), &mut result) };
+    let status = crate::keychain::with_interaction(false, || {
+        Ok(unsafe { SecItemCopyMatching(query.as_concrete_TypeRef(), &mut result) })
+    })
+    .map_err(|_| ProviderError::CredentialStorage)?;
     let value = if result.is_null() {
         None
     } else {
@@ -275,7 +281,9 @@ pub fn read_keychain(
                 account
             }
         };
-        match security_framework::passwords::generic_password(keychain_options(service, account)) {
+        match crate::keychain::with_interaction(false, || {
+            security_framework::passwords::generic_password(keychain_options(service, account))
+        }) {
             Ok(bytes) if bytes.len() <= 1024 * 1024 => Ok(Some(bytes)),
             Ok(_) => Err(ProviderError::InvalidData),
             Err(error) if error.code() == -25300 => Ok(None),
@@ -327,9 +335,11 @@ pub(crate) fn authorize_keychain(
                 discovered.as_deref().ok_or(ProviderError::Authentication)?
             }
         };
-        security_framework::passwords::generic_password(authorization_options(service, account))
-            .map(|_| ())
-            .map_err(|_| ProviderError::CredentialStorage)
+        crate::keychain::with_interaction(true, || {
+            security_framework::passwords::generic_password(authorization_options(service, account))
+        })
+        .map(|_| ())
+        .map_err(|_| ProviderError::CredentialStorage)
     }
     #[cfg(not(target_os = "macos"))]
     {

@@ -52,6 +52,15 @@ chmod 755 "${STAGED_BINARY}"
 for arch in ${ARCHS:-$(uname -m)}; do
     lipo "${STAGED_BINARY}" -verify_arch "${arch}"
 done
+if [ "${CONFIGURATION:-Debug}" = "Debug" ] \
+    && [ "${CODE_SIGNING_ALLOWED:-YES}" != "NO" ] \
+    && [ -n "${EXPANDED_CODE_SIGN_IDENTITY:-}" ] \
+    && [ "${EXPANDED_CODE_SIGN_IDENTITY}" != "-" ]; then
+    codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY}" \
+        --identifier "${PRODUCT_BUNDLE_IDENTIFIER:?}.cli-helper" \
+        --options runtime --timestamp=none "${STAGED_BINARY}"
+    codesign --verify --strict "${STAGED_BINARY}"
+fi
 "${STAGED_BINARY}" --version >/dev/null
 
 DESTINATION="${TARGET_BUILD_DIR:?}/${CONTENTS_FOLDER_PATH:?}/Helpers/quotio-cli"

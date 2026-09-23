@@ -33,6 +33,22 @@ pub(super) fn account_code(error: &AccountError) -> &'static str {
         _ => "invalid_credential",
     }
 }
+fn native_source_error(error: &AccountError) -> &'static str {
+    match error {
+        AccountError::Provider(
+            crate::error::ProviderError::Authentication
+            | crate::error::ProviderError::OwnerRefreshRequired,
+        ) => "native_login_required",
+        AccountError::Provider(crate::error::ProviderError::InvalidData)
+        | AccountError::Corrupt => "native_credential_invalid",
+        AccountError::Provider(
+            crate::error::ProviderError::CredentialStorage
+            | crate::error::ProviderError::LocalCredentialStorage,
+        ) => "native_keychain_access_failed",
+        _ => account_code(error),
+    }
+}
+
 fn account_error(error: AccountError) -> ApiError {
     let status = match error {
         AccountError::NotFound => StatusCode::NOT_FOUND,
@@ -257,9 +273,14 @@ async fn mutate(
         .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "invalid_idempotency_key"))?;
     // Durable receipts survive both discovery expiry and server restart. Validate
     // the body fingerprint before attempting to read a live native source.
-    let receipt = crate::accounts::service::mutation_receipt(vault.clone(), &intent)
-        .await
-        .map_err(account_error)?;
+    let authorize = matches!(&mutation, Mutation::Authorize(_));
+    let receipt = if authorize {
+        None
+    } else {
+        crate::accounts::service::mutation_receipt(vault.clone(), &intent)
+            .await
+            .map_err(account_error)?
+    };
     let (operation, new) = state
         .operations
         .lock()
@@ -271,10 +292,15 @@ async fn mutate(
         let id = operation.id.clone();
         let spawn_result = state.spawn(async move {
             let result = async {
+                if authorize {
+                    vault
+                        .authorize_interactively()
+                        .await
+                        .map_err(|_| "quotio_vault_access_failed")?;
+                }
                 if let Some(id) = receipt {
                     return Ok(json!({"account_id":id}));
                 }
-                let authorize = matches!(&mutation, Mutation::Authorize(_));
                 match mutation {
                     Mutation::Migrate(input) => {
                         let (prepared, enabled) = api::migration::prepare(input, &work.context)
@@ -320,7 +346,7 @@ async fn mutate(
                         let input = if authorize {
                             crate::accounts::authorization::authorize(input)
                                 .await
-                                .map_err(|e| account_code(&e))?
+                                .map_err(|_| "native_keychain_access_failed")?
                         } else {
                             input
                         };
@@ -336,7 +362,13 @@ async fn mutate(
                             }
                             input => api::prepare_source(input).await,
                         }
-                        .map_err(|e| account_code(&e))?;
+                        .map_err(|e| {
+                            if authorize {
+                                native_source_error(&e)
+                            } else {
+                                account_code(&e)
+                            }
+                        })?;
                         let _guard = crate::accounts::service::mutation_guard(&work.commit_guard)
                             .await
                             .map_err(|e| account_code(&e))?;
@@ -550,4 +582,30 @@ pub(super) async fn validate_refresh_account(
         return Err(ApiError(StatusCode::BAD_REQUEST, "invalid_refresh_scope"));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod authorization_error_tests {
+    use super::*;
+    use crate::error::ProviderError;
+
+    #[test]
+    fn successful_keychain_read_does_not_turn_invalid_login_into_permission_failure() {
+        assert_eq!(
+            native_source_error(&AccountError::Provider(ProviderError::Authentication)),
+            "native_login_required"
+        );
+        assert_eq!(
+            native_source_error(&AccountError::Provider(ProviderError::InvalidData)),
+            "native_credential_invalid"
+        );
+        assert_eq!(
+            native_source_error(&AccountError::Provider(ProviderError::CredentialStorage)),
+            "native_keychain_access_failed"
+        );
+        assert_eq!(
+            native_source_error(&AccountError::Storage),
+            "credential_storage_unavailable"
+        );
+    }
 }

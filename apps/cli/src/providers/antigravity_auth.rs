@@ -56,9 +56,10 @@ pub(crate) async fn authorize() -> Result<(), ProviderError> {
     tokio::task::spawn_blocking(|| {
         #[cfg(target_os = "macos")]
         {
-            let bytes =
+            let bytes = crate::keychain::with_interaction(true, || {
                 security_framework::passwords::get_generic_password("gemini", "antigravity")
-                    .map_err(|_| ProviderError::LocalCredentialStorage)?;
+            })
+            .map_err(|_| ProviderError::LocalCredentialStorage)?;
             parse_credential(&bytes)?;
             Ok(())
         }
@@ -154,7 +155,9 @@ fn options(service: &str, account: &str) -> security_framework::passwords::Passw
 fn read_password(service: &str, account: &str) -> Result<Option<Vec<u8>>, ProviderError> {
     #[cfg(target_os = "macos")]
     {
-        match security_framework::passwords::generic_password(options(service, account)) {
+        match crate::keychain::with_interaction(false, || {
+            security_framework::passwords::generic_password(options(service, account))
+        }) {
             Ok(bytes) => Ok(Some(bytes)),
             Err(error) if error.code() == -25300 => Ok(None),
             Err(_) => Err(ProviderError::LocalCredentialStorage),
