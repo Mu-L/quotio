@@ -315,9 +315,15 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
             let accounts = response.accounts
                 .filter { !excludedIDs.contains($0.id) }
                 .filter { activeMode == .monitor || $0.origin != "owned" || QuotioCLIWarpMirror.isMirror($0) }
-                .compactMap(Self.account)
+                .compactMap { value in
+                    let provider = QuotioCLIProviderMap.domain(value.provider)
+                    let key = provider.flatMap { snapshot.accountAliases[$0]?[value.id] }
+                    return Self.account(value, accountKey: key)
+                }
             return AccountSelectionPolicy.preferred(
-                accounts + reportedAccounts,
+                accounts + reportedAccounts.filter { reported in
+                    !accounts.contains { $0.id == reported.id && $0.providerID == reported.providerID }
+                },
                 disabledIDs: Set(accounts.filter(\.isDisabled).map(\.id))
             )
         } catch {
@@ -591,7 +597,13 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
             }
             saveImportedIDEQuotas()
             let references = report.providers.map { ($0.provider, $0.accountRef) }
-                + report.failures.map { ($0.provider, $0.accountRef) }
+                + report.failures.filter { failure in
+                    // A failed default adapter does not prove a local login exists.
+                    failure.accountRef?.origin != nil || reportedAccounts.contains {
+                        $0.id == failure.accountRef?.id
+                            && QuotaProvider(rawValue: $0.providerID.rawValue).flatMap(QuotioCLIProviderMap.cli) == failure.provider
+                    }
+                }.map { ($0.provider, $0.accountRef) }
             reportedAccounts = references.compactMap { name, reference in
                 guard let reference,
                       let provider = QuotioCLIProviderMap.domain(name),
@@ -806,7 +818,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         continuations[id] = nil
     }
 
-    private static func account(_ value: QuotioCLIAccount) -> Account? {
+    private static func account(_ value: QuotioCLIAccount, accountKey: String? = nil) -> Account? {
         guard let provider = QuotioCLIProviderMap.domain(value.provider) else { return nil }
         let label = QuotioCLIWarpMirror.displayLabel(value.label, provider: value.provider)
         let source: AccountSource = switch value.origin {
@@ -822,7 +834,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
             identity: AccountIdentity(
                 id: value.id,
                 providerID: AccountProviderID(rawValue: provider.rawValue),
-                accountKey: label
+                accountKey: accountKey ?? label
             ),
             displayName: label,
             source: source,

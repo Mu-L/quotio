@@ -302,6 +302,32 @@ final class QuotioCLIBackendTests: XCTestCase {
         XCTAssertTrue(QuotioCLIURLProtocol.requests().isEmpty)
     }
 
+    func testFailedDefaultAdaptersDoNotInventAccounts() async throws {
+        QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[],"failures":[{"provider":"claude","account_ref":{"id":"local","label":"Local or environment account"},"code":"authentication"},{"provider":"clinepass","account_ref":{"id":"local","label":"Local or environment account"},"code":"unavailable"}]}"#)
+        QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"accounts":[]}"#)
+        let backend = QuotioCLIBackend(session: stubSession())
+        await backend.connect(QuotioCLIConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
+        let snapshot = await backend.bootstrap(mode: .monitor)
+        let accounts = await backend.accounts()
+        XCTAssertTrue(accounts.isEmpty)
+        XCTAssertFalse(snapshot.accountIssues.isEmpty)
+    }
+
+    func testSameLabelAccountsKeepTheirOwnIDsAndSources() async throws {
+        QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[{"provider":"amp","account_ref":{"id":"local","label":"Local Amp account"},"account":{"id":"amp","label":"Local Amp account"},"windows":[]},{"provider":"amp","account_ref":{"origin":"borrowed_native","id":"amp-native","label":"Local Amp account"},"account":{"id":"amp","label":"Local Amp account"},"windows":[]}],"failures":[]}"#)
+        QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"accounts":[{"id":"amp-native","provider":"amp","origin":"borrowed_native","label":"Local Amp account","enabled":false,"source_kind":"amp_native"}]}"#)
+        let backend = QuotioCLIBackend(session: stubSession())
+        await backend.connect(QuotioCLIConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
+        _ = await backend.bootstrap(mode: .monitor)
+        let accounts = await backend.accounts()
+        XCTAssertEqual(accounts.count, 2)
+        let native = try XCTUnwrap(accounts.first { $0.id == "amp-native" })
+        XCTAssertEqual(native.accountKey, "amp-native")
+        XCTAssertEqual(native.credentialReference, "amp_native")
+        XCTAssertTrue(native.isDisabled)
+        XCTAssertTrue(native.capabilities.contains(.disable))
+    }
+
     func testOriginlessUsageAccountsAreReadOnlyNativeCredentials() async throws {
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[{"provider":"codex","account_ref":{"id":"local","label":"Local"},"account":{"id":"user","label":"Local"},"windows":[]}],"failures":[]}"#)
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"accounts":[]}"#)

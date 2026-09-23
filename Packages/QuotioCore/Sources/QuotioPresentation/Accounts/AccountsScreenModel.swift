@@ -56,7 +56,7 @@ public final class AccountsScreenModel {
         guard !accountAliases.isEmpty else { return candidates }
         let canonical = candidates.map { account in
             guard let provider = QuotaProvider(rawValue: account.providerID.rawValue),
-                  let key = accountAliases[provider]?[account.accountKey] else { return account }
+                  let key = accountAliases[provider]?[account.id] ?? accountAliases[provider]?[account.accountKey] else { return account }
             return Account(
                 identity: AccountIdentity(id: account.id, providerID: account.providerID, accountKey: key),
                 displayName: account.displayName,
