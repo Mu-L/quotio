@@ -4,6 +4,24 @@ import XCTest
 @testable import QuotioInfrastructure
 
 final class UserDefaultsPreferenceRepositoriesTests: XCTestCase {
+    func testLocalProxyMigrationKeepsAutoStartAndAuthFiles() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("fixture.json")
+        let contents = Data("synthetic credential fixture".utf8)
+        try contents.write(to: file)
+        defaults.set("local", forKey: "operatingMode")
+        defaults.set(directory.path, forKey: "authDirectory")
+        defaults.set(true, forKey: "autoStartProxy")
+        let repository = UserDefaultsOperatingModePreferencesRepository(defaults: defaults)
+        XCTAssertEqual(repository.load().mode, .monitor)
+        XCTAssertEqual(repository.load().mode, .monitor)
+        XCTAssertTrue(defaults.bool(forKey: "autoStartProxy"))
+        XCTAssertEqual(try Data(contentsOf: file), contents)
+        XCTAssertEqual(defaults.string(forKey: "authDirectory"), directory.path)
+    }
+
     func testProviderTrackingRoundTripsWithoutChangingAccountsOrProxyPreferences() {
         defaults.set(["existing-account"], forKey: "disabledAccountIDs")
         defaults.set(true, forKey: "autoStartProxy")
@@ -39,15 +57,15 @@ final class UserDefaultsPreferenceRepositoriesTests: XCTestCase {
         defaults.set("local", forKey: "connectionMode")
         let repository = UserDefaultsOperatingModePreferencesRepository(defaults: defaults)
 
-        XCTAssertEqual(repository.load().mode, .localProxy)
-        XCTAssertEqual(defaults.string(forKey: "operatingMode"), "local")
+        XCTAssertEqual(repository.load().mode, .monitor)
+        XCTAssertEqual(defaults.string(forKey: "operatingMode"), "monitor")
         XCTAssertTrue(defaults.bool(forKey: "migratedToOperatingMode"))
         XCTAssertEqual(defaults.string(forKey: "appMode"), "full")
         XCTAssertEqual(defaults.string(forKey: "connectionMode"), "local")
 
         defaults.set("quotaOnly", forKey: "appMode")
-        XCTAssertEqual(repository.load().mode, .localProxy)
-        XCTAssertEqual(defaults.string(forKey: "operatingMode"), "local")
+        XCTAssertEqual(repository.load().mode, .monitor)
+        XCTAssertEqual(defaults.string(forKey: "operatingMode"), "monitor")
     }
 
     func testCurrentOperatingModeTakesPrecedenceOverLegacyFixture() {
@@ -131,7 +149,7 @@ final class UserDefaultsPreferenceRepositoriesTests: XCTestCase {
     func testRepositoriesRoundTripUsingExistingKeysAndFormats() throws {
         let modeRepository = UserDefaultsOperatingModePreferencesRepository(defaults: defaults)
         modeRepository.save(OperatingModePreferences(mode: .localProxy, hasCompletedOnboarding: true))
-        XCTAssertEqual(defaults.string(forKey: "operatingMode"), "local")
+        XCTAssertEqual(defaults.string(forKey: "operatingMode"), "monitor")
         XCTAssertTrue(defaults.bool(forKey: "hasCompletedOnboarding"))
 
         let menuPreferences = MenuBarPreferences(

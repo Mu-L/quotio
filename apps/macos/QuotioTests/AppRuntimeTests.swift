@@ -29,7 +29,7 @@ final class AppRuntimeTests: XCTestCase {
         XCTAssertEqual(services.startUpdatePollingCount, 1)
     }
 
-    func testOnboardingDefersAndThenCompletesFullInitializationOnce() async {
+    func testOnboardingAllowsMonitoringInitializationExactlyOnce() async {
         let services = FakeAppRuntimeServices()
         services.hasCompletedOnboarding = false
         let runtime = AppRuntime(services: services)
@@ -37,7 +37,7 @@ final class AppRuntimeTests: XCTestCase {
         await runtime.initializeIfNeeded()
 
         XCTAssertTrue(runtime.needsOnboarding)
-        XCTAssertEqual(services.loadDirectAuthFilesCount, 0)
+        XCTAssertEqual(services.loadDirectAuthFilesCount, 1)
         XCTAssertEqual(services.startUpdatePollingCount, 1)
 
         async let firstCompletion: Void = runtime.completeOnboarding(mode: .localProxy)
@@ -45,7 +45,7 @@ final class AppRuntimeTests: XCTestCase {
         _ = await (firstCompletion, secondCompletion)
 
         XCTAssertFalse(runtime.needsOnboarding)
-        XCTAssertEqual(services.modeManager.currentMode, .localProxy)
+        XCTAssertEqual(services.modeManager.currentMode, .monitor)
         XCTAssertTrue(services.modeManager.hasCompletedOnboarding)
         XCTAssertEqual(services.loadDirectAuthFilesCount, 1)
         XCTAssertEqual(services.initializeFeaturesCount, 1)

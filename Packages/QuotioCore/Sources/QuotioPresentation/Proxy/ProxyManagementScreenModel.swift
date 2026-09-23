@@ -97,12 +97,6 @@ public final class ProxyManagementScreenModel {
 
     public func initialize() async {
         await proxy.initialize()
-        if proxy.proxyStatus.running {
-            setupAPIClient()
-            startAutomaticRefresh()
-            await refreshData(refreshQuota: false)
-        }
-
         let autoStart = proxyPreferences.load().autoStartProxy
         if autoStart, proxy.isBinaryInstalled, !proxy.proxyStatus.running {
             await startProxy()
@@ -116,36 +110,14 @@ public final class ProxyManagementScreenModel {
 
         do {
             try await proxy.start()
-            setupAPIClient()
-            startAutomaticRefresh()
-            await refreshData(refreshQuota: false)
-            await syncDisabledStatesToBackend()
-            await refreshData(refreshQuota: false)
-            await refreshQuotas?(true)
             Task { await proxy.checkForUpgrade() }
-
-            if tunnelPreferences.load().autoStartTunnel, tunnel.installation.isInstalled {
-                await tunnel.startTunnel(port: proxy.port)
-            }
         } catch {
             errorMessage = proxy.errorMessage(for: error)
         }
     }
 
     func stopProxy() {
-        Task { await oauth.cancel() }
-        refreshTask?.cancel()
-        refreshTask = nil
-        if tunnel.tunnelState.isActive || tunnel.tunnelState.status == .starting {
-            Task { await tunnel.stopTunnel() }
-        }
         proxy.stop()
-
-        let client = managementClient
-        managementClient = nil
-        if let client {
-            Task { await client.invalidate() }
-        }
     }
 
     public func toggleProxy() async {

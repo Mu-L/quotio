@@ -13,7 +13,7 @@ public final class UserDefaultsOperatingModePreferencesRepository: OperatingMode
         migrateLegacyModeIfNeeded()
 
         let stored = defaults.string(forKey: "operatingMode")
-        let mode = stored.flatMap(OperatingMode.init(rawValue:)) ?? .monitor
+        let mode = OperatingMode.monitor
         if let stored, stored != mode.rawValue {
             defaults.set(mode.rawValue, forKey: "operatingMode")
         }
@@ -24,7 +24,7 @@ public final class UserDefaultsOperatingModePreferencesRepository: OperatingMode
     }
 
     public func save(_ preferences: OperatingModePreferences) {
-        defaults.set(preferences.mode.rawValue, forKey: "operatingMode")
+        defaults.set(OperatingMode.monitor.rawValue, forKey: "operatingMode")
         defaults.set(preferences.hasCompletedOnboarding, forKey: "hasCompletedOnboarding")
     }
 

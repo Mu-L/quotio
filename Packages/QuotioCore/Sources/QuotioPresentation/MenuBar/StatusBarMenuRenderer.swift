@@ -109,7 +109,7 @@ final class StatusBarMenuRenderer {
         menu.addItem(NSMenuItem.separator())
 
         // 2. Network info (Proxy + Tunnel) - Local Proxy Mode only
-        if snapshot.isLocalProxyMode {
+        if snapshot.isProxyInstalled {
             menu.addItem(buildNetworkInfoItem())
             menu.addItem(NSMenuItem.separator())
         }

@@ -17,7 +17,6 @@ public struct SettingsScreen: View {
     public var body: some View {
         TabView {
             Form {
-                OperatingModeSection()
                 Section("settings.general".localized()) { LaunchAtLoginToggle() }
                 Section("settings.language".localized()) {
                     Picker("settings.language".localized(), selection: Binding(
@@ -50,14 +49,12 @@ public struct SettingsScreen: View {
             }
             .tabItem { Label("connections.privacy".localized(), systemImage: "lock") }
 
-            if modeManager.isLocalProxyMode {
-                Form {
-                    LocalProxyServerSection()
-                    ProxySettingsSection()
-                    LocalPathsSection()
-                }
-                .tabItem { Label("connections.gateway".localized(), systemImage: "network") }
+            Form {
+                LocalProxyServerSection()
+                ProxySettingsSection()
+                LocalPathsSection()
             }
+            .tabItem { Label("connections.gateway".localized(), systemImage: "network") }
 
             Form {
                 Section("troubleshooting.title".localized()) {
@@ -69,90 +66,6 @@ public struct SettingsScreen: View {
             .tabItem { Label("connections.advanced".localized(), systemImage: "slider.horizontal.3") }
         }
         .formStyle(.grouped)
-    }
-}
-
-// MARK: - Operating Mode Section
-
-struct OperatingModeSection: View {
-    @Environment(ProxyManagementScreenModel.self) private var viewModel
-    @Environment(QuotaFeatureController.self) private var quotaController
-    @Environment(OperatingModeManager.self) private var modeManager
-    @State private var showModeChangeConfirmation = false
-    @State private var pendingMode: OperatingMode?
-    
-    var body: some View {
-        Section {
-            // Mode selection cards
-            VStack(spacing: 10) {
-                ForEach(OperatingMode.allCases) { mode in
-                    OperatingModeCard(
-                        mode: mode,
-                        isSelected: modeManager.currentMode == mode
-                    ) {
-                        handleModeSelection(mode)
-                    }
-                }
-            }
-            .padding(.vertical, 4)
-        } header: {
-            Label("settings.appMode".localized(), systemImage: "switch.2")
-        } footer: {
-            footerText
-        }
-        .alert("settings.appMode.switchConfirmTitle".localized(), isPresented: $showModeChangeConfirmation) {
-            Button("action.cancel".localized(), role: .cancel) {
-                pendingMode = nil
-            }
-            Button("action.switch".localized()) {
-                if let mode = pendingMode {
-                    switchToMode(mode)
-                }
-                pendingMode = nil
-            }
-        } message: {
-            Text("settings.appMode.switchConfirmMessage".localized())
-        }
-    }
-    
-    @ViewBuilder
-    private var footerText: some View {
-        switch modeManager.currentMode {
-        case .monitor:
-            Label("settings.appMode.quotaOnlyNote".localized(), systemImage: "info.circle")
-                .font(.caption)
-        case .localProxy:
-            EmptyView()
-        }
-    }
-    
-    private func handleModeSelection(_ mode: OperatingMode) {
-        guard mode != modeManager.currentMode else { return }
-        
-        // Confirm when switching FROM local proxy mode (stops the local proxy)
-        if modeManager.currentMode == .localProxy && mode == .monitor {
-            pendingMode = mode
-            showModeChangeConfirmation = true
-        } else {
-            // Switch immediately for other transitions
-            switchToMode(mode)
-        }
-    }
-    
-    private func switchToMode(_ mode: OperatingMode) {
-        modeManager.switchMode(to: mode) {
-            viewModel.stopProxy()
-        }
-        
-        // Re-initialize based on new mode
-        Task {
-            if modeManager.isLocalProxyMode {
-                await viewModel.initialize()
-            } else {
-                await viewModel.loadDirectAuthFiles()
-            }
-            await quotaController.initialize()
-        }
     }
 }
 

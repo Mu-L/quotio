@@ -11313,25 +11313,25 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open Dashboard"
+            "value" : "Open Settings"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ouvrir le tableau de bord"
+            "value" : "Ouvrir les réglages"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mở bảng điều khiển"
+            "value" : "Mở Cài đặt"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "打开仪表板"
+            "value" : "打开设置"
           }
         }
       }
@@ -11371,25 +11371,25 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Quotio is configured and ready to use with the following mode:"
+            "value" : "View quota in the menu bar and manage connections in Settings."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Quotio est configuré et prêt à être utilisé avec le mode suivant :"
+            "value" : "Consultez les quotas dans la barre des menus et gérez les connexions dans Réglages."
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Quotio đã được cấu hình và sẵn sàng sử dụng với chế độ sau:"
+            "value" : "Xem quota trên thanh menu và quản lý kết nối trong Cài đặt."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Quotio 已配置完成，可以使用以下模式："
+            "value" : "在菜单栏查看配额，在设置中管理连接。"
           }
         }
       }
@@ -11864,25 +11864,25 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "You can add more providers later from the Providers tab"
+            "value" : "Choose a provider in Settings to connect or grant access."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vous pourrez ajouter d'autres fournisseurs plus tard depuis l'onglet Fournisseurs"
+            "value" : "Choisissez un fournisseur dans Réglages pour vous connecter ou autoriser l’accès."
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bạn có thể thêm các nhà cung cấp khác sau từ tab Nhà cung cấp"
+            "value" : "Chọn provider trong Cài đặt để kết nối hoặc cấp quyền."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "您可以稍后从「提供商」标签页添加更多提供商"
+            "value" : "在设置中选择提供商以连接或授予访问权限。"
           }
         }
       }
@@ -11893,25 +11893,25 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Quotio supports these AI providers"
+            "value" : "Logins found on this Mac"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Quotio prend en charge ces fournisseurs IA"
+            "value" : "Connexions trouvées sur ce Mac"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Quotio hỗ trợ các nhà cung cấp AI sau"
+            "value" : "Đăng nhập tìm thấy trên máy Mac này"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Quotio 支持这些 AI 提供商"
+            "value" : "在此 Mac 上找到的登录"
           }
         }
       }
@@ -11922,25 +11922,25 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "AI Providers"
+            "value" : "Detected providers"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fournisseurs IA"
+            "value" : "Fournisseurs détectés"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nhà cung cấp AI"
+            "value" : "Provider đã phát hiện"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "AI 提供商"
+            "value" : "已检测到的提供商"
           }
         }
       }

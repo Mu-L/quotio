@@ -725,11 +725,8 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
             await warpTokenScreenModel.load()
         }
         await tunnel.refreshInstallation()
-        if modeManager.isLocalProxyMode {
-            await proxyManagement.initialize()
-        } else {
-            await proxyManagement.loadDirectAuthFiles()
-        }
+        await proxyManagement.initialize()
+        await proxyManagement.loadDirectAuthFiles()
         await quotaController.initialize()
         await warmupScreenModel.configure()
     }
@@ -790,7 +787,8 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
             menuBarPreferences: menuBarSettings.preferences,
             appearanceMode: appearanceManager.appearanceMode,
             language: languageManager.currentLanguage,
-            trackingPreferences: quotaController.trackingPreferences
+            trackingPreferences: quotaController.trackingPreferences,
+            isProxyInstalled: proxyManagement.proxy.isBinaryInstalled
         )
     }
 

@@ -7,16 +7,7 @@ public enum OperatingMode: String, Codable, CaseIterable, Identifiable, Sendable
     public var id: String { rawValue }
 
     public static func fromLegacy(appModeRaw: String?, connectionModeRaw: String?) -> OperatingMode {
-        guard let appModeRaw else { return .monitor }
-
-        switch appModeRaw {
-        case "quotaOnly":
-            return .monitor
-        case "full":
-            return connectionModeRaw == "remote" ? .monitor : .localProxy
-        default:
-            return .monitor
-        }
+        .monitor
     }
 }
 

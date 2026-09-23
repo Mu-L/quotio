@@ -29,7 +29,6 @@ struct CompletionStep: View {
                     .frame(maxWidth: 400)
             }
             
-            selectedModeCard
             
             Spacer()
             
@@ -63,31 +62,7 @@ struct CompletionStep: View {
         }
     }
     
-    private var selectedModeCard: some View {
-        HStack(spacing: 14) {
-            Image(systemName: viewModel.selectedMode.icon)
-                .font(.title2)
-                .foregroundStyle(.white)
-                .frame(width: 44, height: 44)
-                .background(viewModel.selectedMode.color)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text(viewModel.selectedMode.displayName)
-                    .font(.headline)
-                
-                Text(viewModel.selectedMode.description)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            
-            Spacer()
-        }
-        .padding(16)
-        .background(Color.secondary.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .frame(maxWidth: 400)
-    }
+
 }
 
 #Preview {

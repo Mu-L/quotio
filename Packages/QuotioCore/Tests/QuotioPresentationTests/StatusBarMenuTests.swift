@@ -77,7 +77,7 @@ final class StatusBarMenuSnapshotMapperTests: XCTestCase {
             language: .vietnamese
         )
 
-        XCTAssertFalse(snapshot.isLocalProxyMode)
+        XCTAssertFalse(snapshot.isProxyInstalled)
         XCTAssertEqual(snapshot.proxyPort, 8317)
         XCTAssertTrue(snapshot.isProxyRunning)
         XCTAssertEqual(snapshot.tunnel, tunnel)
@@ -119,10 +119,11 @@ final class StatusBarMenuSnapshotMapperTests: XCTestCase {
             activeAntigravityEmail: nil,
             menuBarPreferences: MenuBarPreferences(selectedProvider: .claude),
             appearanceMode: .system,
-            language: .english
+            language: .english,
+            isProxyInstalled: true
         )
 
-        XCTAssertTrue(snapshot.isLocalProxyMode)
+        XCTAssertTrue(snapshot.isProxyInstalled)
         XCTAssertEqual(snapshot.providers.map(\.provider), [.antigravity, .claude, .codex])
         XCTAssertEqual(snapshot.selectedProvider, .claude)
     }

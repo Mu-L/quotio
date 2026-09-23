@@ -42,6 +42,7 @@ struct QuotioApp: App {
                             }
                         }
                         .environment(runtime.providerImageModel)
+                        .environment(runtime.accountsScreenModel)
                     }
             }
         }

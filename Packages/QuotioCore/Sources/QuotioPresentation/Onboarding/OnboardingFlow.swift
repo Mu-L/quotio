@@ -11,15 +11,13 @@ import SwiftUI
 
 enum OnboardingStep: Int, CaseIterable {
     case welcome = 0
-    case modeSelection = 1
-    case providers = 2
-    case completion = 3
+    case providers = 1
+    case completion = 2
     
     @MainActor
     var title: String {
         switch self {
         case .welcome: return "onboarding.step.welcome".localizedStatic()
-        case .modeSelection: return "onboarding.step.mode".localizedStatic()
         case .providers: return "onboarding.step.providers".localizedStatic()
         case .completion: return "onboarding.step.completion".localizedStatic()
         }
@@ -30,11 +28,10 @@ enum OnboardingStep: Int, CaseIterable {
 @Observable
 final class OnboardingViewModel {
     var currentStep: OnboardingStep = .welcome
-    var selectedMode: OperatingMode = .monitor
     var direction: SlideDirection = .forward
     
     var visibleSteps: [OnboardingStep] {
-        [.welcome, .modeSelection, .providers, .completion]
+        [.welcome, .providers, .completion]
     }
     
     var currentStepIndex: Int {
@@ -97,13 +94,11 @@ public struct OnboardingFlow: View {
         switch viewModel.currentStep {
         case .welcome:
             WelcomeStep(viewModel: viewModel)
-        case .modeSelection:
-            ModeSelectionStep(viewModel: viewModel)
         case .providers:
             ProviderStep(viewModel: viewModel)
         case .completion:
             CompletionStep(viewModel: viewModel) {
-                onComplete?(viewModel.selectedMode)
+                onComplete?(.monitor)
                 dismiss()
             }
         }

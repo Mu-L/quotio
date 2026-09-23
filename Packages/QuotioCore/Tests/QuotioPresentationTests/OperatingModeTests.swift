@@ -15,10 +15,10 @@ final class OperatingModeTests: XCTestCase {
         )
     }
 
-    func testLegacyLocalModeMigratesToLocalProxy() {
+    func testLegacyLocalModeMigratesToMonitor() {
         XCTAssertEqual(
             OperatingMode.fromLegacy(appModeRaw: "full", connectionModeRaw: "local"),
-            .localProxy
+            .monitor
         )
     }
 }

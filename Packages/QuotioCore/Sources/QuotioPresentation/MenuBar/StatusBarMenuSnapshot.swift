@@ -39,7 +39,7 @@ struct StatusBarMenuDisplaySettings: Equatable, Sendable {
 }
 
 public struct StatusBarMenuSnapshot: Equatable, Sendable {
-    let isLocalProxyMode: Bool
+    let isProxyInstalled: Bool
     let proxyPort: UInt16
     let isProxyRunning: Bool
     let tunnel: CloudflareTunnelSnapshot
@@ -64,7 +64,8 @@ public enum StatusBarMenuSnapshotMapper {
         menuBarPreferences: MenuBarPreferences,
         appearanceMode: AppearanceMode,
         language: AppLanguage,
-        trackingPreferences: ProviderTrackingPreferences = ProviderTrackingPreferences()
+        trackingPreferences: ProviderTrackingPreferences = ProviderTrackingPreferences(),
+        isProxyInstalled: Bool = false
     ) -> StatusBarMenuSnapshot {
         let disabledAccounts = Set(monitorAccounts.lazy.filter(\.isDisabled).map {
             "\($0.providerID.rawValue):\($0.accountKey.lowercased())"
@@ -104,7 +105,7 @@ public enum StatusBarMenuSnapshotMapper {
         }
 
         return StatusBarMenuSnapshot(
-            isLocalProxyMode: mode == .localProxy,
+            isProxyInstalled: isProxyInstalled,
             proxyPort: proxyPort,
             isProxyRunning: isProxyRunning,
             tunnel: tunnel,

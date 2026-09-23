@@ -187,8 +187,6 @@ final class AppRuntime {
 
         if !services.hasCompletedOnboarding {
             needsOnboarding = true
-            hasInitialized = true
-            return
         }
 
         await performFullInitializationIfNeeded()

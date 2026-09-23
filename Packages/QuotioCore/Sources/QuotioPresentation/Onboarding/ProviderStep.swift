@@ -8,14 +8,18 @@ import QuotioDomain
 import SwiftUI
 
 struct ProviderStep: View {
+    @Environment(AccountsScreenModel.self) private var accounts
     @Bindable var viewModel: OnboardingViewModel
     
     var body: some View {
         VStack(spacing: 24) {
             headerSection
             
-            providersGrid
-                .frame(maxWidth: 520)
+            if featuredProviders.isEmpty {
+                Text("providers.emptyState.title".localized()).foregroundStyle(.secondary)
+            } else {
+                providersGrid.frame(maxWidth: 520)
+            }
             
             hintSection
             
@@ -52,7 +56,8 @@ struct ProviderStep: View {
     }
     
     private var featuredProviders: [QuotaProvider] {
-        [.claude, .codex, .copilot, .antigravity, .qwen]
+        Array(Set(accounts.accounts.map(\.provider)).union(accounts.nativeSourcePermissions.map(\.provider)))
+            .sorted { $0.displayName < $1.displayName }
     }
     
     private var hintSection: some View {

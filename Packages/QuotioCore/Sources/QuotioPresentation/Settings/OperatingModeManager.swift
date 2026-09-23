@@ -47,7 +47,7 @@ public final class OperatingModeManager {
     public init(repository: any OperatingModePreferencesRepository) {
         self.repository = repository
         let preferences = repository.load()
-        self.currentMode = preferences.mode
+        self.currentMode = .monitor
         self.hasCompletedOnboarding = preferences.hasCompletedOnboarding
     }
     
@@ -55,7 +55,7 @@ public final class OperatingModeManager {
     
     /// Set current mode and persist
     public func setMode(_ mode: OperatingMode) {
-        currentMode = mode
+        currentMode = .monitor
         persist()
     }
     

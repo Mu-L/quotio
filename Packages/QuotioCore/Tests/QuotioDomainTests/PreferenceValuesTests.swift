@@ -16,7 +16,7 @@ final class PreferenceValuesTests: XCTestCase {
         XCTAssertEqual(OperatingMode.fromLegacy(appModeRaw: nil, connectionModeRaw: nil), .monitor)
         XCTAssertEqual(OperatingMode.fromLegacy(appModeRaw: "quotaOnly", connectionModeRaw: nil), .monitor)
         XCTAssertEqual(OperatingMode.fromLegacy(appModeRaw: "full", connectionModeRaw: "remote"), .monitor)
-        XCTAssertEqual(OperatingMode.fromLegacy(appModeRaw: "full", connectionModeRaw: "local"), .localProxy)
+        XCTAssertEqual(OperatingMode.fromLegacy(appModeRaw: "full", connectionModeRaw: "local"), .monitor)
         XCTAssertEqual(OperatingMode.fromLegacy(appModeRaw: "unknown", connectionModeRaw: "local"), .monitor)
     }
 
