@@ -170,6 +170,7 @@ struct QuotioCLIAccount: Decodable, Sendable {
     let origin: String
     let enabled: Bool
     let sourceKind: String?
+    let sourceLocation: String?
     let sourceId: String?
 }
 
@@ -248,7 +249,8 @@ struct QuotioCLIUsageMapper {
         mode: QuotaOperatingMode = .monitor,
         bundle: Bundle = .main,
         locale: Locale = .current,
-        excludedAccountIDs: Set<String> = []
+        excludedAccountIDs: Set<String> = [],
+        previousAliases: [QuotaProvider: [String: String]] = [:]
     ) -> QuotaSnapshot {
         let mapper = Self(bundle: bundle, locale: locale)
         var snapshot = QuotaSnapshot(lastUpdated: report.generatedAt)
@@ -310,10 +312,18 @@ struct QuotioCLIUsageMapper {
             let issue = QuotaRefreshIssue(kind: isDiagnostic ? .partial : .failed, occurredAt: report.generatedAt,
                 reason: QuotaRefreshFailureReason(rawValue: failure.code))
             if let account = failure.accountRef {
+                snapshot.sourceIssues[provider, default: [:]][account.id] = issue
                 let label = QuotioCLIWarpMirror.displayLabel(account.label, provider: failure.provider)
+                let previousKey = previousAliases[provider]?[account.id].flatMap {
+                    snapshot.quotas[provider]?[$0] == nil ? nil : $0
+                }
                 let key = snapshot.accountAliases[provider]?[account.id]
+                    ?? previousKey
                     ?? (snapshot.accountIDs[provider]?[label] == nil ? label : account.id)
                 snapshot.accountAliases[provider, default: [:]][account.id] = key
+                if let selectedSource = snapshot.accountIDs[provider]?[key], selectedSource != account.id {
+                    continue
+                }
                 snapshot.accountIDs[provider, default: [:]][key] = account.id
                 let id = QuotaAccountID(provider: provider, accountKey: key)
                 if snapshot.accountIssues[id]?.kind != .failed { snapshot.accountIssues[id] = issue }

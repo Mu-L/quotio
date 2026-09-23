@@ -12,10 +12,11 @@ public final class UserDefaultsProviderTrackingPreferencesRepository: ProviderTr
     public func load() -> ProviderTrackingPreferences {
         ProviderTrackingPreferences(disabledProviders: Set(
             (defaults.stringArray(forKey: "disabledProviders") ?? []).compactMap(QuotaProvider.init(rawValue:))
-        ))
+        ), automaticallyDiscoverLogins: defaults.object(forKey: "automaticallyDiscoverLogins") as? Bool ?? true)
     }
 
     public func save(_ preferences: ProviderTrackingPreferences) {
+        defaults.set(preferences.automaticallyDiscoverLogins, forKey: "automaticallyDiscoverLogins")
         defaults.set(preferences.disabledProviders.map(\.rawValue).sorted(), forKey: "disabledProviders")
     }
 }

@@ -7,6 +7,15 @@ public enum AccountServiceFailure: Error, Equatable, Sendable {
     case deletionNotAllowed
 }
 
+public enum NativeSourceAuthorizationFailure: Error, Equatable, Sendable {
+    case quotioVault
+    case nativeKeychain
+    case nativeLogin
+    case invalidCredential
+    case timeout
+    case unknown
+}
+
 public struct NativeSourcePermission: Codable, Hashable, Identifiable, Sendable {
     public let provider: QuotaProvider
     public let kind: String
@@ -26,6 +35,9 @@ public protocol AccountManaging: Sendable {
     func rescanNativeAccounts(for provider: QuotaProvider) async
     func nativeSourcesRequiringPermission() async -> [NativeSourcePermission]
     func authorizeNativeSource(_ source: NativeSourcePermission) async throws
+    func authorizedNativeSources() async -> [NativeSourcePermission]
+    func accountStorageRequiresAuthorization() async -> Bool
+    func authorizeAccountStorage() async throws
     func accounts() async -> [Account]
     func setDisabled(_ disabled: Bool, accountID: String) async
     func delete(accountID: String) async throws
@@ -35,4 +47,10 @@ public protocol AccountManaging: Sendable {
         apiKey: String,
         existingAccountID: String?
     ) async throws
+}
+
+public extension AccountManaging {
+    func authorizedNativeSources() async -> [NativeSourcePermission] { [] }
+    func accountStorageRequiresAuthorization() async -> Bool { false }
+    func authorizeAccountStorage() async throws { throw NativeSourceAuthorizationFailure.unknown }
 }

@@ -108,6 +108,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
     private var reportedAccounts: [Account] = []
     private var activeMode: QuotaOperatingMode = .monitor
     private var continuations: [UUID: AsyncStream<QuotaSnapshot>.Continuation] = [:]
+    private let logger: (any ApplicationLogging)?
     private let trackingPreferences: (any ProviderTrackingPreferencesRepository)?
     private let session: URLSession?
     private let userDefaults: UserDefaults
@@ -115,11 +116,13 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
     private let customProviderDomain: String
     private let authFileState: (any ManagedAuthFileStateRepository)?
     private let localization: @MainActor @Sendable () -> (bundle: Bundle, locale: Locale)
-    private static let knownNativeSourcesKey = "quotioCLI.knownNativeSources.v2"
+    private var storageRequiresAuthorization = false
+    private var discoveredNativeSourceKinds: Set<String> = []
     private static let pendingNativeSourcesKey = "quotioCLI.pendingNativeSources.v1"
 
     public init(
         session: URLSession? = nil,
+        logger: (any ApplicationLogging)? = nil,
         trackingPreferences: (any ProviderTrackingPreferencesRepository)? = nil,
         userDefaults: UserDefaults = .standard,
         customProviders: (@Sendable () throws -> [CustomProvider])? = nil,
@@ -128,6 +131,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         localization: @escaping @MainActor @Sendable () -> (bundle: Bundle, locale: Locale) = { (.main, .current) }
     ) {
         self.session = session
+        self.logger = logger
         self.trackingPreferences = trackingPreferences
         self.userDefaults = userDefaults
         self.customProviders = customProviders
@@ -230,12 +234,18 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
     }
 
     public func registerDetectedNativeAccounts() async {
+        guard trackingPreferences?.load().automaticallyDiscoverLogins != false else { return }
+        await discoverNativeAccounts(providerID: nil)
+    }
+
+    private func discoverNativeAccounts(providerID: String?) async {
         guard let client,
               let response: QuotioCLIProviderList = try? await client.request("v1/providers"),
               response.schemaVersion == 1 else { return }
-        var known = Set(userDefaults.stringArray(forKey: Self.knownNativeSourcesKey) ?? [])
+        var known = discoveredNativeSourceKinds
         var pending = Set(pendingNativeSources())
         for provider in response.providers {
+            guard providerID == nil || providerID == provider.id else { continue }
             guard let domainProvider = QuotioCLIProviderMap.domain(provider.id), isTracked(domainProvider) else { continue }
             for source in provider.capabilities.sourceReferences
             where source.origin == "borrowed_native" && source.platforms.contains("macos") {
@@ -245,6 +255,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
                     let discovered = try await discoverNativeSource(
                         client: client, provider: provider.id, kind: source.kind, inspect: true
                     )
+                    await logger?.write(.info, message: "Native discovery provider=\(domainProvider.rawValue) available=\(discovered.candidates.filter { $0.status == "available" }.count) permissionRequired=\(discovered.candidates.filter { $0.status == "permission_required" }.count)")
                     pending = pending.filter { $0.kind != source.kind }
                     if let domainProvider = QuotioCLIProviderMap.domain(provider.id) {
                         pending.formUnion(discovered.candidates.compactMap { candidate in
@@ -256,9 +267,10 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
                             )
                         })
                     }
+                    savePendingNativeSources(pending)
                     for candidate in discovered.candidates where candidate.status == "available" {
                         let body = try JSONEncoder.quotioCLI.encode(candidate.source)
-                        try? await mutate(
+                        try await mutate(
                             client: client,
                             path: "v1/account-sources",
                             method: "POST",
@@ -268,13 +280,14 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
                                 candidate.source.kind,
                                 candidate.source.location ?? "",
                                 candidate.source.discoveryRef ?? "",
+                                UUID().uuidString,
                             ])
                         )
                     }
                     known.insert(sourceKey)
-                    userDefaults.set(known.sorted(), forKey: Self.knownNativeSourcesKey)
-                    savePendingNativeSources(pending)
+                    discoveredNativeSourceKinds = known
                 } catch {
+                    await logger?.write(.warning, message: "Native discovery provider=\(domainProvider.rawValue) failed=\(Self.failureCategory(error))")
                     continue
                 }
             }
@@ -283,9 +296,8 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
 
     public func rescanNativeAccounts(for provider: QuotaProvider) async {
         guard isTracked(provider), let providerID = QuotioCLIProviderMap.cli(provider) else { return }
-        let known = userDefaults.stringArray(forKey: Self.knownNativeSourcesKey) ?? []
-        userDefaults.set(known.filter { !$0.hasPrefix(providerID + ":") }, forKey: Self.knownNativeSourcesKey)
-        await registerDetectedNativeAccounts()
+        discoveredNativeSourceKinds = discoveredNativeSourceKinds.filter { !$0.hasPrefix(providerID + ":") }
+        await discoverNativeAccounts(providerID: providerID)
     }
 
     public func nativeSourcesRequiringPermission() async -> [NativeSourcePermission] {
@@ -304,14 +316,56 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
             location: source.location,
             discoveryRef: nil
         ))
-        try await mutate(
-            client: client,
-            path: "v1/account-sources/authorize",
-            method: "POST",
-            body: body,
-            idempotencyKey: "quotio-native-permission-" + UUID().uuidString
-        )
+        do {
+            try await mutate(
+                client: client,
+                path: "v1/account-sources/authorize",
+                method: "POST",
+                body: body,
+                idempotencyKey: "quotio-native-permission-" + UUID().uuidString,
+                timeout: .seconds(300)
+            )
+        } catch {
+            switch error {
+            case QuotioCLIBackendError.response(_, "quotio_vault_access_failed"),
+                 QuotioCLIBackendError.response(_, "credential_storage_unavailable"):
+                throw NativeSourceAuthorizationFailure.quotioVault
+            case QuotioCLIBackendError.response(_, "native_keychain_access_failed"):
+                throw NativeSourceAuthorizationFailure.nativeKeychain
+            case QuotioCLIBackendError.response(_, "native_login_required"):
+                throw NativeSourceAuthorizationFailure.nativeLogin
+            case QuotioCLIBackendError.response(_, "native_credential_invalid"):
+                throw NativeSourceAuthorizationFailure.invalidCredential
+            case QuotioCLIBackendError.timeout:
+                throw NativeSourceAuthorizationFailure.timeout
+            default:
+                throw NativeSourceAuthorizationFailure.unknown
+            }
+        }
+        var authorized = Set(await authorizedNativeSources())
+        authorized.insert(source)
+        userDefaults.set(try? JSONEncoder().encode(authorized.sorted { $0.id < $1.id }), forKey: "quotioCLI.authorizedNativeSources.v1")
         savePendingNativeSources(Set(pendingNativeSources()).subtracting([source]))
+        await registerDetectedNativeAccounts()
+    }
+
+    public func authorizedNativeSources() async -> [NativeSourcePermission] {
+        guard let data = userDefaults.data(forKey: "quotioCLI.authorizedNativeSources.v1") else { return [] }
+        return (try? JSONDecoder().decode([NativeSourcePermission].self, from: data)) ?? []
+    }
+
+    public func accountStorageRequiresAuthorization() async -> Bool { storageRequiresAuthorization }
+
+    public func authorizeAccountStorage() async throws {
+        guard let client else { throw NativeSourceAuthorizationFailure.unknown }
+        do {
+            try await mutate(client: client, path: "v1/account-vault/authorize", method: "POST", body: Data("{}".utf8), timeout: .seconds(300))
+            storageRequiresAuthorization = false
+            discoveredNativeSourceKinds = []
+            await registerDetectedNativeAccounts()
+        } catch {
+            throw NativeSourceAuthorizationFailure.quotioVault
+        }
     }
 
     public func accounts() async -> [Account] {
@@ -320,6 +374,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         do {
             let response: QuotioCLIAccountList = try await client.request("v1/accounts")
             guard response.schemaVersion == 1 else { return [] }
+            storageRequiresAuthorization = false
             removeDisabledProxyQuotas()
             let excludedIDs = disabledProxyAccountIDs()
             let accounts = response.accounts
@@ -337,6 +392,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
                 disabledIDs: Set(accounts.filter(\.isDisabled).map(\.id))
             )
         } catch {
+            if Self.failureCategory(error) == "account_storage" { storageRequiresAuthorization = true }
             return reportedAccounts
         }
     }
@@ -551,6 +607,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
             }
             await loadSnapshot(mode: mode, refreshedProviders: domainProviders, importedAccounts: importedAccounts)
         } catch {
+            await logger?.write(.warning, message: "Quota refresh failed=\(Self.failureCategory(error))")
             guard activeMode == mode else { return }
             snapshot.refreshingProviders.subtract(domainProviders)
             markFailure(for: domainProviders)
@@ -576,7 +633,8 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
             let previous = snapshot
             snapshot = QuotioCLIUsageMapper.snapshot(
                 report, mode: mode, bundle: localization.bundle, locale: localization.locale,
-                excludedAccountIDs: disabledProxyAccountIDs()
+                excludedAccountIDs: disabledProxyAccountIDs(),
+                previousAliases: previous.accountAliases
             )
             if let refreshedProviders {
                 for provider in QuotaProvider.allCases where !refreshedProviders.contains(provider) {
@@ -585,6 +643,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
                     snapshot.accountAliases[provider] = previous.accountAliases[provider]
                     snapshot.subscriptions[provider] = previous.subscriptions[provider]
                     snapshot.issues[provider] = previous.issues[provider]
+                    snapshot.sourceIssues[provider] = previous.sourceIssues[provider]
                 }
                 snapshot.accountIssues = snapshot.accountIssues.filter { refreshedProviders.contains($0.key.provider) }
                 for (account, issue) in previous.accountIssues where !refreshedProviders.contains(account.provider) {
@@ -620,8 +679,15 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
                 return Self.account(reference, provider: provider, accountKey: key)
             }
             removeDisabledProxyQuotas()
+            for provider in (refreshedProviders ?? Set(Self.supportedProviders)).sorted(by: { $0.rawValue < $1.rawValue }) {
+                let reasons = Set(snapshot.accountIssues.filter { $0.key.provider == provider }.values.compactMap { $0.reason?.rawValue })
+                    .union(snapshot.issues[provider]?.reason.map { [$0.rawValue] } ?? [])
+                let quotas = snapshot.quotas[provider] ?? [:]
+                await logger?.write(.info, message: "Quota snapshot provider=\(provider.rawValue) accounts=\(quotas.count) withMetrics=\(quotas.values.filter { !$0.models.isEmpty }.count) reasons=\(reasons.sorted().joined(separator: ","))")
+            }
             publish()
         } catch {
+            await logger?.write(.warning, message: "Quota snapshot failed=\(Self.failureCategory(error))")
             guard activeMode == mode else { return }
             markFailure(for: refreshedProviders ?? Set(Self.supportedProviders))
         }
@@ -789,7 +855,8 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         path: String,
         method: String,
         body: Data?,
-        idempotencyKey: String = UUID().uuidString
+        idempotencyKey: String = UUID().uuidString,
+        timeout: Duration = .seconds(60)
     ) async throws {
         var operation: QuotioCLIOperation = try await client.request(
             path,
@@ -797,7 +864,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
             body: body,
             idempotencyKey: idempotencyKey
         )
-        let deadline = ContinuousClock.now + .seconds(60)
+        let deadline = ContinuousClock.now + timeout
         while operation.status == "running" {
             guard ContinuousClock.now < deadline else { throw QuotioCLIBackendError.timeout }
             try await Task.sleep(for: .milliseconds(100))
@@ -851,7 +918,11 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
             status: value.enabled ? .ready : .disabled,
             credentialMetadata: RedactedCredentialMetadata(
                 kind: value.origin == "owned" && provider.usesAPIKeyAuth ? .apiKey : .external
-            )
+            ),
+            sources: [AccountLoginSource(
+                accountID: value.id, source: source, credentialReference: value.sourceKind,
+                status: value.enabled ? .ready : .disabled, location: value.sourceLocation
+            )]
         )
     }
 
@@ -878,6 +949,21 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
             capabilities: [],
             status: .ready
         )
+    }
+
+    private static func failureCategory(_ error: Error) -> String {
+        switch error {
+        case QuotioCLIBackendError.response(_, "credential_storage_unavailable"),
+             QuotioCLIBackendError.response(_, "account_storage_unavailable"),
+             QuotioCLIBackendError.response(_, "account_storage_disabled"):
+            "account_storage"
+        case QuotioCLIBackendError.response(_, "duplicate_account"): "duplicate_account"
+        case QuotioCLIBackendError.response(_, "credential_validation_failed"): "credential_validation"
+        case QuotioCLIBackendError.response(let status, _): "http_\(status)"
+        case QuotioCLIBackendError.timeout: "timeout"
+        case QuotioCLIBackendError.disconnected: "disconnected"
+        default: "unclassified"
+        }
     }
 
     private static func accountFailure(_ error: Error) -> AccountServiceFailure {

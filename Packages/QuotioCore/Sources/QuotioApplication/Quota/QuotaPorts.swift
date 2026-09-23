@@ -55,6 +55,7 @@ public struct QuotaSnapshot: Equatable, Sendable {
     public var subscriptions: [QuotaProvider: [String: QuotaSubscriptionInfo]]
     public var issues: [QuotaProvider: QuotaRefreshIssue]
     public var accountIssues: [QuotaAccountID: QuotaRefreshIssue]
+    public var sourceIssues: [QuotaProvider: [String: QuotaRefreshIssue]]
     public var refreshingProviders: Set<QuotaProvider>
     public var lastUpdated: Date?
 
@@ -65,6 +66,7 @@ public struct QuotaSnapshot: Equatable, Sendable {
         subscriptions: [QuotaProvider: [String: QuotaSubscriptionInfo]] = [:],
         issues: [QuotaProvider: QuotaRefreshIssue] = [:],
         accountIssues: [QuotaAccountID: QuotaRefreshIssue] = [:],
+        sourceIssues: [QuotaProvider: [String: QuotaRefreshIssue]] = [:],
         refreshingProviders: Set<QuotaProvider> = [],
         lastUpdated: Date? = nil
     ) {
@@ -74,6 +76,7 @@ public struct QuotaSnapshot: Equatable, Sendable {
         self.subscriptions = subscriptions
         self.issues = issues
         self.accountIssues = accountIssues
+        self.sourceIssues = sourceIssues
         self.refreshingProviders = refreshingProviders
         self.lastUpdated = lastUpdated
     }

@@ -5,6 +5,88 @@ import XCTest
 @testable import QuotioInfrastructure
 
 final class QuotioCLIBackendTests: XCTestCase {
+    func testSuccessfulAccountReadClearsPreviousStoragePermissionFailure() async throws {
+        let backend = QuotioCLIBackend(session: stubSession())
+        await backend.connect(.init(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
+        QuotioCLIURLProtocol.enqueue(#"{"error":"credential_storage_unavailable"}"#, status: 503)
+        _ = await backend.accounts()
+        let blocked = await backend.accountStorageRequiresAuthorization()
+        XCTAssertTrue(blocked)
+        QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"accounts":[]}"#)
+        _ = await backend.accounts()
+        let recovered = await backend.accountStorageRequiresAuthorization()
+        XCTAssertFalse(recovered)
+    }
+
+    func testFailedSecondarySourceDoesNotSplitOrInvalidateItsVerifiedAccount() throws {
+        let data = Data(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[{"provider":"codex","account_ref":{"origin":"owned","id":"owned","label":"Work"},"account":{"id":"workspace-1","label":"fixture"},"windows":[]}],"failures":[{"provider":"codex","account_ref":{"origin":"borrowed_native","id":"native","label":"Native login"},"code":"authentication"}]}"#.utf8)
+        let report = try makeQuotioCLIDecoder().decode(QuotioCLIUsageReport.self, from: data)
+        let snapshot = QuotioCLIUsageMapper.snapshot(report, previousAliases: [.codex: ["native": "Work"]])
+        XCTAssertEqual(snapshot.accountAliases[.codex]?["native"], "Work")
+        XCTAssertEqual(snapshot.accountIDs[.codex]?["Work"], "owned")
+        XCTAssertTrue(snapshot.accountIssues.isEmpty)
+        XCTAssertEqual(snapshot.sourceIssues[.codex]?["native"]?.reason, .authentication)
+    }
+
+    func testGrantingQuotioStorageAutomaticallyRetriesNativeDiscovery() async throws {
+        let providers = #"{"schema_version":1,"providers":[{"id":"codex","capabilities":{"source_references":[{"kind":"codex_native","platforms":["macos"],"origin":"borrowed_native"}]}}]}"#
+        let discovery = #"{"schema_version":1,"status":"checked","candidates":[{"status":"available","source":{"kind":"codex_native","location":"default"}}]}"#
+        QuotioCLIURLProtocol.enqueue(providers)
+        QuotioCLIURLProtocol.enqueue(discovery)
+        QuotioCLIURLProtocol.enqueue(#"{"error":"credential_storage_unavailable"}"#, status: 503)
+        let backend = QuotioCLIBackend(session: stubSession())
+        await backend.connect(.init(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
+        await backend.registerDetectedNativeAccounts()
+        let discoveryNeedsAccess = await backend.accountStorageRequiresAuthorization()
+        XCTAssertFalse(discoveryNeedsAccess)
+        QuotioCLIURLProtocol.enqueue(#"{"error":"credential_storage_unavailable"}"#, status: 503)
+        _ = await backend.accounts()
+        let needsAccess = await backend.accountStorageRequiresAuthorization()
+        XCTAssertTrue(needsAccess)
+
+        QuotioCLIURLProtocol.enqueue(#"{"id":"authorize","status":"completed"}"#)
+        QuotioCLIURLProtocol.enqueue(providers)
+        QuotioCLIURLProtocol.enqueue(discovery)
+        QuotioCLIURLProtocol.enqueue(#"{"id":"register","status":"completed"}"#)
+        try await backend.authorizeAccountStorage()
+        let stillNeedsAccess = await backend.accountStorageRequiresAuthorization()
+        XCTAssertFalse(stillNeedsAccess)
+        XCTAssertEqual(QuotioCLIURLProtocol.requests().filter { $0.url?.path == "/v1/account-vault/authorize" }.count, 1)
+        XCTAssertEqual(QuotioCLIURLProtocol.requests().filter { $0.url?.path == "/v1/account-sources" }.count, 2)
+    }
+
+    func testStartupDiscoveryDoesNotTrustLastLaunchsScanMarker() async throws {
+        let suite = "QuotioCLIBackendTests.startup.\(UUID().uuidString)"
+        UserDefaults(suiteName: suite)?.set(["codex:codex_native"], forKey: "quotioCLI.knownNativeSources.v2")
+        defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
+        QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"providers":[{"id":"codex","capabilities":{"source_references":[{"kind":"codex_native","platforms":["macos"],"origin":"borrowed_native"}]}}]}"#)
+        QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"status":"checked","candidates":[{"status":"available","source":{"kind":"codex_native","location":"default"}}]}"#)
+        QuotioCLIURLProtocol.enqueue(#"{"id":"register","status":"completed"}"#)
+        let backend = QuotioCLIBackend(session: stubSession(), userDefaults: try XCTUnwrap(UserDefaults(suiteName: suite)))
+        await backend.connect(.init(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
+        await backend.registerDetectedNativeAccounts()
+        XCTAssertEqual(QuotioCLIURLProtocol.requests().map { $0.url!.path }, ["/v1/providers", "/v1/account-sources/discover", "/v1/account-sources"])
+    }
+
+    func testAuthorizationFailurePreservesItsVerifiedStage() async throws {
+        let backend = QuotioCLIBackend(session: stubSession())
+        await backend.connect(.init(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
+        for (code, expected) in [
+            ("quotio_vault_access_failed", NativeSourceAuthorizationFailure.quotioVault),
+            ("native_keychain_access_failed", .nativeKeychain),
+            ("native_login_required", .nativeLogin),
+            ("native_credential_invalid", .invalidCredential),
+        ] {
+            QuotioCLIURLProtocol.enqueue("{\"id\":\"authorize\",\"status\":\"failed\",\"error\":\"\(code)\"}")
+            do {
+                try await backend.authorizeNativeSource(.init(provider: .antigravity, kind: "antigravity_native", location: "gemini_keychain"))
+                XCTFail("Expected a stage-specific failure")
+            } catch let failure as NativeSourceAuthorizationFailure {
+                XCTAssertEqual(failure, expected)
+            }
+        }
+    }
+
     func testDisabledProviderDoesNotRefreshOrDiscoverAndAccountsRemainStored() async throws {
         let suite = "QuotioCLIBackendTests.tracking.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
@@ -238,7 +320,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         XCTAssertNotNil(request.value(forHTTPHeaderField: "Idempotency-Key"))
     }
 
-    func testNativeDiscoveryRegistersUnseenMacOSSourcesOnce() async throws {
+    func testNativeDiscoveryRetriesFailedRegistrationWithinLaunch() async throws {
         let suite = "QuotioCLIBackendTests.nativeDiscovery.\(UUID().uuidString)"
         defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
         let providers = #"{"schema_version":1,"providers":[{"id":"codex","capabilities":{"source_references":[{"kind":"codex_native","platforms":["macos"],"origin":"borrowed_native"},{"kind":"cli_proxy_auth_file","platforms":["macos"],"origin":"borrowed_proxy"}]}},{"id":"cursor","capabilities":{"source_references":[{"kind":"cursor_native","platforms":["macos"],"origin":"borrowed_native"}]}},{"id":"amp","capabilities":{"source_references":[{"kind":"amp_native","platforms":["linux"],"origin":"borrowed_native"}]}},{"id":"grok","capabilities":{"source_references":[{"kind":"grok_native","platforms":["macos","linux"],"origin":"borrowed_native"}]}}]}"#
@@ -249,6 +331,8 @@ final class QuotioCLIBackendTests: XCTestCase {
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"status":"checked","candidates":[{"label":"Native entry 1","status":"available","source":{"kind":"discovered","discovery_ref":"opaque-reference"}}]}"#)
         QuotioCLIURLProtocol.enqueue(#"{"id":"grok-source","status":"failed","error":"duplicate_account"}"#)
         QuotioCLIURLProtocol.enqueue(providers)
+        QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"status":"checked","candidates":[{"status":"available","source":{"kind":"discovered","discovery_ref":"retry-reference"}}]}"#)
+        QuotioCLIURLProtocol.enqueue(#"{"id":"grok-retry","status":"completed"}"#)
         let backend = QuotioCLIBackend(
             session: stubSession(),
             userDefaults: try XCTUnwrap(UserDefaults(suiteName: suite))
@@ -262,8 +346,8 @@ final class QuotioCLIBackendTests: XCTestCase {
 
         let requests = QuotioCLIURLProtocol.requests()
         XCTAssertEqual(requests.filter { $0.url?.path == "/v1/providers" }.count, 2)
-        XCTAssertEqual(requests.filter { $0.url?.path == "/v1/account-sources/discover" }.count, 3)
-        XCTAssertEqual(requests.filter { $0.url?.path == "/v1/account-sources" }.count, 2)
+        XCTAssertEqual(requests.filter { $0.url?.path == "/v1/account-sources/discover" }.count, 4)
+        XCTAssertEqual(requests.filter { $0.url?.path == "/v1/account-sources" }.count, 3)
         XCTAssertFalse(requests.contains { $0.httpMethod == "PATCH" })
         let discoveryBodies = try QuotioCLIURLProtocol.bodies(forPath: "/v1/account-sources/discover")
             .map { try XCTUnwrap(JSONSerialization.jsonObject(with: $0) as? [String: Any]) }
@@ -300,6 +384,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"status":"permission_required","candidates":[{"label":"Native source","status":"permission_required","source":{"kind":"factory_native","location":"v2_keyring"}}]}"#)
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"accounts":[]}"#)
         QuotioCLIURLProtocol.enqueue(#"{"id":"factory-source","status":"completed"}"#)
+        QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"providers":[]}"#)
         let backend = QuotioCLIBackend(
             session: stubSession(),
             userDefaults: try XCTUnwrap(UserDefaults(suiteName: suite))
