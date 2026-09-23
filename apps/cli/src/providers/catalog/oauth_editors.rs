@@ -718,6 +718,7 @@ async fn cursor_sqlite_query(
             "-readonly",
         ])
         .args(["-cmd", ".limit length 1048576"])
+        .args(["-cmd", ".limit length"])
         .arg(database.directory.join("state.vscdb"))
         // Do not evaluate a hostile view or virtual table in place of ItemTable.
         .arg(format!(
@@ -748,16 +749,28 @@ async fn cursor_sqlite_query(
     {
         return Err(ProviderError::Unavailable);
     }
-    // .limit reports the effective value; the schema check then emits 1. Remove
-    // those fixed records before parsing credentials, failing closed on older tools.
-    let mut lines = bytes.splitn(3, |byte| *byte == b'\n');
-    let limit = lines.next().ok_or(ProviderError::Unavailable)?;
-    if std::str::from_utf8(limit).ok().map(str::trim) != Some("length 1048576")
-        || lines.next() != Some(b"1".as_slice())
-    {
+    sqlite_query_payload(&bytes).map(<[u8]>::to_vec)
+}
+
+#[cfg(unix)]
+fn sqlite_query_payload(mut bytes: &[u8]) -> Result<&[u8], ProviderError> {
+    // Query the effective limit explicitly. Older SQLite also echoes the setter.
+    let mut limit_records = 0;
+    for _ in 0..2 {
+        let end = bytes
+            .iter()
+            .position(|byte| *byte == b'\n')
+            .ok_or(ProviderError::Unavailable)?;
+        if std::str::from_utf8(&bytes[..end]).ok().map(str::trim) != Some("length 1048576") {
+            break;
+        }
+        limit_records += 1;
+        bytes = &bytes[end + 1..];
+    }
+    if limit_records == 0 {
         return Err(ProviderError::Unavailable);
     }
-    Ok(lines.next().ok_or(ProviderError::Unavailable)?.to_vec())
+    bytes.strip_prefix(b"1\n").ok_or(ProviderError::Unavailable)
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -1791,6 +1804,28 @@ mod tests {
             cursor_login_from_output(b"[]"),
             Err(ProviderError::Authentication)
         ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn sqlite_output_requires_verified_limit_and_schema_with_optional_setter_echo() {
+        for output in [
+            "              length 1048576\n1\n[]\n",
+            "              length 1048576\n              length 1048576\n1\n[]\n",
+        ] {
+            assert_eq!(sqlite_query_payload(output.as_bytes()).unwrap(), b"[]\n");
+        }
+        for output in [
+            "1\n[]\n",
+            "length 2048\n1\n[]\n",
+            "length 1048576\n0\n[]\n",
+            "length 1048576\n",
+        ] {
+            assert_eq!(
+                sqlite_query_payload(output.as_bytes()),
+                Err(ProviderError::Unavailable)
+            );
+        }
     }
 
     #[cfg(target_os = "macos")]
