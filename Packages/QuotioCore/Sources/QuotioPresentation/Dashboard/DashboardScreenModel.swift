@@ -22,12 +22,12 @@ public final class DashboardScreenModel {
         Set(trackedAccounts.map { QuotaProvider(rawValue: $0.providerID.rawValue) }.compactMap { $0 }).count
     }
 
-    public var lowestQuotaPercentage: Double {
+    public var lowestQuotaPercentage: Double? {
         quota.providerQuotas.values
             .flatMap(\.values)
             .map(QuotaPolicy.lowestAvailablePercentage)
             .filter { $0 >= 0 }
-            .min() ?? 100
+            .min()
     }
 
     public var lastRefreshTime: Date? { quota.lastRefreshTime }

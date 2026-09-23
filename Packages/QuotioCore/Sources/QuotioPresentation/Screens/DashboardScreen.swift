@@ -48,21 +48,6 @@ struct DashboardScreen: View {
     
     // MARK: - Precomputed Properties (performance optimization)
     
-    /// Unique provider count from direct auth files
-    private var directProvidersCount: Int {
-        dashboard.connectedProviderCount
-    }
-    
-    /// Lowest quota percentage across all providers using total usage logic
-    private var lowestQuotaPercentage: Double {
-        dashboard.lowestQuotaPercentage
-    }
-    
-    /// Grouped accounts by provider (cached computation)
-    private var groupedMonitorAccounts: [QuotaProvider: [Account]] {
-        Dictionary(grouping: dashboard.trackedAccounts) { $0.provider }
-    }
-    
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
@@ -76,12 +61,12 @@ struct DashboardScreen: View {
                     }
                 } else {
                     // Quota-Only Mode: Show quota dashboard
-                    quotaOnlyModeContent
+                    MonitorOverviewScreen()
                 }
             }
             .padding(24)
         }
-        .navigationTitle("nav.dashboard".localized())
+        .navigationTitle("connections.overview".localized())
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -153,155 +138,6 @@ struct DashboardScreen: View {
             endpointSection
             AvailableModelsSection()
             tunnelSection
-        }
-    }
-    
-    // MARK: - Quota-Only Mode Content
-    
-    private var quotaOnlyModeContent: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            // Quota Overview KPIs
-            quotaOnlyKPISection
-            
-            // Quick Quota Status
-            quotaStatusSection
-            
-            // Tracked Accounts
-            trackedAccountsSection
-        }
-    }
-    
-    private var quotaOnlyKPISection: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 16)], spacing: 16) {
-            KPICard(
-                title: "dashboard.trackedAccounts".localized(),
-                value: "\(dashboard.trackedAccountCount)",
-                subtitle: "dashboard.accounts".localized(),
-                icon: "person.2.fill",
-                color: .blue
-            )
-            
-            KPICard(
-                title: "dashboard.providers".localized(),
-                value: "\(directProvidersCount)",
-                subtitle: "dashboard.connected".localized(),
-                icon: "cpu",
-                color: .green
-            )
-            
-            // Show lowest quota percentage (precomputed)
-            KPICard(
-                title: "dashboard.lowestQuota".localized(),
-                value: String(format: "%.0f%%", lowestQuotaPercentage),
-                subtitle: "dashboard.remaining".localized(),
-                icon: "chart.bar.fill",
-                color: lowestQuotaPercentage > 50 ? .green : (lowestQuotaPercentage > 20 ? .orange : .red)
-            )
-            
-            if let lastRefresh = dashboard.lastRefreshTime {
-                KPICard(
-                    title: "dashboard.lastRefresh".localized(),
-                    value: lastRefresh.formatted(date: .omitted, time: .shortened),
-                    subtitle: "dashboard.updated".localized(),
-                    icon: "clock.fill",
-                    color: .purple
-                )
-            }
-        }
-    }
-    
-    private var quotaStatusSection: some View {
-        GroupBox {
-            if quota.providerQuotas.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "chart.bar.xaxis")
-                        .font(.largeTitle)
-                        .foregroundStyle(.tertiary)
-                    
-                    Text("dashboard.noQuotaData".localized())
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    
-                    Button {
-                        Task { await quotaController.refreshAll(force: true) }
-                    } label: {
-                        Label("action.refresh".localized(), systemImage: "arrow.clockwise")
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(quota.isLoadingQuotas)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 20)
-            } else {
-                VStack(alignment: .leading, spacing: 12) {
-                    // Sort providers for stable iteration order (ForEach performance fix)
-                    ForEach(quota.providerQuotas.keys.sorted { $0.displayName < $1.displayName }) { provider in
-                        if let accounts = quota.providerQuotas[provider], !accounts.isEmpty {
-                            QuotaProviderRow(provider: provider, accounts: accounts)
-                        }
-                    }
-                }
-            }
-        } label: {
-            HStack {
-                Label("dashboard.quotaOverview".localized(), systemImage: "chart.bar.fill")
-                
-                Spacer()
-                
-                if quota.isLoadingQuotas {
-                    SmallProgressView()
-                }
-            }
-        }
-    }
-    
-    private var trackedAccountsSection: some View {
-        GroupBox {
-            if dashboard.trackedAccounts.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "person.crop.circle.badge.questionmark")
-                        .font(.largeTitle)
-                        .foregroundStyle(.tertiary)
-                    
-                    Text("dashboard.noAccountsTracked".localized())
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    
-                    Text("dashboard.addAccountsHint".localized())
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .multilineTextAlignment(.center)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 20)
-            } else {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(QuotaProvider.allCases.filter { groupedMonitorAccounts[$0] != nil }) { provider in
-                        if let accounts = groupedMonitorAccounts[provider] {
-                            HStack(spacing: 12) {
-                                ProviderIcon(provider: provider, size: 20)
-                                
-                                Text(provider.displayName)
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-                                
-                                Spacer()
-                                
-                                Text("\(accounts.count)")
-                                    .font(.caption)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 2)
-                                    .background(provider.color.opacity(0.15))
-                                    .foregroundStyle(provider.color)
-                                    .clipShape(Capsule())
-                            }
-                            .padding(.vertical, 4)
-                        }
-                    }
-                }
-            }
-        } label: {
-            Label("dashboard.trackedAccounts".localized(), systemImage: "person.2.badge.key")
         }
     }
     
@@ -793,57 +629,5 @@ struct FlowLayout: Layout {
         }
         
         return (CGSize(width: maxWidth, height: currentY + lineHeight), positions)
-    }
-}
-
-// MARK: - Quota Provider Row (for Quota-Only Mode Dashboard)
-
-struct QuotaProviderRow: View {
-    let provider: QuotaProvider
-    let accounts: [String: ProviderQuota]
-    
-    private var lowestQuota: Double {
-        accounts.values.flatMap { $0.models }.map { $0.percentage }.min() ?? 100
-    }
-    
-    private var quotaColor: Color {
-        if lowestQuota > 50 { return .green }
-        if lowestQuota > 20 { return .orange }
-        return .red
-    }
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            ProviderIcon(provider: provider, size: 24)
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text(provider.displayName)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                
-                Text("\(accounts.count) " + "quota.accounts".localized())
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            
-            Spacer()
-            
-            // Lowest quota indicator
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(quotaColor)
-                    .frame(width: 8, height: 8)
-                
-                Text(String(format: "%.0f%%", lowestQuota))
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(quotaColor)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(quotaColor.opacity(0.1))
-            .clipShape(Capsule())
-        }
-        .padding(.vertical, 6)
     }
 }

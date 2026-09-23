@@ -60,9 +60,9 @@ public struct RootNavigationView: View {
             VStack(spacing: 0) {
                 List(selection: selection) {
                     Section {
-                        Label("nav.dashboard".localized(), systemImage: "gauge.with.dots.needle.33percent")
+                        Label("connections.overview".localized(), systemImage: "gauge.with.dots.needle.33percent")
                             .tag(Selection.page(.dashboard))
-                        Label("nav.quota".localized(), systemImage: "chart.bar")
+                        Label("connections.usage".localized(), systemImage: "chart.bar")
                             .tag(Selection.page(.quota))
                         Label("connections.all".localized(), systemImage: "square.grid.2x2")
                             .tag(Selection.page(.providers))

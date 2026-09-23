@@ -52,6 +52,15 @@ final class QuotaScreenModelsTests: XCTestCase {
         await quota.shutdown()
     }
 
+    func testDashboardDoesNotReportFullQuotaWithoutAnyReadings() {
+        let quota = QuotaScreenModel(coordinator: TestQuotaCoordinator())
+        let accounts = AccountsScreenModel(
+            accountService: EmptyAccountManager(),
+            authFileRepository: EmptyAuthFileRepository()
+        )
+        XCTAssertNil(DashboardScreenModel(quota: quota, accounts: accounts).lowestQuotaPercentage)
+    }
+
     func testDashboardModelHidesDisabledAccounts() {
         let quota = QuotaScreenModel(coordinator: TestQuotaCoordinator())
         let accounts = AccountsScreenModel(
