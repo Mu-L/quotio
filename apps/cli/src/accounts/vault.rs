@@ -226,14 +226,14 @@ impl Vault {
     pub fn for_usage() -> Result<Self, AccountError> {
         Self::system_with_interaction(false, None, None)
     }
-    pub fn isolated_for_management(
+    pub fn isolated_for_usage(
         namespace: &VaultNamespace,
         data_directory: &std::path::Path,
     ) -> Result<Self, AccountError> {
         if !data_directory.is_absolute() {
             return Err(AccountError::Storage);
         }
-        Self::system_with_interaction(true, Some(namespace), Some(data_directory.to_owned()))
+        Self::system_with_interaction(false, Some(namespace), Some(data_directory.to_owned()))
     }
     fn system_with_interaction(
         _interactive: bool,
@@ -866,11 +866,9 @@ pub(crate) mod tests {
     #[test]
     fn isolated_account_data_directory_must_be_absolute() {
         let namespace: VaultNamespace = "manual-test".parse().unwrap();
-        assert!(
-            Vault::isolated_for_management(&namespace, std::path::Path::new("relative")).is_err()
-        );
+        assert!(Vault::isolated_for_usage(&namespace, std::path::Path::new("relative")).is_err());
         let isolated =
-            Vault::isolated_for_management(&namespace, std::path::Path::new("/isolated/accounts"))
+            Vault::isolated_for_usage(&namespace, std::path::Path::new("/isolated/accounts"))
                 .unwrap();
         assert_eq!(
             isolated.lock_path,

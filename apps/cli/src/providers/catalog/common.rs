@@ -288,6 +288,55 @@ pub fn read_keychain(
         Err(ProviderError::Unavailable)
     }
 }
+
+#[cfg(target_os = "macos")]
+fn authorization_options(
+    service: &str,
+    account: &str,
+) -> security_framework::passwords::PasswordOptions {
+    use core_foundation::{base::TCFType, string::CFString};
+    use security_framework_sys::item::kSecUseAuthenticationUI;
+    unsafe extern "C" {
+        static kSecUseAuthenticationUIAllow: core_foundation::string::CFStringRef;
+    }
+    let mut options = keychain_options(service, account);
+    #[allow(deprecated)]
+    unsafe {
+        let key = CFString::wrap_under_get_rule(kSecUseAuthenticationUI);
+        options.query.retain(|(candidate, _)| candidate != &key);
+        options.query.push((
+            key,
+            CFString::wrap_under_get_rule(kSecUseAuthenticationUIAllow).into_CFType(),
+        ));
+    }
+    options
+}
+
+// Only the explicit native-source authorization operation calls this function.
+pub(crate) fn authorize_keychain(
+    service: &str,
+    account: Option<&str>,
+) -> Result<(), ProviderError> {
+    #[cfg(target_os = "macos")]
+    {
+        let discovered;
+        let account = match account {
+            Some(account) => account,
+            None => {
+                discovered = discover_keychain_account(service)?;
+                discovered.as_deref().ok_or(ProviderError::Authentication)?
+            }
+        };
+        security_framework::passwords::generic_password(authorization_options(service, account))
+            .map(|_| ())
+            .map_err(|_| ProviderError::CredentialStorage)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (service, account);
+        Err(ProviderError::Unavailable)
+    }
+}
 #[cfg(all(test, target_os = "macos"))]
 mod tests {
     use super::*;
@@ -297,6 +346,36 @@ mod tests {
         dictionary::CFDictionary,
         string::CFString,
     };
+    #[test]
+    fn automatic_keychain_reads_never_inherit_interactive_authorization() {
+        use security_framework_sys::item::kSecUseAuthenticationUI;
+        unsafe extern "C" {
+            static kSecUseAuthenticationUIFail: core_foundation::string::CFStringRef;
+            static kSecUseAuthenticationUIAllow: core_foundation::string::CFStringRef;
+        }
+        #[allow(deprecated)]
+        unsafe {
+            let key = CFString::wrap_under_get_rule(kSecUseAuthenticationUI);
+            for options in [
+                keychain_options("fixture", "account"),
+                keychain_options("fixture", "account"),
+            ] {
+                assert!(options.query.iter().any(|(k, v)| {
+                    k == &key
+                        && *v
+                            == CFString::wrap_under_get_rule(kSecUseAuthenticationUIFail)
+                                .into_CFType()
+                }));
+            }
+            let explicit = authorization_options("fixture", "account");
+            assert!(explicit.query.iter().any(|(k, v)| k == &key
+                && *v
+                    == CFString::wrap_under_get_rule(kSecUseAuthenticationUIAllow).into_CFType()));
+            let automatic = keychain_options("fixture", "account");
+            assert!(automatic.query.iter().any(|(k, v)| k == &key
+                && *v == CFString::wrap_under_get_rule(kSecUseAuthenticationUIFail).into_CFType()));
+        }
+    }
     #[test]
     fn keychain_metadata_requires_one_explicit_account() {
         for names in [vec![], vec!["account-a"], vec!["account-a", "account-b"]] {

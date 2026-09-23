@@ -582,6 +582,27 @@ pub async fn update_once(
     })
     .await
 }
+
+pub(crate) async fn register_source_once(
+    vault: Vault,
+    prepared: PreparedAccount,
+    intent: service::MutationIntent,
+) -> Result<String, AccountError> {
+    service::commit_once(vault, intent, move |document| {
+        if let Some(existing) = document.accounts.iter().find(|account| {
+            account.provider == prepared.provider && account.identity == prepared.identity
+        }) {
+            return Ok(existing.id.clone());
+        }
+        document.add(
+            prepared.provider,
+            &prepared.label,
+            prepared.identity,
+            prepared.credential,
+        )
+    })
+    .await
+}
 pub async fn remove_once(
     vault: Vault,
     id: String,
@@ -634,6 +655,50 @@ pub async fn remove(vault: Vault, id: String) -> Result<(), AccountError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn reauthorizing_a_source_preserves_its_account_and_disabled_state() {
+        let dir = std::env::temp_dir().join(crate::accounts::random_string().unwrap());
+        std::fs::create_dir(&dir).unwrap();
+        let vault = Vault::new(
+            std::sync::Arc::new(super::super::vault::tests::Memory::default()),
+            dir.join("lock"),
+        );
+        let prepared = || PreparedAccount {
+            provider: Provider::Catalog("claude"),
+            label: "Claude native account".into(),
+            identity: "source-identity".into(),
+            credential: Credential::ClaudeNative {
+                source: super::super::sources::ClaudeNativeReference {
+                    location: super::super::sources::ClaudeLocation::CodeKeychain,
+                    path: None,
+                },
+            },
+        };
+        let first = register_source_once(
+            vault.clone(),
+            prepared(),
+            service::MutationIntent::new("first", "first".into()).unwrap(),
+        )
+        .await
+        .unwrap();
+        let mut tx = vault.begin().unwrap();
+        tx.document.patch(&first, None, None, Some(false)).unwrap();
+        tx.commit().unwrap();
+        let second = register_source_once(
+            vault.clone(),
+            prepared(),
+            service::MutationIntent::new("second", "second".into()).unwrap(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(first, second);
+        let tx = vault.begin().unwrap();
+        assert_eq!(tx.document.accounts.len(), 1);
+        assert!(!tx.document.accounts[0].enabled());
+        drop(tx);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn api_key_input_rejects_unknown_fields_and_never_accepts_identity() {

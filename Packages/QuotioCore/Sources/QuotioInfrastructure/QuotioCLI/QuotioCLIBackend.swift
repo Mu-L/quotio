@@ -306,12 +306,10 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         ))
         try await mutate(
             client: client,
-            path: "v1/account-sources",
+            path: "v1/account-sources/authorize",
             method: "POST",
             body: body,
-            idempotencyKey: "quotio-native-permission-v1-" + Self.sourceID([
-                source.provider.rawValue, source.kind, source.location ?? "",
-            ])
+            idempotencyKey: "quotio-native-permission-" + UUID().uuidString
         )
         savePendingNativeSources(Set(pendingNativeSources()).subtracting([source]))
     }

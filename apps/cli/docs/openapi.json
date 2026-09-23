@@ -1520,6 +1520,147 @@
         }
       }
     },
+    "/v1/account-sources/authorize": {
+      "post": {
+        "summary": "Authorize a native Keychain source after an explicit user action",
+        "responses": {
+          "202": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "500": {
+            "$ref": "#/components/responses/BadRequest",
+            "description": "Internal error"
+          },
+          "408": {
+            "$ref": "#/components/responses/BadRequest",
+            "description": "Request body timeout"
+          },
+          "413": {
+            "$ref": "#/components/responses/BadRequest",
+            "description": "JSON body exceeds 64 KiB"
+          },
+          "415": {
+            "$ref": "#/components/responses/BadRequest",
+            "description": "JSON content type required"
+          },
+          "422": {
+            "$ref": "#/components/responses/BadRequest",
+            "description": "Invalid JSON request"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "kind",
+                      "location"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "const": "claude_native"
+                      },
+                      "location": {
+                        "enum": [
+                          "code_keychain"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "kind",
+                      "location"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "const": "factory_native"
+                      },
+                      "location": {
+                        "enum": [
+                          "v2_login_keychain",
+                          "v2_keyring",
+                          "legacy"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "kind",
+                      "location"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "const": "antigravity_native"
+                      },
+                      "location": {
+                        "enum": [
+                          "gemini_keychain"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "macOS only. May show one system Keychain permission dialog. Accepts only Claude Code Keychain, Factory encrypted login, and Antigravity Gemini Keychain references. After authorization, registers the read-only source using the normal noninteractive path. Never returns credentials. Automatic discovery, registration and refresh must not call this route. Requires management mode and a new Idempotency-Key per user authorization attempt."
+      }
+    },
     "/v1/account-sources": {
       "post": {
         "summary": "Register a read-only quota source",

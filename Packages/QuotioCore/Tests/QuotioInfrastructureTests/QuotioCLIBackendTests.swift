@@ -319,7 +319,7 @@ final class QuotioCLIBackendTests: XCTestCase {
 
         try await backend.authorizeNativeSource(permission)
         XCTAssertEqual(QuotioCLIURLProtocol.requests().filter {
-            $0.url?.path == "/v1/account-sources"
+            $0.url?.path == "/v1/account-sources/authorize"
         }.count, 1)
     }
 

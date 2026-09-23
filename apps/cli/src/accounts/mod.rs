@@ -1,4 +1,5 @@
 pub mod api;
+pub(crate) mod authorization;
 pub mod command;
 pub mod discovery;
 #[cfg(any(target_os = "linux", all(test, unix)))]

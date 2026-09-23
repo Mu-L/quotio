@@ -162,6 +162,7 @@ fn router(state: Arc<ApiState>, policy: Arc<security::Policy>) -> Router {
         .route("/v1/accounts/migrate", post(management::migrate))
         .route("/v1/account-sources", post(management::reference))
         .route("/v1/account-sources/discover", post(management::discover))
+        .route("/v1/account-sources/authorize", post(management::authorize))
         .route("/v1/accounts/{id}/usage", get(management::usage))
         .route("/v1/auth/sessions", post(management::begin))
         .route(
@@ -726,7 +727,7 @@ pub async fn run(args: ServeArgs) -> Result<(), ServerError> {
         (&args.account_vault_namespace, &args.account_data_dir)
     {
         Some(
-            crate::accounts::vault::Vault::isolated_for_management(namespace, directory)
+            crate::accounts::vault::Vault::isolated_for_usage(namespace, directory)
                 .map_err(|_| ServerError::Config)?,
         )
     } else {

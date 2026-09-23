@@ -87,6 +87,7 @@ enum Mutation {
     Create(api::AccountCreateInput),
     Migrate(api::migration::Input),
     Reference(api::SourceInput),
+    Authorize(api::SourceInput),
     Update(String, api::AccountPatch),
     Remove(String),
 }
@@ -159,6 +160,25 @@ pub(super) async fn discover(
     .map_err(account_error)?;
     Ok(Json(result))
 }
+pub(super) async fn authorize(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    ApiJson(body): ApiJson<Value>,
+) -> Result<(StatusCode, Json<Operation>), ApiError> {
+    let input = serde_json::from_value(body.clone())
+        .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "invalid_request"))?;
+    crate::accounts::authorization::target(&input).map_err(account_error)?;
+    mutate(
+        state,
+        headers,
+        "native_source_authorize",
+        "",
+        body,
+        Mutation::Authorize(input),
+    )
+    .await
+}
+
 pub(super) async fn reference(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
@@ -254,6 +274,7 @@ async fn mutate(
                 if let Some(id) = receipt {
                     return Ok(json!({"account_id":id}));
                 }
+                let authorize = matches!(&mutation, Mutation::Authorize(_));
                 match mutation {
                     Mutation::Migrate(input) => {
                         let (prepared, enabled) = api::migration::prepare(input, &work.context)
@@ -295,7 +316,14 @@ async fn mutate(
                         work.invalidate().await;
                         Ok(json!({"account_id":account_id}))
                     }
-                    Mutation::Reference(input) => {
+                    Mutation::Reference(input) | Mutation::Authorize(input) => {
+                        let input = if authorize {
+                            crate::accounts::authorization::authorize(input)
+                                .await
+                                .map_err(|e| account_code(&e))?
+                        } else {
+                            input
+                        };
                         let prepared = match input {
                             api::SourceInput::Discovered { discovery_ref } => {
                                 let reference = work
@@ -312,7 +340,7 @@ async fn mutate(
                         let _guard = crate::accounts::service::mutation_guard(&work.commit_guard)
                             .await
                             .map_err(|e| account_code(&e))?;
-                        let account_id = api::save_once(vault, prepared, intent)
+                        let account_id = api::register_source_once(vault, prepared, intent)
                             .await
                             .map_err(|e| account_code(&e))?;
                         work.invalidate().await;

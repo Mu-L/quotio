@@ -416,3 +416,24 @@ async fn legacy_migration_requires_authentication_management_and_storage() {
         assert!(!server.logs.lock().unwrap().contains("synthetic-migration"));
     }
 }
+
+#[tokio::test]
+async fn native_authorization_requires_authentication_management_and_storage() {
+    let body = json!({"kind":"claude_native","location":"code_keychain"});
+    for (arguments, expected) in [(vec![], 405), (vec!["--manage"], 503)] {
+        let server = Server::start(&arguments).await;
+        let unauthorized = server.client.post(format!("{}/v1/account-sources/authorize", server.base))
+            .json(&body).send().await.unwrap();
+        assert_eq!(unauthorized.status(), 401);
+        let response = server.request(reqwest::Method::POST, "/v1/account-sources/authorize")
+            .header("Idempotency-Key", "authorization-fixture").json(&body).send().await.unwrap();
+        assert_eq!(response.status().as_u16(), expected);
+        if expected == 503 {
+            let response = server.request(reqwest::Method::POST, "/v1/account-sources/authorize")
+                .header("Idempotency-Key", "invalid-authorization-fixture")
+                .json(&json!({"kind":"claude_native","location":"code_keychain","service":"other"}))
+                .send().await.unwrap();
+            assert_eq!(response.status(), 400);
+        }
+    }
+}
