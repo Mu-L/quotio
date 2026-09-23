@@ -440,7 +440,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"providers":[{"id":"factory","capabilities":{"source_references":[{"kind":"factory_native","platforms":["macos"],"origin":"borrowed_native"}]}}]}"#)
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"status":"permission_required","candidates":[{"label":"Native source","status":"permission_required","source":{"kind":"factory_native","location":"v2_keyring"}}]}"#)
-        QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"accounts":[{"id":"factory-disabled","provider":"factory","label":"Factory","origin":"borrowed_native","active":true,"enabled":false,"source_kind":"factory_native","source_id":null}]}"#)
+        QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"accounts":[{"id":"factory-disabled","provider":"factory","label":"Factory","origin":"borrowed_native","active":true,"enabled":false,"source_kind":"factory_native","source_location":"v2_keyring","source_id":null}]}"#)
         let backend = QuotioCLIBackend(
             session: stubSession(),
             userDefaults: try XCTUnwrap(UserDefaults(suiteName: suite))
@@ -452,6 +452,21 @@ final class QuotioCLIBackendTests: XCTestCase {
         await backend.registerDetectedNativeAccounts()
         let permissions = await backend.nativeSourcesRequiringPermission()
         XCTAssertTrue(permissions.isEmpty)
+    }
+
+    func testRegisteredNativeFileDoesNotHideAnotherLocationsPermissionAcrossRelaunch() async throws {
+        let suite = "QuotioCLIBackendTests.nativeLocations." + UUID().uuidString
+        defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
+        let pending = NativeSourcePermission(provider: .factoryDroid, kind: "factory_native", location: "v2_keyring")
+        UserDefaults(suiteName: suite)?.set(try JSONEncoder().encode([pending]), forKey: "quotioCLI.pendingNativeSources.v1")
+        for _ in 0..<2 {
+            let backend = QuotioCLIBackend(session: stubSession(), userDefaults: try XCTUnwrap(UserDefaults(suiteName: suite)))
+            await backend.connect(.init(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
+            QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"accounts":[{"id":"factory-file","provider":"factory","label":"Factory","origin":"borrowed_native","enabled":true,"source_kind":"factory_native","source_location":"v2_file"}]}"#)
+            let permissions = await backend.nativeSourcesRequiringPermission()
+            XCTAssertEqual(permissions, [pending])
+        }
+        XCTAssertEqual(QuotioCLIURLProtocol.requests().map { $0.url!.path }, ["/v1/accounts", "/v1/accounts"])
     }
 
     func testLegacyImportUsesStableReceiptAndUnixExpiry() async throws {

@@ -311,8 +311,13 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         guard let client,
               let response: QuotioCLIAccountList = try? await client.request("v1/accounts"),
               response.schemaVersion == 1 else { return pending }
-        let registeredKinds = Set(response.accounts.compactMap(\.sourceKind))
-        return pending.filter { !registeredKinds.contains($0.kind) }
+        return pending.filter { source in
+            !response.accounts.contains {
+                QuotioCLIProviderMap.domain($0.provider) == source.provider
+                    && $0.sourceKind == source.kind
+                    && $0.sourceLocation == source.location
+            }
+        }
     }
 
     public func authorizeNativeSource(_ source: NativeSourcePermission) async throws {
