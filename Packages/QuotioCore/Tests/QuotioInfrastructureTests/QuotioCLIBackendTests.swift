@@ -5,6 +5,29 @@ import XCTest
 @testable import QuotioInfrastructure
 
 final class QuotioCLIBackendTests: XCTestCase {
+    func testVerifiedIdentityMergesDifferentSourceLabelsButNotDifferentAccounts() throws {
+        let data = Data(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[{"provider":"codex","account_ref":{"origin":"owned","id":"owned","label":"Work"},"account":{"id":"workspace-1","label":"person@example.com"},"windows":[]},{"provider":"codex","account_ref":{"origin":"borrowed_native","id":"native","label":"person@example.com"},"account":{"id":"workspace-1","label":"person@example.com"},"windows":[]},{"provider":"codex","account_ref":{"origin":"owned","id":"second","label":"Work"},"account":{"id":"workspace-2","label":"person@example.com"},"windows":[]}],"failures":[]}"#.utf8)
+        let report = try makeQuotioCLIDecoder().decode(QuotioCLIUsageReport.self, from: data)
+        let snapshot = QuotioCLIUsageMapper.snapshot(report)
+        XCTAssertEqual(snapshot.quotas[.codex]?.count, 2)
+        XCTAssertEqual(snapshot.accountAliases[.codex]?["owned"], "Work")
+        XCTAssertEqual(snapshot.accountAliases[.codex]?["native"], "Work")
+        XCTAssertEqual(snapshot.accountAliases[.codex]?["second"], "second")
+    }
+
+    func testPartialRefreshDropsReportedAccountsAbsentFromTheLatestReport() async throws {
+        QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[{"provider":"claude","account_ref":{"id":"local","label":"Work"},"account":{"id":"user","label":"Work"},"windows":[]}],"failures":[]}"#)
+        let backend = QuotioCLIBackend(session: stubSession())
+        await backend.connect(QuotioCLIConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
+        _ = await backend.bootstrap(mode: .monitor)
+        QuotioCLIURLProtocol.enqueue(#"{"id":"refresh","status":"completed"}"#)
+        QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"generated_at":"2026-09-16T12:01:00Z","providers":[],"failures":[]}"#)
+        _ = await backend.refresh(QuotaFetchRequest(provider: .codex, mode: .monitor))
+        QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"accounts":[]}"#)
+        let accounts = await backend.accounts()
+        XCTAssertTrue(accounts.isEmpty)
+    }
+
     override func tearDown() {
         QuotioCLIURLProtocol.reset()
         super.tearDown()
@@ -42,8 +65,8 @@ final class QuotioCLIBackendTests: XCTestCase {
         {
           "schema_version":1,"generated_at":"2026-09-16T12:00:00Z","failures":[],
           "providers":[
-            {"provider":"openrouter","account_ref":{"origin":"owned","id":"account-1","label":"Work"},"account":{"id":"api-key","label":"API Key","plan":null},"windows":[]},
-            {"provider":"openrouter","account_ref":{"origin":"owned","id":"account-2","label":"Personal"},"account":{"id":"api-key","label":"API Key","plan":null},"windows":[]}
+            {"provider":"openrouter","account_ref":{"origin":"owned","id":"account-1","label":"Work"},"account":{"id":"key:work","label":"API Key","plan":null},"windows":[]},
+            {"provider":"openrouter","account_ref":{"origin":"owned","id":"account-2","label":"Personal"},"account":{"id":"key:personal","label":"API Key","plan":null},"windows":[]}
           ]
         }
         """#.utf8)
@@ -337,16 +360,17 @@ final class QuotioCLIBackendTests: XCTestCase {
         XCTAssertEqual(snapshot.accountIssues[QuotaAccountID(provider: .clinePass, accountKey: "Local or environment account")]?.reason, .unavailable)
     }
 
-    func testSameLabelAccountsKeepTheirOwnIDsAndSources() async throws {
+    func testSameAccountKeepsBothSourcesUnderOneQuotaKey() async throws {
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[{"provider":"amp","account_ref":{"id":"local","label":"Local Amp account"},"account":{"id":"amp","label":"Local Amp account"},"windows":[]},{"provider":"amp","account_ref":{"origin":"borrowed_native","id":"amp-native","label":"Local Amp account"},"account":{"id":"amp","label":"Local Amp account"},"windows":[]}],"failures":[]}"#)
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"accounts":[{"id":"amp-native","provider":"amp","origin":"borrowed_native","label":"Local Amp account","enabled":false,"source_kind":"amp_native"}]}"#)
         let backend = QuotioCLIBackend(session: stubSession())
         await backend.connect(QuotioCLIConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
         _ = await backend.bootstrap(mode: .monitor)
         let accounts = await backend.accounts()
-        XCTAssertEqual(accounts.count, 2)
+        XCTAssertEqual(accounts.count, 1)
         let native = try XCTUnwrap(accounts.first { $0.id == "amp-native" })
-        XCTAssertEqual(native.accountKey, "amp-native")
+        XCTAssertEqual(native.accountKey, "Local Amp account")
+        XCTAssertEqual(native.sources.count, 2)
         XCTAssertEqual(native.credentialReference, "amp_native")
         XCTAssertTrue(native.isDisabled)
         XCTAssertTrue(native.capabilities.contains(.disable))
@@ -429,7 +453,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         XCTAssertEqual(bootstrapFailure.issues[.codex]?.kind, .failed)
     }
 
-    func testScopedRefreshAfterMutationPreservesUnaffectedProviderState() async throws {
+    func testScopedRefreshPreservesQuotaButDoesNotRestoreUnreportedAccounts() async throws {
         let report = #"""
         {"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[
             {"provider":"claude","account_ref":{"origin":"borrowed_proxy","id":"claude-1","label":"Work"},"account":{"id":"user","label":"Work"},"windows":[],"diagnostics":[{"code":"transient"}]},
@@ -463,7 +487,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         XCTAssertNotNil(refreshed.quotas[.openRouter]?["New"])
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"accounts":[]}"#)
         let accounts = await backend.accounts()
-        XCTAssertEqual(Set(accounts.map(\.id)), ["claude-1", "ag-1", "amp-1", "new-1"])
+        XCTAssertEqual(Set(accounts.map(\.id)), ["new-1"])
 
         // An empty refreshed scope must still remove its old results and issues.
         QuotioCLIURLProtocol.enqueue(#"{"id":"refresh","status":"completed"}"#)
@@ -475,7 +499,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         XCTAssertEqual(removed.quotas[.antigravity], initial.quotas[.antigravity])
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"accounts":[]}"#)
         let remainingAccounts = await backend.accounts()
-        XCTAssertEqual(Set(remainingAccounts.map(\.id)), ["ag-1", "amp-1", "new-1"])
+        XCTAssertTrue(remainingAccounts.isEmpty)
 
         QuotioCLIURLProtocol.enqueue(#"{"id":"refresh-all","status":"completed"}"#)
         QuotioCLIURLProtocol.enqueue(emptyReport)
@@ -505,7 +529,7 @@ final class QuotioCLIBackendTests: XCTestCase {
     }
 
     func testLocalProxyModeOnlyKeepsWarpMirrorsIncludingCachedFailures() async throws {
-        let report = #"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[{"provider":"warp","account_ref":{"origin":"owned","id":"mirror","label":"__quotio_local_warp__:Work"},"account":{"id":"warp","label":"Work"},"windows":[]},{"provider":"warp","account_ref":{"origin":"owned","id":"monitor","label":"Personal"},"account":{"id":"warp","label":"Personal"},"windows":[]}],"failures":[{"provider":"warp","account_ref":{"origin":"owned","id":"monitor-failed","label":"Personal failed"},"code":"authentication"},{"provider":"warp","account_ref":{"origin":"owned","id":"mirror-failed","label":"__quotio_local_warp__:Work failed"},"code":"authentication"}]}"#
+        let report = #"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[{"provider":"warp","account_ref":{"origin":"owned","id":"mirror","label":"__quotio_local_warp__:Work"},"account":{"id":"work-user","label":"Work"},"windows":[]},{"provider":"warp","account_ref":{"origin":"owned","id":"monitor","label":"Personal"},"account":{"id":"personal-user","label":"Personal"},"windows":[]}],"failures":[{"provider":"warp","account_ref":{"origin":"owned","id":"monitor-failed","label":"Personal failed"},"code":"authentication"},{"provider":"warp","account_ref":{"origin":"owned","id":"mirror-failed","label":"__quotio_local_warp__:Work failed"},"code":"authentication"}]}"#
         QuotioCLIURLProtocol.enqueue(report)
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"accounts":[{"id":"monitor","provider":"warp","label":"Personal","origin":"owned","enabled":true},{"id":"mirror","provider":"warp","label":"__quotio_local_warp__:Work","origin":"owned","enabled":true}]}"#)
         let backend = QuotioCLIBackend(session: stubSession())
@@ -515,10 +539,10 @@ final class QuotioCLIBackendTests: XCTestCase {
         XCTAssertEqual(Set(snapshot.accountIDs[.warp]?.values.map { $0 } ?? []), ["mirror", "mirror-failed"])
         XCTAssertEqual(Set(snapshot.accountIssues.keys.map(\.accountKey)), ["Work failed"])
         let accounts = await backend.accounts()
-        XCTAssertEqual(Set(accounts.map(\.id)), ["mirror", "mirror-failed"])
+        XCTAssertEqual(Set(accounts.map(\.id)), ["mirror"])
         await backend.disconnect()
         let cached = await backend.accounts()
-        XCTAssertEqual(Set(cached.map(\.id)), ["mirror", "mirror-failed"])
+        XCTAssertEqual(Set(cached.map(\.id)), ["mirror"])
 
         let decoded = try makeQuotioCLIDecoder().decode(QuotioCLIUsageReport.self, from: Data(report.utf8))
         let monitor = QuotioCLIUsageMapper.snapshot(decoded, mode: .monitor)
@@ -800,7 +824,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         }
     }
 
-    func testFailedBorrowedAccountRemainsVisibleAndCanBeRefreshed() async throws {
+    func testFailedBorrowedProbeDoesNotInventAnAccountButKeepsItsIssue() async throws {
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[],"failures":[{"provider":"claude","account_ref":{"origin":"borrowed_proxy","id":"proxy-1","label":"Work"},"code":"authentication"}]}"#)
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"accounts":[]}"#)
         let backend = QuotioCLIBackend(session: stubSession())
@@ -810,8 +834,7 @@ final class QuotioCLIBackendTests: XCTestCase {
 
         let snapshot = await backend.bootstrap(mode: .monitor)
         let accounts = await backend.accounts()
-        XCTAssertEqual(accounts.map(\.id), ["proxy-1"])
-        XCTAssertEqual(accounts.map(\.accountKey), ["Work"])
+        XCTAssertTrue(accounts.isEmpty)
         XCTAssertNotNil(snapshot.accountIssues[QuotaAccountID(provider: .claude, accountKey: "Work")])
 
         QuotioCLIURLProtocol.enqueue(#"{"id":"refresh","status":"completed","error":null}"#)

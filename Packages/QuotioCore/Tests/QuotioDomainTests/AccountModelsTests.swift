@@ -63,6 +63,7 @@ final class AccountModelsTests: XCTestCase {
         XCTAssertEqual(selected.count, 1)
         XCTAssertEqual(selected.first?.source, .nativeCredential)
         XCTAssertEqual(selected.first?.status, .disabled)
+        XCTAssertEqual(Set(selected.first?.sources.map(\.source) ?? []), [.nativeCredential, .legacyCLIProxy])
     }
 
     func testAmpNativeAndNamedAccountsHaveDistinctIdentities() {
@@ -84,7 +85,7 @@ final class AccountModelsTests: XCTestCase {
         XCTAssertNotEqual(native.accountKey, named.accountKey)
     }
 
-    func testMergingQuotaAccountsAddsImportedIDEAccountWithoutDuplicatingCredentialAccount() {
+    func testMergingQuotaDoesNotInventAccountsFromQuotaKeys() {
         let codex = Account.make(
             providerID: AccountProviderID(rawValue: QuotaProvider.codex.rawValue),
             accountKey: "person@example.com",
@@ -103,12 +104,10 @@ final class AccountModelsTests: XCTestCase {
             ]
         )
 
-        XCTAssertEqual(merged.count, 2)
+        XCTAssertEqual(merged.count, 1)
         XCTAssertEqual(merged.filter { $0.providerID.rawValue == QuotaProvider.codex.rawValue }.count, 1)
         let cursor = merged.first { $0.providerID.rawValue == QuotaProvider.cursor.rawValue }
-        XCTAssertEqual(cursor?.source, .localIDE)
-        XCTAssertEqual(cursor?.displayName, "Person")
-        XCTAssertEqual(cursor?.canDelete, true)
+        XCTAssertNil(cursor)
     }
 
     func testMergingQuotaDisplayNameDoesNotChangeExistingAccountIdentity() {

@@ -74,7 +74,8 @@ public final class AccountsScreenModel {
                 credentialReference: account.credentialReference,
                 capabilities: account.capabilities,
                 status: account.status,
-                credentialMetadata: account.credentialMetadata
+                credentialMetadata: account.credentialMetadata,
+                sources: account.sources
             )
         }
         return AccountSelectionPolicy.preferred(

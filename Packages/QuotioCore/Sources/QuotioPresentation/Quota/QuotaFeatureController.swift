@@ -247,9 +247,6 @@ public final class QuotaFeatureController {
         if let issue = quota.state.accountIssues[accountID], updated == nil || updated! <= issue.occurredAt {
             return (issue.kind == .partial ? "partial" : "failed", issue.explanation)
         }
-        if let issue = quota.state.issues[provider], updated == nil || updated! <= issue.occurredAt {
-            return (issue.kind == .partial ? "partial" : "failed", issue.explanation)
-        }
         guard let updated else { return (nil, nil) }
         let monitoring = AccountMonitoringState.resolve(
             isTracked: !account.isDisabled, hasSource: true, needsPermission: false,

@@ -115,6 +115,7 @@ public struct Account: Identifiable, Codable, Hashable, Sendable {
     public let capabilities: Set<AccountCapability>
     public var status: AccountStatus
     public let credentialMetadata: RedactedCredentialMetadata?
+    public var sources: [AccountLoginSource]
 
     public var id: String { identity.id }
     public var providerID: AccountProviderID { identity.providerID }
@@ -133,7 +134,8 @@ public struct Account: Identifiable, Codable, Hashable, Sendable {
         credentialReference: String? = nil,
         capabilities: Set<AccountCapability> = [.disable],
         status: AccountStatus = .unknown,
-        credentialMetadata: RedactedCredentialMetadata? = nil
+        credentialMetadata: RedactedCredentialMetadata? = nil,
+        sources: [AccountLoginSource]? = nil
     ) {
         self.identity = identity
         self.displayName = displayName
@@ -142,6 +144,9 @@ public struct Account: Identifiable, Codable, Hashable, Sendable {
         self.capabilities = capabilities
         self.status = status
         self.credentialMetadata = credentialMetadata
+        self.sources = sources ?? [AccountLoginSource(
+            accountID: identity.id, source: source, credentialReference: credentialReference, status: status
+        )]
     }
 
     public static func make(
@@ -183,6 +188,7 @@ public struct Account: Identifiable, Codable, Hashable, Sendable {
         case credentialReference
         case canDelete
         case isDisabled
+        case sources
     }
 
     public init(from decoder: any Decoder) throws {
@@ -199,6 +205,9 @@ public struct Account: Identifiable, Codable, Hashable, Sendable {
         let isDisabled = try container.decodeIfPresent(Bool.self, forKey: .isDisabled) ?? false
         status = isDisabled ? .disabled : .unknown
         credentialMetadata = nil
+        sources = try container.decodeIfPresent([AccountLoginSource].self, forKey: .sources) ?? [
+            AccountLoginSource(accountID: id, source: source, credentialReference: credentialReference, status: status),
+        ]
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -211,18 +220,11 @@ public struct Account: Identifiable, Codable, Hashable, Sendable {
         try container.encodeIfPresent(credentialReference, forKey: .credentialReference)
         try container.encode(canDelete, forKey: .canDelete)
         try container.encode(isDisabled, forKey: .isDisabled)
+        try container.encode(sources, forKey: .sources)
     }
 }
 
 public enum AccountSelectionPolicy {
-    private static let placeholderAccountKeys: [QuotaProvider: Set<String>] = [
-        .copilot: ["github copilot"],
-        .antigravity: ["antigravity"],
-        .claude: ["claude code"],
-        .codex: ["codex", "codex user"],
-        .kiro: ["kiro"],
-    ]
-
     public static func preferred(
         _ candidates: [Account],
         disabledIDs: Set<String> = []
@@ -231,10 +233,14 @@ public enum AccountSelectionPolicy {
         for var account in candidates {
             account.isDisabled = disabledIDs.contains(account.id)
             let key = account.deduplicationKey
-            if let existing = selected[key], existing.source.priority >= account.source.priority {
-                continue
+            if let existing = selected[key] {
+                var preferred = existing.source.priority >= account.source.priority ? existing : account
+                var seen = Set<String>()
+                preferred.sources = (existing.sources + account.sources).filter { seen.insert($0.id).inserted }
+                selected[key] = preferred
+            } else {
+                selected[key] = account
             }
-            selected[key] = account
         }
         return selected.values.sorted {
             if $0.providerID == $1.providerID {
@@ -248,7 +254,7 @@ public enum AccountSelectionPolicy {
         _ accounts: [Account],
         quotas: [QuotaProvider: [String: ProviderQuota]]
     ) -> [Account] {
-        var merged = accounts.map { account in
+        let merged = accounts.map { account in
             guard let provider = QuotaProvider(rawValue: account.providerID.rawValue),
                   let displayName = quotas[provider]?[account.accountKey]?.accountDisplayName else {
                 return account
@@ -260,43 +266,10 @@ public enum AccountSelectionPolicy {
                 credentialReference: account.credentialReference,
                 capabilities: account.capabilities,
                 status: account.status,
-                credentialMetadata: account.credentialMetadata
+                credentialMetadata: account.credentialMetadata,
+                sources: account.sources
             )
         }
-        var keys = Set(merged.map(\.deduplicationKey))
-
-        for (provider, accountQuotas) in quotas {
-            for (accountKey, quota) in accountQuotas {
-                let source: AccountSource = switch provider {
-                case .cursor, .trae: .localIDE
-                case .glm, .warp, .clinePass, .factoryDroid, .openRouter, .amp: .apiKey
-                default: .nativeCredential
-                }
-                let account = Account.make(
-                    providerID: AccountProviderID(rawValue: provider.rawValue),
-                    accountKey: accountKey,
-                    displayName: quota.accountDisplayName,
-                    source: source,
-                    capabilities: provider.isImportedFromLocalIDE ? [.delete] : []
-                )
-                guard keys.insert(account.deduplicationKey).inserted else { continue }
-                merged.append(account)
-            }
-        }
-
-        let disabledIDs = Set(merged.lazy.filter(\.isDisabled).map(\.id))
-        merged = preferred(merged, disabledIDs: disabledIDs)
-        return merged.filter { account in
-            guard let provider = QuotaProvider(rawValue: account.providerID.rawValue),
-                  placeholderAccountKeys[provider]?.contains(account.accountKey.lowercased()) == true else {
-                return true
-            }
-            return !merged.contains {
-                $0.providerID == account.providerID
-                    && $0.id != account.id
-                    && placeholderAccountKeys[provider]?.contains($0.accountKey.lowercased()) != true
-                    && $0.source.priority >= account.source.priority
-            }
-        }
+        return preferred(merged, disabledIDs: Set(merged.filter(\.isDisabled).map(\.id)))
     }
 }

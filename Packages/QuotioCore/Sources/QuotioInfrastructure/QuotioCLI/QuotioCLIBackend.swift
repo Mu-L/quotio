@@ -567,11 +567,6 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
             let localization = await localization()
             guard activeMode == mode else { return }
             let previous = snapshot
-            let retainedAccounts = reportedAccounts.filter { account in
-                refreshedProviders.map { providers in
-                    !providers.contains { $0.rawValue == account.providerID.rawValue }
-                } ?? false
-            }
             snapshot = QuotioCLIUsageMapper.snapshot(
                 report, mode: mode, bundle: localization.bundle, locale: localization.locale,
                 excludedAccountIDs: disabledProxyAccountIDs()
@@ -606,7 +601,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
             let references = report.providers.map { ($0.provider, $0.accountRef) }
                 + report.failures.filter { failure in
                     // A failed default adapter does not prove a local login exists.
-                    failure.accountRef?.origin != nil || reportedAccounts.contains {
+                    reportedAccounts.contains {
                         $0.id == failure.accountRef?.id
                             && QuotaProvider(rawValue: $0.providerID.rawValue).flatMap(QuotioCLIProviderMap.cli) == failure.provider
                     }
@@ -614,10 +609,9 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
             reportedAccounts = references.compactMap { name, reference in
                 guard let reference,
                       let provider = QuotioCLIProviderMap.domain(name),
-                      refreshedProviders?.contains(provider) != false,
                       let key = snapshot.accountAliases[provider]?[reference.id] else { return nil }
                 return Self.account(reference, provider: provider, accountKey: key)
-            } + retainedAccounts
+            }
             removeDisabledProxyQuotas()
             publish()
         } catch {

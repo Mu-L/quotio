@@ -431,7 +431,7 @@ struct ProvidersScreen: View {
         guard !rows.isEmpty else { return nil }
         let issues = rows.compactMap { row -> QuotaRefreshIssue? in
             let id = QuotaAccountID(provider: provider, accountKey: row.menuBarAccountKey)
-            guard let issue = quota.state.accountIssues[id] ?? quota.state.issues[provider] else { return nil }
+            guard let issue = quota.state.accountIssues[id] else { return nil }
             let updated = quota.providerQuotas[provider]?[row.menuBarAccountKey]?.lastUpdated
             return updated == nil || updated! <= issue.occurredAt ? issue : nil
         }

@@ -252,7 +252,12 @@ struct QuotioCLIUsageMapper {
     ) -> QuotaSnapshot {
         let mapper = Self(bundle: bundle, locale: locale)
         var snapshot = QuotaSnapshot(lastUpdated: report.generatedAt)
-        for usage in report.providers
+        var identities: [QuotaProvider: [String: String]] = [:]
+        let priority = ["owned": 3, "borrowed_native": 2, "borrowed_proxy": 1]
+        let usages = report.providers.sorted {
+            priority[$0.accountRef?.origin ?? "", default: 2] > priority[$1.accountRef?.origin ?? "", default: 2]
+        }
+        for usage in usages
         where mode == .monitor || usage.accountRef?.origin != "owned" || QuotioCLIWarpMirror.isMirror(
             provider: usage.provider, origin: usage.accountRef?.origin, label: usage.accountRef?.label
         ) {
@@ -265,10 +270,15 @@ struct QuotioCLIUsageMapper {
                 ?? usage.account.label.nilIfEmpty
                 ?? usage.accountRef?.id
                 ?? usage.account.id
-            let key = snapshot.quotas[provider]?[preferredKey] == nil
-                ? preferredKey
-                : usage.accountRef?.id ?? usage.account.id
-            snapshot.quotas[provider, default: [:]][key] = mapper.quota(usage)
+            let matchingKey = usage.account.id.isEmpty ? nil : identities[provider]?[usage.account.id]
+            let key = matchingKey ?? (snapshot.quotas[provider]?[preferredKey] == nil
+                ? preferredKey : usage.accountRef?.id ?? usage.account.id)
+            if !usage.account.id.isEmpty {
+                identities[provider, default: [:]][usage.account.id] = key
+            }
+            if snapshot.quotas[provider]?[key] == nil {
+                snapshot.quotas[provider, default: [:]][key] = mapper.quota(usage)
+            }
             if let reference = usage.accountRef {
                 snapshot.accountAliases[provider, default: [:]][reference.id] = key
                 if snapshot.accountAliases[provider]?[reference.label] == nil {
@@ -278,9 +288,11 @@ struct QuotioCLIUsageMapper {
                    snapshot.accountAliases[provider]?[referenceLabel] == nil {
                     snapshot.accountAliases[provider, default: [:]][referenceLabel] = key
                 }
-                snapshot.accountIDs[provider, default: [:]][key] = reference.id
+                if snapshot.accountIDs[provider]?[key] == nil {
+                    snapshot.accountIDs[provider, default: [:]][key] = reference.id
+                }
             }
-            if let subscription = mapper.subscription(usage) {
+            if snapshot.subscriptions[provider]?[key] == nil, let subscription = mapper.subscription(usage) {
                 snapshot.subscriptions[provider, default: [:]][key] = subscription
             }
         }

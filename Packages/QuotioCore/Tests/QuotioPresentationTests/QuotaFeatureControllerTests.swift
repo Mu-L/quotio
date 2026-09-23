@@ -7,6 +7,19 @@ import XCTest
 
 @MainActor
 final class QuotaFeatureControllerTests: XCTestCase {
+    func testProviderFailureDoesNotMarkAnUnaffectedAccountFailed() async {
+        let account = Account.make(
+            providerID: AccountProviderID(rawValue: QuotaProvider.codex.rawValue),
+            accountKey: "person@example.com", source: .nativeCredential
+        )
+        let fixture = await makeFixture(
+            account: account, provider: .codex, lastUpdated: Date(),
+            issues: [.codex: .init(kind: .failed, occurredAt: Date().addingTimeInterval(10), reason: .authentication)]
+        )
+        XCTAssertEqual(fixture.controller.monitorStatus(for: account).status, "ready")
+        await fixture.controller.shutdown()
+    }
+
     func testMonitorStatusKeepsQuotaFreshForTwoRefreshIntervals() async {
         let account = Account.make(
             providerID: AccountProviderID(rawValue: QuotaProvider.codex.rawValue),
@@ -181,7 +194,8 @@ final class QuotaFeatureControllerTests: XCTestCase {
         aliases: [String: String] = [:],
         authFiles: [AuthFileDescriptor] = [],
         disabledFiles: Set<String> = [],
-        lastUpdated: Date = Date(timeIntervalSince1970: 1_000)
+        lastUpdated: Date = Date(timeIntervalSince1970: 1_000),
+        issues: [QuotaProvider: QuotaRefreshIssue] = [:]
     ) async -> (
         controller: QuotaFeatureController,
         accountService: QuotaFeatureAccountService,
@@ -202,7 +216,8 @@ final class QuotaFeatureControllerTests: XCTestCase {
                     ),
                 ],
                 ],
-                accountAliases: aliases.isEmpty ? [:] : [provider: aliases]
+                accountAliases: aliases.isEmpty ? [:] : [provider: aliases],
+                issues: issues
             )
         ))
         await quota.bootstrap(mode: .monitor)

@@ -76,7 +76,7 @@ final class AccountScreenModelsTests: XCTestCase {
         )
     }
 
-    func testAccountsModelReloadMergesQuotaDerivedAccounts() async {
+    func testAccountsModelReloadDoesNotInventQuotaDerivedAccounts() async {
         let model = AccountsScreenModel(
             accountService: AccountScreenModelService(accounts: []),
             authFileRepository: AccountScreenModelAuthFiles(files: [])
@@ -86,8 +86,7 @@ final class AccountScreenModelsTests: XCTestCase {
             .cursor: ["person@example.com": ProviderQuota(accountDisplayName: "Person")],
         ])
 
-        XCTAssertEqual(model.accounts.map(\.accountKey), ["person@example.com"])
-        XCTAssertEqual(model.accounts.first?.source, .localIDE)
+        XCTAssertTrue(model.accounts.isEmpty)
     }
 
     func testQuotaAliasesDoNotCreateSyntheticDuplicateOfOwnedAccount() async throws {
