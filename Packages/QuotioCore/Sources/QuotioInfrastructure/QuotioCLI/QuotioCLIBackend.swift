@@ -268,22 +268,28 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
                         })
                     }
                     savePendingNativeSources(pending)
+                    var registrationError: Error?
                     for candidate in discovered.candidates where candidate.status == "available" {
-                        let body = try JSONEncoder.quotioCLI.encode(candidate.source)
-                        try await mutate(
-                            client: client,
-                            path: "v1/account-sources",
-                            method: "POST",
-                            body: body,
-                            idempotencyKey: "quotio-native-v1-" + Self.sourceID([
-                                sourceKey,
-                                candidate.source.kind,
-                                candidate.source.location ?? "",
-                                candidate.source.discoveryRef ?? "",
-                                UUID().uuidString,
-                            ])
-                        )
+                        do {
+                            let body = try JSONEncoder.quotioCLI.encode(candidate.source)
+                            try await mutate(
+                                client: client,
+                                path: "v1/account-sources",
+                                method: "POST",
+                                body: body,
+                                idempotencyKey: "quotio-native-v1-" + Self.sourceID([
+                                    sourceKey,
+                                    candidate.source.kind,
+                                    candidate.source.location ?? "",
+                                    candidate.source.discoveryRef ?? "",
+                                    UUID().uuidString,
+                                ])
+                            )
+                        } catch {
+                            registrationError = error
+                        }
                     }
+                    if let registrationError { throw registrationError }
                     known.insert(sourceKey)
                     discoveredNativeSourceKinds = known
                 } catch {

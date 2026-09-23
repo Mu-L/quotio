@@ -354,6 +354,33 @@ final class QuotioCLIBackendTests: XCTestCase {
         XCTAssertTrue(discoveryBodies.allSatisfy { $0["inspect"] as? Bool == true })
     }
 
+    func testNativeDiscoveryContinuesAfterOneCandidateFailsAndRetriesTheKind() async throws {
+        let suite = "QuotioCLIBackendTests.partialDiscovery." + UUID().uuidString
+        defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
+        let providers = #"{"schema_version":1,"providers":[{"id":"codex","capabilities":{"source_references":[{"kind":"codex_native","platforms":["macos"],"origin":"borrowed_native"}]}}]}"#
+        let discovery = #"{"schema_version":1,"status":"checked","candidates":[{"status":"available","source":{"kind":"codex_native","location":"default"}},{"status":"available","source":{"kind":"codex_native","location":"config"}}]}"#
+        let backend = QuotioCLIBackend(session: stubSession(), userDefaults: try XCTUnwrap(UserDefaults(suiteName: suite)))
+        await backend.connect(.init(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
+
+        QuotioCLIURLProtocol.enqueue(providers)
+        QuotioCLIURLProtocol.enqueue(discovery)
+        QuotioCLIURLProtocol.enqueue(#"{"id":"first","status":"failed","error":"credential_validation_failed"}"#)
+        QuotioCLIURLProtocol.enqueue(#"{"id":"second","status":"completed"}"#)
+        await backend.registerDetectedNativeAccounts()
+        let bodies = try QuotioCLIURLProtocol.bodies(forPath: "/v1/account-sources")
+            .map { try XCTUnwrap(JSONSerialization.jsonObject(with: $0) as? [String: Any]) }
+        XCTAssertEqual(bodies.compactMap { $0["location"] as? String }, ["default", "config"])
+
+        QuotioCLIURLProtocol.reset()
+        QuotioCLIURLProtocol.enqueue(providers)
+        QuotioCLIURLProtocol.enqueue(discovery)
+        QuotioCLIURLProtocol.enqueue(#"{"id":"first-retry","status":"completed"}"#)
+        QuotioCLIURLProtocol.enqueue(#"{"id":"second-retry","status":"completed"}"#)
+        await backend.registerDetectedNativeAccounts()
+        XCTAssertEqual(QuotioCLIURLProtocol.bodies(forPath: "/v1/account-sources").count, 2)
+        XCTAssertFalse(QuotioCLIURLProtocol.requests().contains { $0.url?.path.hasSuffix("/authorize") == true })
+    }
+
     func testExplicitRescanRetriesOnlyRequestedKnownProviderWithoutEnablingAccounts() async throws {
         let suite = "QuotioCLIBackendTests.rescan." + UUID().uuidString
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
