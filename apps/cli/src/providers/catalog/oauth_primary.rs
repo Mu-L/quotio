@@ -745,7 +745,23 @@ pub(crate) async fn copilot_gh_hosts_reference_token(
     let bytes = native_file(path)
         .await?
         .ok_or(ProviderError::Authentication)?;
-    copilot_gh_token(&bytes)?.ok_or(ProviderError::Authentication)
+    copilot_gh_reference_token(&bytes, || native_keychain("gh:github.com", None)).await
+}
+
+async fn copilot_gh_reference_token<F, Fut>(
+    bytes: &[u8],
+    keychain: F,
+) -> Result<Secret, ProviderError>
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = Result<Option<Vec<u8>>, ProviderError>>,
+{
+    let host = copilot_gh_host(bytes)?.ok_or(ProviderError::Authentication)?;
+    if let Some(raw) = host.oauth_token {
+        return token(raw)?.ok_or(ProviderError::Authentication);
+    }
+    let bytes = keychain().await?.ok_or(ProviderError::Authentication)?;
+    copilot_keychain_token(&bytes)?.ok_or(ProviderError::Authentication)
 }
 
 async fn native_copilot_token() -> Result<Secret, ProviderError> {
@@ -1158,6 +1174,30 @@ mod tests {
                 .unwrap()
                 .0,
             "right"
+        );
+    }
+
+    #[tokio::test]
+    async fn copilot_gh_reference_uses_keychain_only_for_a_host_without_inline_token() {
+        let token = copilot_gh_reference_token(b"github.com:\n  user: fixture\n", || async {
+            Ok(Some(b"go-keyring-base64:cmlnaHQ=".to_vec()))
+        })
+        .await
+        .unwrap();
+        assert_eq!(token.0, "right");
+        let inline =
+            copilot_gh_reference_token(b"github.com:\n  oauth_token: inline\n", || async {
+                panic!("inline tokens must not access Keychain")
+            })
+            .await
+            .unwrap();
+        assert_eq!(inline.0, "inline");
+        assert!(
+            copilot_gh_reference_token(b"enterprise.example:\n  user: fixture\n", || async {
+                panic!("other hosts must not access GitHub Keychain")
+            })
+            .await
+            .is_err()
         );
     }
 }
