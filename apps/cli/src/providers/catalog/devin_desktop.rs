@@ -263,6 +263,17 @@ fn parse_usage(
         .and_then(Value::as_str)
         .filter(|id| !id.is_empty())
     {
+        let identity = crate::domain::VerifiedIdentity {
+            subject: id.to_owned(),
+            tenant: status
+                .get("teamId")
+                .and_then(Value::as_str)
+                .filter(|value| !value.is_empty())
+                .map(str::to_owned),
+        };
+        if identity.is_valid() {
+            usage.account.verified = Some(identity);
+        }
         usage.account.id = crate::cache::fingerprint(&[
             "devin-desktop",
             id,
@@ -309,6 +320,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(first.account.id, second.account.id);
+        assert_eq!(first.account.verified, second.account.verified);
+        assert_eq!(first.account.verified.as_ref().unwrap().subject, "user-1");
         assert_eq!(first.account.label, "person@example.test");
         root["userStatus"]["teamId"] = json!("other-team");
         let other = parse_usage(
@@ -318,6 +331,7 @@ mod tests {
         )
         .unwrap();
         assert_ne!(first.account.id, other.account.id);
+        assert_ne!(first.account.verified, other.account.verified);
     }
 
     #[test]

@@ -267,6 +267,7 @@ pub(crate) async fn fetch_oauth_at(
         account_ref: None,
         provider: ProviderId("factory".into()),
         account: AccountIdentity {
+            verified: None,
             id: id.clone(),
             label,
             plan: None,
@@ -374,6 +375,7 @@ fn parse(
         account_ref: None,
         provider: ProviderId("factory".into()),
         account: AccountIdentity {
+            verified: None,
             subscription_status: None,
             plan: None,
             id: format!("{}:{}", identity.user_id, identity.org_id),

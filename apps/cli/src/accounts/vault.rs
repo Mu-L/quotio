@@ -330,7 +330,12 @@ impl Vault {
                 }
                 let doc: Document =
                     serde_json::from_slice(&bytes).map_err(|_| AccountError::Corrupt)?;
-                if !matches!(doc.version, 1..=9)
+                if !matches!(doc.version, 1..=10)
+                    || (doc.version < 10 && doc.resolved.is_some())
+                    || doc
+                        .resolved
+                        .as_ref()
+                        .is_some_and(|state| state.validate(&doc.accounts).is_err())
                     || (doc.version < 9 && doc.accounts.iter().any(|a| a.naming.is_some()))
                     || doc.accounts.iter().any(|a| {
                         a.naming
@@ -454,6 +459,14 @@ impl Transaction {
         {
             self.document.version = self.document.version.max(9);
         }
+        if let Some(resolved) = &mut self.document.resolved {
+            resolved.synchronize(&self.document.accounts)?;
+            resolved.revision = resolved
+                .revision
+                .checked_add(1)
+                .ok_or(AccountError::Corrupt)?;
+            self.document.version = 10;
+        }
         let bytes = serde_json::to_vec(&self.document).map_err(|_| AccountError::Corrupt)?;
         if bytes.len() > 1024 * 1024 {
             return Err(AccountError::Input);
@@ -509,6 +522,80 @@ pub(crate) mod tests {
             region: None,
             organization: None,
         }
+    }
+
+    #[test]
+    fn resolved_metadata_migration_is_explicit_durable_and_reversible_without_credentials_rollback()
+    {
+        let memory = Arc::new(Memory::default());
+        let dir = std::env::temp_dir().join(random_string().unwrap());
+        let vault = Vault::new(memory.clone(), dir.join("lock"));
+        let mut tx = vault.begin().unwrap();
+        let id = tx
+            .document
+            .add(Provider::Amp, "Legacy", "old".into(), credential())
+            .unwrap();
+        tx.commit().unwrap();
+        let before = memory.read().unwrap().unwrap();
+        let tx = vault.begin().unwrap();
+        assert!(tx.document.resolved.is_none());
+        drop(tx);
+        assert_eq!(memory.read().unwrap().unwrap(), before);
+        memory.fail.store(true, Ordering::SeqCst);
+        let mut tx = vault.begin().unwrap();
+        tx.document.enable_resolved_accounts().unwrap();
+        assert!(matches!(tx.commit(), Err(AccountError::Storage)));
+        assert_eq!(memory.read().unwrap().unwrap(), before);
+        memory.fail.store(false, Ordering::SeqCst);
+        let mut tx = vault.begin().unwrap();
+        tx.document.enable_resolved_accounts().unwrap();
+        tx.commit().unwrap();
+        let mut tx = vault.begin().unwrap();
+        assert_eq!(tx.document.version, 10);
+        let registry = tx.document.resolved.as_ref().unwrap();
+        assert_eq!(registry.account_id_for_source(&id), Some(id.as_str()));
+        assert_eq!(registry.revision, 1);
+        let host_id = registry.host_id.clone();
+        tx.document.enable_resolved_accounts().unwrap();
+        tx.document.patch(&id, None, None, Some(false)).unwrap();
+        tx.commit().unwrap();
+        let mut tx = vault.begin().unwrap();
+        assert_eq!(tx.document.resolved.as_ref().unwrap().host_id, host_id);
+        assert_eq!(tx.document.resolved.as_ref().unwrap().revision, 2);
+        tx.document
+            .replace_api_key(
+                &id,
+                Provider::Amp,
+                "new".into(),
+                Credential::ApiKey {
+                    token: "rotated-secret-sentinel".into(),
+                    region: None,
+                    organization: None,
+                },
+            )
+            .unwrap();
+        tx.commit().unwrap();
+        let bytes = memory.read().unwrap().unwrap();
+        let mut malformed: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        malformed["version"] = 9.into();
+        memory
+            .write(&serde_json::to_vec(&malformed).unwrap())
+            .unwrap();
+        assert!(matches!(vault.begin(), Err(AccountError::Corrupt)));
+        memory.write(&bytes).unwrap();
+        let mut tx = vault.begin().unwrap();
+        tx.document.disable_resolved_accounts();
+        tx.commit().unwrap();
+        let tx = vault.begin().unwrap();
+        assert_eq!(tx.document.version, 9);
+        assert!(tx.document.resolved.is_none());
+        assert_eq!(tx.document.accounts[0].id, id);
+        assert!(!tx.document.accounts[0].enabled);
+        assert!(
+            matches!(&tx.document.accounts[0].credential, Credential::ApiKey { token, .. } if token == "rotated-secret-sentinel")
+        );
+        drop(tx);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

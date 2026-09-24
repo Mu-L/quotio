@@ -2055,6 +2055,16 @@
       "AccountIdentity": {
         "type": "object",
         "properties": {
+          "verified": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["subject", "tenant"],
+            "properties": {
+              "subject": {"type": "string", "minLength": 1, "maxLength": 512},
+              "tenant": {"type": ["string", "null"], "minLength": 1, "maxLength": 512}
+            },
+            "description": "Optional provider-verified subject and tenant. Local names and token fingerprints are not proof. Host grouping persists evidence only after a fresh authenticated fetch, never from a client-supplied report."
+          },
           "plan": {
             "type": [
               "string",

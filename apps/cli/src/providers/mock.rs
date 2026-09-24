@@ -21,6 +21,7 @@ impl ProviderAdapter for MockProvider {
                 account_ref: None,
                 provider: self.id(),
                 account: AccountIdentity {
+                    verified: None,
                     subscription_status: None,
                     plan: None,
                     id: "mock-account".into(),

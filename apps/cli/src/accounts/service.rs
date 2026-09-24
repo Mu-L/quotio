@@ -834,12 +834,18 @@ impl ManagedProvider {
         if !current.enabled() || current.credential != *credential {
             return Err(AccountError::Busy);
         }
+        let mut changed = false;
         if current.naming.is_some() {
-            let changed = current.observe_name(&usage.account.label)?;
+            changed = current.observe_name(&usage.account.label)?;
             usage.account.label = current.display_name().to_owned();
-            if changed {
-                commit(tx).await?;
-            }
+        }
+        if let (Some(resolved), Some(identity)) =
+            (&mut tx.document.resolved, &usage.account.verified)
+        {
+            changed |= resolved.observe(&self.id, identity)?;
+        }
+        if changed {
+            commit(tx).await?;
         }
         Ok(usage)
     }

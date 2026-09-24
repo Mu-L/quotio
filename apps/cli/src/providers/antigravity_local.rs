@@ -246,6 +246,7 @@ async fn probe(
         account_ref: None,
         provider: ProviderId("antigravity".into()),
         account: AccountIdentity {
+            verified: None,
             subscription_status: None,
             id: expected
                 .map(|(id, _)| id.to_owned())

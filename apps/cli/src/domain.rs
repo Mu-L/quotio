@@ -6,8 +6,29 @@ use time::OffsetDateTime;
 #[serde(transparent)]
 pub struct ProviderId(pub String);
 
+/// Identity asserted by an authenticated provider response, never inferred from a label/token hash.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct VerifiedIdentity {
+    pub subject: String,
+    pub tenant: Option<String>,
+}
+impl VerifiedIdentity {
+    pub fn is_valid(&self) -> bool {
+        let valid = |value: &str| {
+            !value.is_empty()
+                && value.len() <= 512
+                && value.trim() == value
+                && !value.chars().any(char::is_control)
+        };
+        valid(&self.subject) && self.tenant.as_deref().is_none_or(valid)
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct AccountIdentity {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verified: Option<VerifiedIdentity>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subscription_status: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

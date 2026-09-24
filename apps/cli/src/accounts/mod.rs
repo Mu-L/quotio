@@ -7,6 +7,7 @@ mod encrypted_file;
 mod input;
 pub mod oauth;
 pub(crate) mod proxy;
+pub mod resolved;
 pub mod service;
 pub mod sources;
 pub mod staging;
@@ -287,6 +288,8 @@ pub struct MutationReceipt {
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct Document {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolved: Option<resolved::Registry>,
     pub version: u8,
     pub accounts: Vec<Account>,
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
@@ -303,6 +306,7 @@ pub struct Document {
 impl Document {
     pub fn empty() -> Self {
         Self {
+            resolved: None,
             version: 1,
             accounts: vec![],
             mutation_receipts: Default::default(),
@@ -312,6 +316,23 @@ impl Document {
             antigravity_refresh_owners: Default::default(),
         }
     }
+    /// Explicit metadata migration; original source IDs, labels and credentials remain untouched.
+    pub fn enable_resolved_accounts(&mut self) -> Result<(), AccountError> {
+        if self.resolved.is_none() {
+            self.resolved = Some(resolved::Registry::new(&self.accounts)?);
+            self.version = 10;
+        }
+        Ok(())
+    }
+
+    /// Return to the preceding naming-aware reader without restoring stale credentials.
+    pub fn disable_resolved_accounts(&mut self) {
+        self.resolved = None;
+        if self.version == 10 {
+            self.version = 9;
+        }
+    }
+
     // Retain token lineage after rotation/removal so registration cannot bypass a fence.
     pub fn reserve_factory_refresh(
         &mut self,
@@ -578,6 +599,11 @@ impl Document {
             && let Some(naming) = &mut account.naming
         {
             naming.observed_name = None;
+        }
+        if account.identity != identity
+            && let Some(resolved) = &mut self.resolved
+        {
+            resolved.invalidate(id)?;
         }
         account.identity = identity;
         account.credential = credential;

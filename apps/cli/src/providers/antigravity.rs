@@ -429,6 +429,7 @@ impl AntigravityProvider {
             account_ref: None,
             provider: self.id(),
             account: AccountIdentity {
+                verified: None,
                 subscription_status: None,
                 plan: subscription_plan(&subscription),
                 id: before.id,
