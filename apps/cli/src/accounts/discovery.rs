@@ -182,10 +182,15 @@ impl Registry {
         if !inspect {
             return Ok(json!({"schema_version":1,"status":"not_checked","candidates":[]}));
         }
-        if location.as_deref() == Some("gh_keychain") {
-            return Ok(json!({"schema_version":1,"status":"unsupported","candidates":[]}));
-        }
-        let result = if kind == "copilot_native" && location.is_none() {
+        let keychain_present = kind == "copilot_native"
+            && location
+                .as_deref()
+                .is_none_or(|location| location == "gh_keychain")
+            && crate::providers::catalog::common::keychain_item_exists("gh:github.com", None)
+                .unwrap_or(false);
+        let result = if kind == "copilot_native" && location.as_deref() == Some("gh_keychain") {
+            Ok(Vec::new())
+        } else if kind == "copilot_native" && location.is_none() {
             let mut references = Vec::new();
             let mut failure = None;
             for location in ["apps", "hosts", "gh_hosts"] {
@@ -196,7 +201,7 @@ impl Registry {
                     Err(_) => (),
                 }
             }
-            if references.is_empty() {
+            if references.is_empty() && !keychain_present {
                 Err(failure.unwrap_or(AccountError::NotFound))
             } else {
                 Ok(references)
@@ -217,6 +222,9 @@ impl Registry {
             return Err(AccountError::Busy);
         }
         let mut candidates = Vec::new();
+        if keychain_present {
+            candidates.push(json!({"label":"GitHub CLI Keychain","status":"permission_required","source":{"kind":"copilot_native","location":"gh_keychain"}}));
+        }
         for (index, reference) in references.into_iter().enumerate() {
             let id = super::random_string()?;
             self.entries.insert(id.clone(), (Instant::now(), reference));

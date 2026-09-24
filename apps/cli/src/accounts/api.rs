@@ -362,6 +362,7 @@ pub enum SourceInput {
     },
     CopilotNative {
         location: super::sources::CopilotLocation,
+        #[serde(default)]
         entry_key: String,
     },
     ClaudeNative {
@@ -423,6 +424,13 @@ pub async fn prepare_source(input: SourceInput) -> Result<PreparedAccount, Accou
             location,
             entry_key,
         } => {
+            let entry_key = if entry_key.is_empty()
+                && location == super::sources::CopilotLocation::GhKeychain
+            {
+                "github.com".into()
+            } else {
+                entry_key
+            };
             let source = super::sources::CopilotNativeReference::system(location, entry_key)?;
             let resolved = source.resolve().await?;
             (

@@ -1,13 +1,17 @@
 use super::{
     AccountError,
     api::SourceInput,
-    sources::{AntigravityLocation, ClaudeLocation, FactoryLocation},
+    sources::{AntigravityLocation, ClaudeLocation, CopilotLocation, FactoryLocation},
 };
 
 pub(crate) fn target(
     input: &SourceInput,
 ) -> Result<(&'static str, Option<&'static str>), AccountError> {
     match input {
+        SourceInput::CopilotNative {
+            location: CopilotLocation::GhKeychain,
+            entry_key,
+        } if entry_key.is_empty() || entry_key == "github.com" => Ok(("gh:github.com", None)),
         SourceInput::ClaudeNative {
             location: ClaudeLocation::CodeKeychain,
         } => Ok(("Claude Code-credentials", None)),
@@ -46,6 +50,7 @@ mod tests {
     fn authorization_only_accepts_supported_keychain_sources() {
         for (kind, location) in [
             ("claude_native", "code_keychain"),
+            ("copilot_native", "gh_keychain"),
             ("factory_native", "v2_keyring"),
             ("antigravity_native", "gemini_keychain"),
         ] {

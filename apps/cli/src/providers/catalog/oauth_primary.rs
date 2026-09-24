@@ -727,7 +727,7 @@ pub(crate) async fn copilot_reference_token(
             token(raw)?.ok_or(ProviderError::Authentication)
         }
         None => {
-            let bytes = native_keychain("gh:github.com", Some(entry))
+            let bytes = native_keychain("gh:github.com", None)
                 .await?
                 .ok_or(ProviderError::Authentication)?;
             copilot_keychain_token(&bytes)?.ok_or(ProviderError::Authentication)
