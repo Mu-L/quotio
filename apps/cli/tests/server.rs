@@ -170,6 +170,9 @@ async fn http_snapshots_security_and_process_shutdown() {
             .contains_key("access-control-allow-origin")
     );
     let snapshot: serde_json::Value = response.json().await.unwrap();
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/contracts/usage-v1.json")).unwrap();
+    assert_eq!(snapshot["providers"], fixture["providers"]);
     assert_eq!(snapshot["schema_version"], 1);
     assert_eq!(snapshot["providers"][0]["provider"], "mock");
     assert_eq!(snapshot["failures"].as_array().unwrap().len(), 0);
@@ -197,6 +200,11 @@ async fn http_snapshots_security_and_process_shutdown() {
             .count(),
         1
     );
+    let expected = serde_json::to_value(quotio::providers::capabilities::ProviderList::new(&[
+        quotio::cli::Provider::Mock,
+    ]))
+    .unwrap();
+    assert_eq!(catalog, expected);
     for (path, status) in [
         ("/v1/usage/codex", 404),
         ("/v1/usage/not-a-provider", 404),

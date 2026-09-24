@@ -10,7 +10,13 @@ pub struct Cli {
 #[derive(Debug, Subcommand)]
 pub enum Command {
     /// List supported providers
-    Providers,
+    Providers {
+        #[arg(long, value_enum, default_value = "text")]
+        format: Format,
+        /// Read this TOML config instead of the platform default
+        #[arg(long)]
+        config: Option<PathBuf>,
+    },
     /// Assess one explicit Swift PIV envelope; never import or unlock credentials
     MigrationInspect {
         /// Absolute envelope path; symlink components are refused

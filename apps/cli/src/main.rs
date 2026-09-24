@@ -185,7 +185,25 @@ async fn run() -> ExitCode {
                 }
             };
         }
-        Command::Providers => (
+        Command::Providers {
+            format: Format::Json,
+            config,
+        } => match Config::load(config.as_deref()).and_then(|config| config.providers()) {
+            Ok(enabled) => match serde_json::to_string_pretty(
+                &quotio::providers::capabilities::ProviderList::new(&enabled),
+            ) {
+                Ok(value) => (format!("{value}\n"), 0),
+                Err(_) => return ExitCode::from(3),
+            },
+            Err(error) => {
+                eprintln!("{error}");
+                return ExitCode::from(2);
+            }
+        },
+        Command::Providers {
+            format: Format::Text,
+            ..
+        } => (
             Provider::value_variants()
                 .iter()
                 .map(|provider| {

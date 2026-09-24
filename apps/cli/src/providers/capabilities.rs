@@ -2,6 +2,44 @@
 use crate::cli::Provider;
 use serde::Serialize;
 
+#[derive(Serialize)]
+pub struct ProviderDescriptor {
+    pub id: Provider,
+    pub description: &'static str,
+    pub enabled: bool,
+    pub capabilities: ProviderCapability,
+}
+
+impl ProviderDescriptor {
+    pub fn new(provider: Provider, enabled: &[Provider]) -> Self {
+        Self {
+            id: provider,
+            description: provider.description(),
+            enabled: enabled.contains(&provider),
+            capabilities: capability(provider),
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub struct ProviderList {
+    pub schema_version: u32,
+    pub providers: Vec<ProviderDescriptor>,
+}
+
+impl ProviderList {
+    pub fn new(enabled: &[Provider]) -> Self {
+        use clap::ValueEnum;
+        Self {
+            schema_version: 1,
+            providers: Provider::value_variants()
+                .iter()
+                .map(|provider| ProviderDescriptor::new(*provider, enabled))
+                .collect(),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Serialize, PartialEq, Eq, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum AuthMethod {

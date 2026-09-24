@@ -65,6 +65,24 @@ fn argument_contract() {
     assert!(Cli::try_parse_from(["quotio", "usage", "--provider", "unknown"]).is_err());
 }
 #[test]
+fn provider_json_uses_the_http_contract() {
+    let config = ConfigFile::new("enabled_providers = [\"mock\"]");
+    let output = Command::new(env!("CARGO_BIN_EXE_quotio"))
+        .args(["providers", "--format", "json", "--config"])
+        .arg(&config.0)
+        .env_clear()
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let actual: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let expected = serde_json::to_value(quotio::providers::capabilities::ProviderList::new(&[
+        quotio::cli::Provider::Mock,
+    ]))
+    .unwrap();
+    assert_eq!(actual, expected);
+}
+
+#[test]
 fn json_contract_and_deduplication() {
     let config = ConfigFile::new("enabled_providers = []");
     let result = run(
@@ -84,6 +102,9 @@ fn json_contract_and_deduplication() {
     let value: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
     assert_eq!(value.as_object().unwrap().len(), 4);
     assert_eq!(value["schema_version"], 1);
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/contracts/usage-v1.json")).unwrap();
+    assert_eq!(value["providers"], fixture["providers"]);
     time::OffsetDateTime::parse(
         value["generated_at"].as_str().unwrap(),
         &time::format_description::well_known::Rfc3339,

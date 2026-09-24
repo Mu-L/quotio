@@ -5,6 +5,17 @@ import XCTest
 @testable import QuotioInfrastructure
 
 final class QuotioCLIBackendTests: XCTestCase {
+    func testSharedRustUsageContractFixtureDecodesWithoutProviderPolicy() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../../../").standardizedFileURL
+        let data = try Data(contentsOf: root.appendingPathComponent("apps/cli/tests/fixtures/contracts/usage-v1.json"))
+        let report = try makeQuotioCLIDecoder().decode(QuotioCLIUsageReport.self, from: data)
+        XCTAssertEqual(report.schemaVersion, 1)
+        XCTAssertEqual(report.providers.first?.account.label, "Demo account")
+        XCTAssertEqual(report.providers.first?.windows.count, 3)
+        XCTAssertTrue(report.failures.isEmpty)
+    }
+
     func testExistingNativeCopilotAccountUsesCurrentUsername() async throws {
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[{"provider":"copilot","account_ref":{"origin":"borrowed_native","id":"native","label":"Copilot oldhash"},"account":{"id":"user","label":"github-user"},"windows":[]}],"failures":[]}"#)
         let backend = QuotioCLIBackend(session: stubSession())

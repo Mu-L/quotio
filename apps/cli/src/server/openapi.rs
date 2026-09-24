@@ -152,7 +152,11 @@ mod tests {
     #[test]
     fn provider_routes_match_runtime_envelope() {
         let d = document_value();
-        let provider = super::super::provider_value(crate::cli::Provider::Codex, &[]);
+        let provider = serde_json::to_value(super::super::provider_value(
+            crate::cli::Provider::Codex,
+            &[],
+        ))
+        .unwrap();
         validate(
             &d["components"]["schemas"]["ProviderList"],
             &serde_json::json!({"schema_version":1,"providers":[provider.clone()]}),
@@ -168,88 +172,18 @@ mod tests {
         );
     }
 
-    fn resolve<'a>(schema: &'a Value, root: &'a Value) -> &'a Value {
-        if let Some(reference) = schema.get("$ref").and_then(Value::as_str) {
-            let mut current = root;
-            for part in reference[2..].split('/') {
-                let part = part.replace("~1", "/").replace("~0", "~");
-                current = &current[part];
-            }
-            current
-        } else {
-            schema
-        }
-    }
-
     fn validate(schema: &Value, value: &Value, root: &Value, path: &str) {
-        let schema = resolve(schema, root);
-        if let Some(options) = schema.get("oneOf").and_then(Value::as_array) {
-            assert!(
-                options.iter().any(|option| std::panic::catch_unwind(
-                    std::panic::AssertUnwindSafe(|| validate(option, value, root, path))
-                )
-                .is_ok()),
-                "{path}: no oneOf branch"
-            );
-            return;
-        }
-        if let Some(types) = schema.get("type").and_then(Value::as_array) {
-            assert!(
-                types
-                    .iter()
-                    .any(|kind| type_matches(kind.as_str().unwrap(), value)),
-                "{path}: wrong type"
-            );
-        } else if let Some(kind) = schema.get("type").and_then(Value::as_str) {
-            assert!(type_matches(kind, value), "{path}: wrong type");
-        }
-        if let Some(expected) = schema.get("const") {
-            assert_eq!(value, expected, "{path}: const");
-        }
-        if let Some(values) = schema.get("enum").and_then(Value::as_array) {
-            assert!(values.contains(value), "{path}: enum");
-        }
-        if let Some(properties) = schema.get("properties").and_then(Value::as_object) {
-            if let Some(required) = schema.get("required").and_then(Value::as_array) {
-                for key in required {
-                    assert!(
-                        value.get(key.as_str().unwrap()).is_some(),
-                        "{path}: missing {key}"
-                    );
-                }
-            }
-            if let Some(object) = value.as_object() {
-                if schema.get("additionalProperties") == Some(&Value::Bool(false)) {
-                    for key in object.keys() {
-                        assert!(properties.contains_key(key), "{path}: additional {key}");
-                    }
-                }
-                for (key, child) in properties {
-                    if let Some(actual) = object.get(key) {
-                        validate(child, actual, root, &format!("{path}/{key}"));
-                    }
-                }
-            }
-        }
-        if let Some(items) = schema.get("items")
-            && let Some(array) = value.as_array()
-        {
-            for (i, item) in array.iter().enumerate() {
-                validate(items, item, root, &format!("{path}/{i}"));
-            }
-        }
-    }
-    fn type_matches(kind: &str, value: &Value) -> bool {
-        match kind {
-            "object" => value.is_object(),
-            "array" => value.is_array(),
-            "string" => value.is_string(),
-            "number" => value.is_number(),
-            "integer" => value.as_i64().is_some() || value.as_u64().is_some(),
-            "boolean" => value.is_boolean(),
-            "null" => value.is_null(),
-            _ => true,
-        }
+        let mut schema = schema.clone();
+        schema["components"] = root["components"].clone();
+        let validator = jsonschema::draft202012::options()
+            .should_validate_formats(true)
+            .build(&schema)
+            .unwrap();
+        let errors: Vec<_> = validator
+            .iter_errors(value)
+            .map(|error| error.to_string())
+            .collect();
+        assert!(errors.is_empty(), "{path}: {}", errors.join("; "));
     }
 
     #[test]

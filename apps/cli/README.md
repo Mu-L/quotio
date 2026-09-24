@@ -45,6 +45,7 @@ this revision was verified with Rust 1.92.0. `Cargo.lock` pins dependencies.
 ```sh
 cargo run -- --help
 cargo run -- providers
+cargo run -- providers --format json --config ./config.toml
 cargo run -- usage
 cargo run -- usage --provider mock --format text
 cargo run -- usage --provider mock --format json
@@ -53,6 +54,8 @@ cargo run -- usage --config ./config.toml
 cargo run -- usage --provider codex --provider amp --timeout 30
 cargo run -- usage --provider antigravity --provider factory --format json
 ```
+
+`providers --format json` emits the same versioned provider catalog as HTTP `/v1/providers`, using the selected configuration for enabled flags. Text output remains the default. Contract tests validate the runtime registry against OpenAPI and share an offline usage fixture with Swift.
 
 Repeated provider IDs are deduplicated, keeping the first occurrence. Timeout is
 an integer from 1 to 3600 seconds, default 10, applied separately to each provider.

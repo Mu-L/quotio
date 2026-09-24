@@ -202,10 +202,15 @@ async fn status(State(state): State<Arc<ApiState>>) -> Json<Value> {
         json!({"schema_version":1,"ready":state.snapshot.read().await.as_ref().is_some_and(|(g,_)|*g==state.generation.load(Ordering::SeqCst)),"refreshing":status.refreshing,"last_completed_at":status.last_completed_at,"next_refresh_at":status.next_refresh_at,"settings_revision":settings.revision,"access_mode":if state.manage {"manage"} else {"read_only"},"account_storage_enabled":state.vault.is_some(),"api_version":1,"server_version":env!("CARGO_PKG_VERSION")}),
     )
 }
-fn provider_value(p: Provider, enabled: &[Provider]) -> Value {
-    json!({"id":p.id(),"description":p.description(),"enabled":enabled.contains(&p),"capabilities":crate::providers::capabilities::capability(p)})
+fn provider_value(
+    p: Provider,
+    enabled: &[Provider],
+) -> crate::providers::capabilities::ProviderDescriptor {
+    crate::providers::capabilities::ProviderDescriptor::new(p, enabled)
 }
-async fn providers(State(state): State<Arc<ApiState>>) -> Json<Value> {
+async fn providers(
+    State(state): State<Arc<ApiState>>,
+) -> Json<crate::providers::capabilities::ProviderList> {
     let enabled = state
         .settings
         .read()
@@ -213,9 +218,7 @@ async fn providers(State(state): State<Arc<ApiState>>) -> Json<Value> {
         .values
         .providers()
         .unwrap_or_default();
-    Json(
-        json!({"schema_version":1,"providers":Provider::value_variants().iter().map(|p|provider_value(*p,&enabled)).collect::<Vec<_>>()}),
-    )
+    Json(crate::providers::capabilities::ProviderList::new(&enabled))
 }
 async fn provider(State(state): State<Arc<ApiState>>, Path(id): Path<String>) -> Response {
     let Some(p) = Provider::value_variants().iter().find(|p| p.id() == id) else {

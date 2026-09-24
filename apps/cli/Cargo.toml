@@ -28,4 +28,5 @@ core-foundation = "0.10"
 security-framework-sys = "2.15"
 
 [dev-dependencies]
+jsonschema = { version = "0.33.0", default-features = false }
 tokio = { version = "1", features = ["test-util"] }
