@@ -10,7 +10,7 @@ pub(crate) fn load(path: &Path) -> Result<Credential, AccountError> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        options.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_NONBLOCK);
+        options.custom_flags(libc::O_CLOEXEC | libc::O_NONBLOCK);
     }
     let file = options.open(path).map_err(|error| {
         if error.kind() == std::io::ErrorKind::NotFound {

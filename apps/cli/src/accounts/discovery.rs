@@ -425,45 +425,30 @@ fn custom_references(
     }
     Ok(result)
 }
-// Walk every path component with openat: neither parent nor leaf symlinks may
-// redirect this explicit inspection into another credential store.
+// Native clients may keep their login files in symlinked directories or files.
+// Callers validate the opened target's type and bound any reads.
 fn open_native(path: &Path) -> Result<std::fs::File, AccountError> {
     #[cfg(unix)]
     {
-        use std::os::fd::{AsRawFd, FromRawFd};
-        if !path.is_absolute() {
+        use std::os::unix::fs::OpenOptionsExt;
+        if !path.is_absolute()
+            || path
+                .components()
+                .any(|part| matches!(part, std::path::Component::ParentDir))
+        {
             return Err(AccountError::Input);
         }
-        let mut file = std::fs::File::open("/").map_err(|_| AccountError::Storage)?;
-        let parts: Vec<_> = path.components().skip(1).collect();
-        for (i, part) in parts.iter().enumerate() {
-            let std::path::Component::Normal(name) = part else {
-                return Err(AccountError::Input);
-            };
-            use std::os::unix::ffi::OsStrExt;
-            let name = std::ffi::CString::new(name.as_bytes()).map_err(|_| AccountError::Input)?;
-            let flags = libc::O_RDONLY
-                | libc::O_NOFOLLOW
-                | libc::O_NONBLOCK
-                | libc::O_CLOEXEC
-                | if i + 1 < parts.len() {
-                    libc::O_DIRECTORY
+        std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NONBLOCK | libc::O_CLOEXEC)
+            .open(path)
+            .map_err(|error| {
+                if error.kind() == std::io::ErrorKind::NotFound {
+                    AccountError::NotFound
                 } else {
-                    0
-                };
-            let fd = unsafe { libc::openat(file.as_raw_fd(), name.as_ptr(), flags) };
-            if fd < 0 {
-                return Err(
-                    if std::io::Error::last_os_error().kind() == std::io::ErrorKind::NotFound {
-                        AccountError::NotFound
-                    } else {
-                        AccountError::Storage
-                    },
-                );
-            }
-            file = unsafe { std::fs::File::from_raw_fd(fd) };
-        }
-        Ok(file)
+                    AccountError::Storage
+                }
+            })
     }
     #[cfg(not(unix))]
     {
@@ -498,6 +483,62 @@ fn read_native(path: &Path) -> Result<Vec<u8>, AccountError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn codex_discovery_and_loading_follow_directory_and_file_symlinks() {
+        let dir = std::env::temp_dir().join(super::super::random_string().unwrap());
+        std::fs::create_dir_all(dir.join("store")).unwrap();
+        let home = dir.canonicalize().unwrap();
+        let target = home.join("store/login.json");
+        let bytes = br#"{"tokens":{"access_token":"fixture","account_id":"first"}}"#;
+        std::fs::write(&target, bytes).unwrap();
+        std::os::unix::fs::symlink("store", home.join(".codex")).unwrap();
+        std::os::unix::fs::symlink("login.json", home.join("store/auth.json")).unwrap();
+        let mut registry = Registry {
+            home: Some(home.clone()),
+            ..Default::default()
+        };
+        let request = serde_json::from_value(json!({
+            "provider":"codex", "kind":"codex_native", "location":"default", "inspect":true
+        }))
+        .unwrap();
+        let discovered = registry.inspect(request).unwrap();
+        assert_eq!(discovered["status"], "checked");
+        assert_eq!(discovered["candidates"].as_array().unwrap().len(), 1);
+        let source = CodexNativeReference {
+            path: home.join(".codex/auth.json"),
+        };
+        let resolved = source.resolve().await.unwrap();
+        assert!(
+            matches!(&resolved.credentials[0], super::super::Credential::CodexOAuth { account_id, .. } if account_id == "first")
+        );
+        assert_eq!(std::fs::read(&target).unwrap(), bytes);
+
+        std::fs::write(
+            &target,
+            br#"{"tokens":{"access_token":"rotated","account_id":"second"}}"#,
+        )
+        .unwrap();
+        let resolved = source.resolve().await.unwrap();
+        assert!(
+            matches!(&resolved.credentials[0], super::super::Credential::CodexOAuth { account_id, .. } if account_id == "second")
+        );
+        std::fs::remove_file(&target).unwrap();
+        assert!(!native_file_exists(&source.path));
+        assert!(matches!(
+            source.resolve().await,
+            Err(AccountError::NotFound)
+        ));
+        std::os::unix::fs::symlink("/dev/zero", &target).unwrap();
+        assert!(!native_file_exists(&source.path));
+        assert!(source.resolve().await.is_err());
+        std::fs::remove_file(&target).unwrap();
+        std::os::unix::fs::symlink("login.json", &target).unwrap();
+        assert!(!native_file_exists(&source.path));
+        assert!(source.resolve().await.is_err());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
     fn request(inspect: bool) -> Request {
         serde_json::from_value(json!({"provider":"grok","kind":"grok_native","inspect":inspect}))
             .unwrap()
@@ -546,10 +587,11 @@ mod tests {
             );
             std::fs::remove_file(&path).unwrap();
             std::fs::remove_dir(home.join(".grok")).unwrap();
-            std::os::unix::fs::symlink("/", home.join(".grok")).unwrap();
+            std::fs::create_dir(home.join("empty")).unwrap();
+            std::os::unix::fs::symlink("empty", home.join(".grok")).unwrap();
             assert_eq!(
                 registry.inspect(request(true)).unwrap()["status"],
-                "unreadable"
+                "unavailable"
             );
         }
         std::fs::remove_dir_all(dir).unwrap();
