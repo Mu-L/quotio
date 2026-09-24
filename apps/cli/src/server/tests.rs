@@ -347,6 +347,47 @@ fn first_scoped_refresh_seeds_the_snapshot() {
 }
 
 #[test]
+fn scoped_refresh_replaces_snapshot_invalidated_by_oauth() {
+    for account in [None, Some("new-account")] {
+        let mut snapshot = Some((
+            0,
+            UsageReport {
+                schema_version: 1,
+                generated_at: time::OffsetDateTime::UNIX_EPOCH,
+                providers: vec![],
+                failures: vec![ProviderFailure {
+                    provider: ProviderId("amp".into()),
+                    account_ref: None,
+                    code: ProviderError::Unavailable,
+                    message: ProviderError::Unavailable.to_string(),
+                }],
+            },
+        ));
+        let report = UsageReport {
+            schema_version: 1,
+            generated_at: time::OffsetDateTime::UNIX_EPOCH + time::Duration::seconds(1),
+            providers: vec![],
+            failures: vec![],
+        };
+        assert!(merge_refresh_report(
+            &mut snapshot,
+            1,
+            &[Provider::Codex],
+            &[Provider::Amp, Provider::Codex],
+            account,
+            report,
+        ));
+        let (generation, report) = snapshot.unwrap();
+        assert_eq!(generation, 1);
+        assert!(report.failures.is_empty());
+        assert_eq!(
+            report.generated_at,
+            time::OffsetDateTime::UNIX_EPOCH + time::Duration::seconds(1)
+        );
+    }
+}
+
+#[test]
 fn full_refresh_initializes_snapshot_independent_of_provider_order() {
     let report = UsageReport {
         schema_version: 1,

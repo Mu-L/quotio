@@ -605,12 +605,14 @@ fn merge_refresh_report(
     let full_refresh = account.is_none()
         && selected.len() == enabled.len()
         && selected.iter().all(|provider| enabled.contains(provider));
-    if full_refresh {
+    // OAuth can advance the generation without clearing the previous snapshot.
+    // Seed the current scope instead of retaining data from that invalidated state.
+    if full_refresh || snapshot.as_ref().is_some_and(|(old, _)| *old != generation) {
         *snapshot = Some((generation, report));
         return true;
     }
 
-    let (old_generation, previous) = snapshot.get_or_insert_with(|| {
+    let (_, previous) = snapshot.get_or_insert_with(|| {
         (
             generation,
             UsageReport {
@@ -621,9 +623,6 @@ fn merge_refresh_report(
             },
         )
     });
-    if *old_generation != generation {
-        return false;
-    }
     let matches = |provider: &ProviderId, reference: Option<&crate::domain::AccountRef>| {
         selected.iter().any(|p| p.id() == provider.0)
             && account.is_none_or(|a| reference.is_some_and(|r| r.id == a))
