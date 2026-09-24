@@ -93,11 +93,11 @@ fn headless_cli_reads_selects_removes_and_restarts_with_encrypted_accounts() {
     );
     assert!(!String::from_utf8_lossy(&list.stdout).contains("fixture-token"));
     let rows: serde_json::Value = serde_json::from_slice(&list.stdout).unwrap();
-    let second = rows[1]["id"].as_str().unwrap();
+    let second = rows["accounts"][1]["id"].as_str().unwrap();
     assert!(f.run(&["accounts", "use", "--", second]).status.success());
     let rows: serde_json::Value =
         serde_json::from_slice(&f.run(&["accounts", "list", "--format", "json"]).stdout).unwrap();
-    assert_eq!(rows[1]["active"], true);
+    assert_eq!(rows["accounts"][1]["active"], true);
     assert!(
         f.run(&["accounts", "remove", "--", second])
             .status
@@ -105,8 +105,8 @@ fn headless_cli_reads_selects_removes_and_restarts_with_encrypted_accounts() {
     );
     let rows: serde_json::Value =
         serde_json::from_slice(&f.run(&["accounts", "list", "--format", "json"]).stdout).unwrap();
-    assert_eq!(rows.as_array().unwrap().len(), 1);
-    assert_eq!(rows[0]["active"], true);
+    assert_eq!(rows["accounts"].as_array().unwrap().len(), 1);
+    assert_eq!(rows["accounts"][0]["active"], true);
     assert!(
         !fs::read(path)
             .unwrap()

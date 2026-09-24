@@ -1,0 +1,65 @@
+{
+  "schema_version": 2,
+  "host": {
+    "id": "host-fixture",
+    "platform": "macos",
+    "api_versions": [
+      1,
+      2
+    ],
+    "capabilities": {
+      "account_read": {
+        "available": true,
+        "reason": null
+      },
+      "account_write_v2": {
+        "available": false,
+        "reason": "not_implemented"
+      }
+    }
+  },
+  "revision": 7,
+  "accounts": [
+    {
+      "id": "source-a",
+      "provider_id": "amp",
+      "display_name": "Work",
+      "user_label": "Work",
+      "identity": {
+        "evidence": "verified",
+        "username": null,
+        "email": null
+      },
+      "enabled": true,
+      "state": "not_checked",
+      "sources": [
+        {
+          "id": "source-a",
+          "origin": "owned",
+          "kind": "owned_credential",
+          "location": null,
+          "enabled": true,
+          "selected": false,
+          "state": "not_checked",
+          "refresh_owner": "none",
+          "issue": null,
+          "actions": []
+        },
+        {
+          "id": "source-b",
+          "origin": "owned",
+          "kind": "owned_credential",
+          "location": null,
+          "enabled": true,
+          "selected": false,
+          "state": "not_checked",
+          "refresh_owner": "none",
+          "issue": null,
+          "actions": []
+        }
+      ],
+      "actions": [],
+      "active": true
+    }
+  ]
+}

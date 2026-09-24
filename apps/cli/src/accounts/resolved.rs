@@ -48,6 +48,16 @@ impl Registry {
             .or_else(|| self.redirects.get(id).map(String::as_str))
     }
 
+    pub fn source_ids(&self, account_id: &str) -> Result<Vec<String>, AccountError> {
+        let canonical = self.resolve_id(account_id).ok_or(AccountError::NotFound)?;
+        Ok(self
+            .bindings
+            .iter()
+            .filter(|(_, binding)| binding.account_id == canonical)
+            .map(|(id, _)| id.clone())
+            .collect())
+    }
+
     /// A live failed fetch must not erase the last confirmed identity.
     /// Call invalidate explicitly when replacing a credential with a different account.
     pub fn observe(
@@ -213,6 +223,7 @@ impl Registry {
                         username: None,
                         email: None,
                     },
+                    active: records.iter().any(|record| record.active),
                     enabled,
                     state: if enabled {
                         view::ConnectionState::NotChecked

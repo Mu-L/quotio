@@ -5,6 +5,30 @@ import XCTest
 @testable import QuotioInfrastructure
 
 final class QuotioCLIBackendTests: XCTestCase {
+    func testResolvedAccountReadUsesRustNamesGroupsAndActionsUnchanged() async throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../../../").standardizedFileURL
+        let data = try Data(contentsOf: root.appendingPathComponent("apps/cli/tests/fixtures/contracts/accounts-v2.json"))
+        QuotioCLIURLProtocol.enqueue(try XCTUnwrap(String(data: data, encoding: .utf8)))
+        let backend = QuotioCLIBackend(session: stubSession())
+        await backend.connect(.init(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
+        let result = try await backend.resolvedAccounts()
+        XCTAssertEqual(result.accounts.count, 1)
+        XCTAssertEqual(result.accounts[0].id, "source-a")
+        XCTAssertEqual(result.accounts[0].displayName, "Work")
+        XCTAssertEqual(result.accounts[0].sources.count, 2)
+        XCTAssertTrue(result.accounts[0].actions.isEmpty)
+        XCTAssertEqual(result.accounts[0].state, "not_checked")
+        XCTAssertEqual(QuotioCLIURLProtocol.requests().last?.url?.path, "/v2/accounts")
+        var incompatible = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        incompatible["schema_version"] = 3
+        QuotioCLIURLProtocol.enqueue(try XCTUnwrap(String(data: JSONSerialization.data(withJSONObject: incompatible), encoding: .utf8)))
+        do {
+            _ = try await backend.resolvedAccounts()
+            XCTFail("Unsupported contract must not reach the frontend")
+        } catch QuotioCLIBackendError.incompatible {}
+    }
+
     func testSharedRustUsageContractFixtureDecodesWithoutProviderPolicy() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .appendingPathComponent("../../../../").standardizedFileURL

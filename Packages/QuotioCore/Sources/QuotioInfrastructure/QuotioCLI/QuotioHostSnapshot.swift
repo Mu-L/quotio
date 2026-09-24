@@ -48,6 +48,7 @@ struct QuotioHostSnapshot: Decodable, Sendable {
         let userLabel: String?
         let identity: Identity
         let enabled: Bool
+        let active: Bool
         let state: String
         let sources: [Source]
         let actions: [Action]
@@ -85,4 +86,11 @@ struct QuotioHostSnapshot: Decodable, Sendable {
         }
         return value
     }
+}
+
+struct QuotioHostAccountList: Decodable, Sendable {
+    let schemaVersion: Int
+    let host: QuotioHostSnapshot.Host
+    let revision: UInt64
+    let accounts: [QuotioHostSnapshot.Account]
 }

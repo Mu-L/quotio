@@ -277,12 +277,8 @@ pub enum AccountCommand {
         #[arg(long = "setting", value_name = "NAME=VALUE")]
         settings: Vec<String>,
     },
-    /// Initialize persistent logical account IDs for the version 2 read API
-    Initialize,
     /// List saved account metadata without credentials
     List {
-        #[arg(long, default_value_t = 1, value_parser = clap::value_parser!(u8).range(1..=2))]
-        schema_version: u8,
         #[arg(long, value_enum, default_value = "text")]
         format: Format,
     },

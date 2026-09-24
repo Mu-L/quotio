@@ -31,18 +31,7 @@ async fn run_with_vault(
                     .into(),
             )
         }
-        AccountCommand::Initialize => {
-            let intent = service::MutationIntent::new(
-                &super::random_string()?,
-                crate::cache::fingerprint(&["initialize_resolved_accounts"]),
-            )?;
-            let id = super::api::initialize_resolved_once(vault, intent).await?;
-            Ok(format!("Resolved account model initialized: {id}\n"))
-        }
-        AccountCommand::List {
-            format,
-            schema_version: 2,
-        } => {
+        AccountCommand::List { format } => {
             let accounts = super::api::resolved_list(vault).await?;
             match format {
                 Format::Json => serde_json::to_string_pretty(&accounts)
@@ -60,39 +49,12 @@ async fn run_with_vault(
                     .collect()),
             }
         }
-        AccountCommand::List { format, .. } => {
-            let accounts = service::list(vault).await?;
-            match format {
-                Format::Json => serde_json::to_string_pretty(
-                    &accounts.iter().map(|a| a.info()).collect::<Vec<_>>(),
-                )
-                .map(|s| format!("{s}\n"))
-                .map_err(|_| AccountError::Corrupt),
-                Format::Text => {
-                    if accounts.is_empty() {
-                        return Ok("No saved accounts. Run quotio accounts add --help.\n".into());
-                    }
-                    Ok(accounts
-                        .iter()
-                        .map(|a| {
-                            format!(
-                                "{} {}  {}  {}\n",
-                                if a.active { "*" } else { " " },
-                                a.id,
-                                a.provider.to_possible_value().expect("provider").get_name(),
-                                a.display_name()
-                            )
-                        })
-                        .collect())
-                }
-            }
-        }
         AccountCommand::Use { id } => {
-            service::select(vault, id).await?;
+            service::select_resolved(vault, id).await?;
             Ok("Active account updated.\n".into())
         }
         AccountCommand::Remove { id } => {
-            service::remove(vault, id).await?;
+            service::remove_resolved(vault, id).await?;
             Ok("Account removed from Quotio.\n".into())
         }
         AccountCommand::Add {
@@ -262,17 +224,9 @@ mod tests {
             .unwrap();
         tx.commit().unwrap();
         let context = crate::providers::http::fixture::context();
-        super::run_with_vault(
-            crate::cli::AccountCommand::Initialize,
-            &context,
-            vault.clone(),
-        )
-        .await
-        .unwrap();
         let output = super::run_with_vault(
             crate::cli::AccountCommand::List {
                 format: crate::cli::Format::Json,
-                schema_version: 2,
             },
             &context,
             vault.clone(),
@@ -287,20 +241,10 @@ mod tests {
             serde_json::to_value(expected).unwrap()
         );
         assert!(!output.contains("not-in-the-response"));
-        let legacy = super::run_with_vault(
-            crate::cli::AccountCommand::List {
-                format: crate::cli::Format::Json,
-                schema_version: 1,
-            },
-            &context,
-            vault,
-        )
-        .await
-        .unwrap();
         assert!(
-            serde_json::from_str::<serde_json::Value>(&legacy)
-                .unwrap()
-                .is_array()
+            clap::Parser::try_parse_from(["quotio", "accounts", "list", "--schema-version", "2"])
+                .map(|_: crate::cli::Cli| ())
+                .is_err()
         );
         std::fs::remove_dir_all(dir).unwrap();
     }

@@ -100,6 +100,7 @@ pub struct Account {
     pub user_label: Option<String>,
     pub identity: Identity,
     pub enabled: bool,
+    pub active: bool,
     pub state: ConnectionState,
     pub sources: Vec<Source>,
     pub actions: Vec<Action>,

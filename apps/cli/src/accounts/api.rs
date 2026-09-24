@@ -660,31 +660,20 @@ pub async fn create(
 }
 pub async fn resolved_list(vault: Vault) -> Result<crate::contract::AccountList, AccountError> {
     tokio::task::spawn_blocking(move || {
-        let tx = vault.begin()?;
+        let mut tx = vault.begin()?;
+        if tx.document.resolved.is_none() {
+            tx.document.enable_resolved_accounts()?;
+            tx.commit()?;
+            tx = vault.begin()?;
+        }
         tx.document
             .resolved
             .as_ref()
-            .ok_or(AccountError::ModelNotInitialized)?
+            .expect("initialized")
             .account_list(&tx.document.accounts)
     })
     .await
     .map_err(|_| AccountError::Storage)?
-}
-
-pub async fn initialize_resolved_once(
-    vault: Vault,
-    intent: service::MutationIntent,
-) -> Result<String, AccountError> {
-    service::commit_once(vault, intent, |document| {
-        document.enable_resolved_accounts()?;
-        Ok(document
-            .resolved
-            .as_ref()
-            .expect("initialized")
-            .host_id
-            .clone())
-    })
-    .await
 }
 
 pub async fn list(vault: Vault) -> Result<Vec<AccountDto>, AccountError> {

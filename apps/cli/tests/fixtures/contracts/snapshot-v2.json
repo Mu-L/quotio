@@ -50,7 +50,8 @@
           "reason": null,
           "interaction": "host"
         }
-      ]
+      ],
+      "active": true
     },
     {
       "id": "devin-desktop-account",
@@ -97,7 +98,8 @@
           "reason": null,
           "interaction": "host"
         }
-      ]
+      ],
+      "active": true
     }
   ],
   "usage": [

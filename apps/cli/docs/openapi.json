@@ -13,7 +13,7 @@
     "/v2/accounts": {
       "get": {
         "summary": "Read resolved accounts without provider network requests",
-        "description": "Requires initialized resolved metadata and enabled account storage. Version 2 account writes are not advertised yet.",
+        "description": "Reads the shared resolved account model. Protected metadata is initialized atomically on first access; repeated reads do not change IDs or revision. No native provider credential scan or provider HTTP request is performed.",
         "security": [
           {
             "bearerAuth": []
@@ -21,7 +21,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Resolved account list shared with CLI --schema-version 2",
+            "description": "Resolved account list shared with the default CLI account list",
             "content": {
               "application/json": {
                 "schema": {
@@ -30,72 +30,8 @@
               }
             }
           },
-          "409": {
-            "description": "account_model_not_initialized"
-          },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
-          },
-          "503": {
-            "$ref": "#/components/responses/Unavailable"
-          }
-        }
-      }
-    },
-    "/v2/accounts/initialize": {
-      "post": {
-        "summary": "Explicitly initialize persistent logical account metadata",
-        "description": "Management-only, idempotent protected metadata migration. Does not scan provider credentials or restore old tokens. Poll the returned operation at /v1/operations/{id}; result contains host_id.",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 128
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "responses": {
-          "202": {
-            "description": "Initialization operation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Operation"
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "405": {
-            "$ref": "#/components/responses/MethodNotAllowed"
-          },
-          "409": {
-            "$ref": "#/components/responses/Conflict"
           },
           "503": {
             "$ref": "#/components/responses/Unavailable"
@@ -4186,7 +4122,8 @@
           "enabled",
           "state",
           "sources",
-          "actions"
+          "actions",
+          "active"
         ],
         "properties": {
           "id": {
@@ -4240,6 +4177,10 @@
             "items": {
               "$ref": "#/components/schemas/V2Action"
             }
+          },
+          "active": {
+            "type": "boolean",
+            "description": "Whether a source of this logical account is the selected CLI account for its provider."
           }
         }
       },

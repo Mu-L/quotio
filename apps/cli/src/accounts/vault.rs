@@ -525,8 +525,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn resolved_metadata_migration_is_explicit_durable_and_reversible_without_credentials_rollback()
-    {
+    fn resolved_metadata_initialization_is_durable_and_preserves_credentials() {
         let memory = Arc::new(Memory::default());
         let dir = std::env::temp_dir().join(random_string().unwrap());
         let vault = Vault::new(memory.clone(), dir.join("lock"));
@@ -583,12 +582,9 @@ pub(crate) mod tests {
             .unwrap();
         assert!(matches!(vault.begin(), Err(AccountError::Corrupt)));
         memory.write(&bytes).unwrap();
-        let mut tx = vault.begin().unwrap();
-        tx.document.disable_resolved_accounts();
-        tx.commit().unwrap();
         let tx = vault.begin().unwrap();
-        assert_eq!(tx.document.version, 9);
-        assert!(tx.document.resolved.is_none());
+        assert_eq!(tx.document.version, 10);
+        assert!(tx.document.resolved.is_some());
         assert_eq!(tx.document.accounts[0].id, id);
         assert!(!tx.document.accounts[0].enabled);
         assert!(

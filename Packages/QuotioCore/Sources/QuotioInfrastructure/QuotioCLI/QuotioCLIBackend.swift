@@ -408,6 +408,15 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         }
     }
 
+    func resolvedAccounts() async throws -> QuotioHostAccountList {
+        guard let client else { throw QuotioCLIBackendError.disconnected }
+        let result: QuotioHostAccountList = try await client.request("v2/accounts")
+        guard result.schemaVersion == 2, result.host.apiVersions.contains(2) else {
+            throw QuotioCLIBackendError.incompatible
+        }
+        return result
+    }
+
     public func importLegacyAccount(_ account: Account, credential: StoredCredential, disabled: Bool) async throws {
         guard let client else { throw QuotioCLIBackendError.disconnected }
         struct Import: Encodable {

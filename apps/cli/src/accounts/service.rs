@@ -485,6 +485,52 @@ pub async fn add(
 pub async fn list(vault: Vault) -> Result<Vec<Account>, AccountError> {
     Ok(begin(vault).await?.document.accounts.clone())
 }
+pub async fn select_resolved(vault: Vault, id: String) -> Result<(), AccountError> {
+    let mut tx = begin(vault).await?;
+    tx.document.enable_resolved_accounts()?;
+    let ids = tx
+        .document
+        .resolved
+        .as_ref()
+        .expect("initialized")
+        .source_ids(&id)?;
+    let selected = tx
+        .document
+        .accounts
+        .iter()
+        .filter(|account| ids.contains(&account.id) && account.enabled())
+        .min_by_key(|account| {
+            (
+                if account.origin() == super::AccountOrigin::Owned {
+                    0
+                } else {
+                    1
+                },
+                account.id.clone(),
+            )
+        })
+        .ok_or(AccountError::SourceDisabled)?
+        .id
+        .clone();
+    tx.document.select(&selected)?;
+    commit(tx).await
+}
+
+pub async fn remove_resolved(vault: Vault, id: String) -> Result<(), AccountError> {
+    let mut tx = begin(vault).await?;
+    tx.document.enable_resolved_accounts()?;
+    let ids = tx
+        .document
+        .resolved
+        .as_ref()
+        .expect("initialized")
+        .source_ids(&id)?;
+    for id in ids {
+        tx.document.remove(&id)?;
+    }
+    commit(tx).await
+}
+
 pub async fn select(vault: Vault, id: String) -> Result<(), AccountError> {
     let mut tx = begin(vault).await?;
     tx.document.select(&id)?;
@@ -1385,6 +1431,54 @@ mod tests {
         sync::atomic::{AtomicUsize, Ordering},
         time::Duration,
     };
+
+    #[tokio::test]
+    async fn cli_mutations_accept_logical_ids_after_the_original_source_is_removed() {
+        let dir = std::env::temp_dir().join(random_string().unwrap());
+        let vault = Vault::new(Arc::new(Memory::default()), dir.join("lock"));
+        let mut tx = vault.begin().unwrap();
+        let mut ids = Vec::new();
+        for label in ["One", "Two"] {
+            ids.push(
+                tx.document
+                    .add(
+                        Provider::Amp,
+                        label,
+                        label.into(),
+                        Credential::ApiKey {
+                            token: format!("fixture-{label}"),
+                            region: None,
+                            organization: None,
+                        },
+                    )
+                    .unwrap(),
+            );
+        }
+        tx.document.enable_resolved_accounts().unwrap();
+        let registry = tx.document.resolved.as_mut().unwrap();
+        for id in &ids {
+            registry
+                .observe(
+                    id,
+                    &crate::domain::VerifiedIdentity {
+                        subject: "same".into(),
+                        tenant: None,
+                    },
+                )
+                .unwrap();
+        }
+        tx.document.remove(&ids[0]).unwrap();
+        tx.commit().unwrap();
+        select_resolved(vault.clone(), ids[0].clone())
+            .await
+            .unwrap();
+        assert!(get(vault.clone(), ids[1].clone()).await.unwrap().active);
+        remove_resolved(vault.clone(), ids[0].clone())
+            .await
+            .unwrap();
+        assert!(list(vault).await.unwrap().is_empty());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[tokio::test]
     async fn resolved_names_persist_and_match_cli_http_without_overwriting_user_or_legacy_labels() {

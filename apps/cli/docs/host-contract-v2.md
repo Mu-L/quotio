@@ -1,6 +1,6 @@
 # Resolved host contract v2
 
-The resolved account read API is available after explicit initialization. Full v2 snapshots and account writes are not enabled yet; production macOS still uses v1. v1 CLI and HTTP shapes remain compatible. The definitions are published under `V2*` in `openapi.json`; Rust types live in `src/contract.rs`. Frontends must not switch production CRUD or quota traffic until their corresponding v2 operations and snapshot services are available.
+The resolved account read API initializes its protected metadata automatically on first access. Full v2 snapshots and account writes are not enabled yet; production macOS still uses v1. There is no CLI schema-selection flag or compatibility guarantee for the old account array. Older production routes are being removed as the frontend cutover proceeds. The definitions are published under `V2*` in `openapi.json`; Rust types live in `src/contract.rs`. Frontends must not switch production CRUD or quota traffic until their corresponding v2 operations and snapshot services are available.
 
 ## Resource ownership
 
@@ -19,7 +19,7 @@ Each usage entry references one account. Source IDs are unique across a host sna
 - `not_loaded`, `fresh`, `stale` and `unavailable` are distinct. Empty metrics with a valid plan are supported. Unknown, disabled, unlimited and measured quota must not be collapsed into zero.
 - Action `interaction` distinguishes work on the client, work on the host, and a person required at the host. This is not permission to bypass OS approval. Credentials never occur in these response types.
 - A snapshot contains resolved accounts and usage atomically. It is not a request to rescan credentials or call provider APIs. Account lists must remain available without network refresh.
-- v1 routes and CLI JSON keep their existing schema and IDs. A future v2 transport must be selected explicitly during migration. The types do not authorize a storage migration or remote network listener.
+- The resolved model is the default contract. Existing credentials and source IDs are retained during data migration; old API shapes and schema-selection flags are not supported. Remote listeners still require a separate secure transport implementation.
 
 ## Checks
 
@@ -35,18 +35,18 @@ Naming-aware writes require protected vault format 9. Readers reject naming meta
 
 ## Verified identity registry
 
-Vault format 10 adds an explicit, opt-in resolved-account registry. Enabling it preserves every credential record and original source ID, starts logical account IDs from those stable IDs, and assigns a persistent host ID. Successful commits advance a checked monotonic revision. Reading a legacy vault does not enable the registry.
+Vault format 10 stores the resolved-account registry. Enabling it preserves every credential record and original source ID, starts logical account IDs from those stable IDs, and assigns a persistent host ID. Successful commits advance a checked monotonic revision. Reading the resolved account view initializes the registry if absent, then returns its committed revision.
 
 Only `VerifiedIdentity { subject, tenant }` supplied by a fresh authenticated provider fetch can merge sources of the same provider. Labels, emails, local metadata, token fingerprints and cached/client-supplied reports are not identity proof. Devin Desktop currently emits evidence from `GetUserStatus.userId` and `teamId`; other adapters remain unverified until their identity endpoints are audited. Missing evidence does not invalidate a working login; its source stays distinct.
 
 Merging an unverified source into a confirmed account retains a durable redirect for its earlier logical ID. Switching a source to a different verified identity or explicitly replacing its credential never redirects an old account bookmark to the new person. Deleting one source retains the logical ID while another source remains. Corrupt cross-provider or unverified shared bindings are rejected on read.
 
-Metadata-only rollback removes the registry and returns to format 9, retaining current credentials, source IDs, names and enabled state. It never restores old tokens from a pre-migration backup. The read routes below use this registry; v2 CRUD and frontend cutover remain pending.
+Data migration preserves current credentials, source IDs, names and enabled state. A failed write must leave the previous document intact. Downgrading to old API/storage behavior is not part of this migration.
 
-## Opt-in read API
+## Default account read API
 
-- Standalone CLI: `quotio accounts initialize`, then `quotio accounts list --schema-version 2 --format json`. Without the flag, the v1 account array/text format remains the default.
-- HTTP: `POST /v2/accounts/initialize` with `{}`, bearer authentication and an `Idempotency-Key`; poll the returned operation at `/v1/operations/{id}`. The result contains `host_id`. Retries use the protected receipt even after process-local operation state is lost.
-- `GET /v2/accounts` returns the same `AccountList` as the CLI. Before initialization it returns `409 account_model_not_initialized`. GET never scans credentials, fetches provider APIs or performs migration.
-- These commands operate on the selected vault. The standalone CLI's default vault is not the macOS app's isolated vault; use the host HTTP endpoint to initialize that host's own store. Never merge namespaces implicitly.
-- Read-model sources report `not_checked` until a usage/state projection is implemented, with no selected source or invented health. The response advertises `account_write_v2: false` and no CRUD actions. Existing v1 management remains separate during the transition.
+- CLI: `quotio accounts list --format json` emits the resolved account envelope; no `--schema-version` or initialization command is required. Text output formats the same Rust account projection.
+- HTTP: `GET /v2/accounts` uses the same service. First access atomically initializes protected metadata, preserving original source IDs and credentials. Repeated reads keep the host ID and revision stable.
+- CLI `use` and `remove` accept logical account IDs, including a group whose original source was removed. Removing a logical account unlinks all its registered sources, never external provider login files.
+- The standalone CLI's default vault is not the macOS app's isolated vault. Use the appropriate host connection; never merge namespaces implicitly.
+- The current read projection reports `not_checked` until the quota/state projection is implemented. It advertises `account_write_v2: false` and no HTTP CRUD actions while the full cutover is being implemented.

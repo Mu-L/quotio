@@ -178,10 +178,6 @@ fn router(state: Arc<ApiState>, policy: Arc<security::Policy>) -> Router {
             post(management::callback),
         )
         .route("/v2/accounts", get(management::resolved_accounts))
-        .route(
-            "/v2/accounts/initialize",
-            post(management::initialize_accounts),
-        )
         .route("/v1/providers", get(providers))
         .route("/v1/providers/{id}", get(provider))
         .route("/v1/usage", get(usage))

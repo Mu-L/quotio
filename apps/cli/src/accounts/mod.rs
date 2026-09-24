@@ -18,8 +18,6 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum AccountError {
-    #[error("initialize the resolved account model before requesting version 2")]
-    ModelNotInitialized,
     #[error("account storage is unavailable or access was denied")]
     Storage,
     #[error(
@@ -325,14 +323,6 @@ impl Document {
             self.version = 10;
         }
         Ok(())
-    }
-
-    /// Return to the preceding naming-aware reader without restoring stale credentials.
-    pub fn disable_resolved_accounts(&mut self) {
-        self.resolved = None;
-        if self.version == 10 {
-            self.version = 9;
-        }
     }
 
     // Retain token lineage after rotation/removal so registration cannot bypass a fence.

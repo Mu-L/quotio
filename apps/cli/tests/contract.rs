@@ -117,3 +117,45 @@ fn resolved_v2_snapshot_roundtrips_and_enforces_account_source_boundaries() {
     invalid["usage"][0]["freshness"] = json!("invented");
     assert!(!validator("V2Snapshot").is_valid(&invalid));
 }
+
+#[test]
+fn resolved_read_projection_matches_the_frontend_fixture() {
+    use quotio::accounts::{Credential, Document, LabelOrigin, resolved::Registry};
+    let mut document = Document::empty();
+    for (id, label, origin) in [
+        ("source-a", "Work", LabelOrigin::User),
+        ("source-b", "Generated", LabelOrigin::Generated),
+    ] {
+        document
+            .add_named(
+                Provider::Amp,
+                label,
+                origin,
+                id.into(),
+                Credential::ApiKey {
+                    token: "fixture-secret".into(),
+                    region: None,
+                    organization: None,
+                },
+            )
+            .unwrap();
+        document.accounts.last_mut().unwrap().id = id.into();
+    }
+    let mut registry = Registry::new(&document.accounts).unwrap();
+    registry.host_id = "host-fixture".into();
+    registry.revision = 7;
+    let proof = quotio::domain::VerifiedIdentity {
+        subject: "fixture-user".into(),
+        tenant: None,
+    };
+    registry.observe("source-a", &proof).unwrap();
+    registry.observe("source-b", &proof).unwrap();
+    let accounts = registry.account_list(&document.accounts).unwrap();
+    assert_eq!(accounts.host.platform, std::env::consts::OS);
+    let mut value = serde_json::to_value(accounts).unwrap();
+    validator("V2AccountList").validate(&value).unwrap();
+    value["host"]["platform"] = json!("macos"); // Only the platform varies across CI hosts.
+    let fixture: Value =
+        serde_json::from_str(include_str!("fixtures/contracts/accounts-v2.json")).unwrap();
+    assert_eq!(value, fixture);
+}
