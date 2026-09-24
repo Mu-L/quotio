@@ -82,6 +82,7 @@ extension NativeSourcePermission {
     var keychainItemName: String {
         switch kind {
         case "claude_native": "Claude Code-credentials"
+        case "copilot_native": "gh:github.com"
         case "factory_native": "Factory CLI"
         case "antigravity_native": "gemini / antigravity"
         default: kind

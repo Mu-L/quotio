@@ -652,6 +652,7 @@ fn copilot_editor_token(bytes: &[u8]) -> Result<Option<Secret>, ProviderError> {
 }
 
 struct CopilotGhHost<'a> {
+    user: Option<&'a str>,
     oauth_token: Option<&'a str>,
 }
 
@@ -659,6 +660,10 @@ fn copilot_gh_host(bytes: &[u8]) -> Result<Option<CopilotGhHost<'_>>, ProviderEr
     let text = std::str::from_utf8(bytes).map_err(|_| ProviderError::Authentication)?;
     let mut in_github = false;
     let mut found = false;
+    let mut host = CopilotGhHost {
+        user: None,
+        oauth_token: None,
+    };
     for line in text.lines() {
         let trimmed = line.trim();
         if trimmed.is_empty() || trimmed.starts_with('#') {
@@ -672,14 +677,24 @@ fn copilot_gh_host(bytes: &[u8]) -> Result<Option<CopilotGhHost<'_>>, ProviderEr
         if !in_github {
             continue;
         }
-        let Some(value) = trimmed.strip_prefix("oauth_token:") else {
-            continue;
-        };
-        return Ok(Some(CopilotGhHost {
-            oauth_token: Some(value.trim().trim_matches(['\'', '"'])),
-        }));
+        if let Some(value) = trimmed.strip_prefix("user:") {
+            let value = value.trim().trim_matches(['\'', '"']);
+            if value.is_empty()
+                || value.len() > 256
+                || !value
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'-')
+            {
+                return Err(ProviderError::Authentication);
+            }
+            host.user = Some(value);
+        }
+        if let Some(value) = trimmed.strip_prefix("oauth_token:") {
+            host.oauth_token
+                .get_or_insert(value.trim().trim_matches(['\'', '"']));
+        }
     }
-    Ok(found.then_some(CopilotGhHost { oauth_token: None }))
+    Ok(found.then_some(host))
 }
 
 pub(crate) fn copilot_gh_host_present(bytes: &[u8]) -> Result<bool, ProviderError> {
@@ -727,7 +742,8 @@ pub(crate) async fn copilot_reference_token(
             token(raw)?.ok_or(ProviderError::Authentication)
         }
         None => {
-            let bytes = native_keychain("gh:github.com", None)
+            let account = copilot_keychain_account().await?;
+            let bytes = native_keychain("gh:github.com", account.as_deref())
                 .await?
                 .ok_or(ProviderError::Authentication)?;
             copilot_keychain_token(&bytes)?.ok_or(ProviderError::Authentication)
@@ -745,7 +761,10 @@ pub(crate) async fn copilot_gh_hosts_reference_token(
     let bytes = native_file(path)
         .await?
         .ok_or(ProviderError::Authentication)?;
-    copilot_gh_reference_token(&bytes, || native_keychain("gh:github.com", None)).await
+    copilot_gh_reference_token(&bytes, |account| async move {
+        native_keychain("gh:github.com", account.as_deref()).await
+    })
+    .await
 }
 
 async fn copilot_gh_reference_token<F, Fut>(
@@ -753,15 +772,29 @@ async fn copilot_gh_reference_token<F, Fut>(
     keychain: F,
 ) -> Result<Secret, ProviderError>
 where
-    F: FnOnce() -> Fut,
+    F: FnOnce(Option<String>) -> Fut,
     Fut: std::future::Future<Output = Result<Option<Vec<u8>>, ProviderError>>,
 {
     let host = copilot_gh_host(bytes)?.ok_or(ProviderError::Authentication)?;
     if let Some(raw) = host.oauth_token {
         return token(raw)?.ok_or(ProviderError::Authentication);
     }
-    let bytes = keychain().await?.ok_or(ProviderError::Authentication)?;
+    let bytes = keychain(host.user.map(str::to_owned))
+        .await?
+        .ok_or(ProviderError::Authentication)?;
     copilot_keychain_token(&bytes)?.ok_or(ProviderError::Authentication)
+}
+
+pub(crate) async fn copilot_keychain_account() -> Result<Option<String>, ProviderError> {
+    let Some(home) = home_dir() else {
+        return Ok(None);
+    };
+    let Some(bytes) = native_file(home.join(".config/gh/hosts.yml")).await? else {
+        return Ok(None);
+    };
+    Ok(copilot_gh_host(&bytes)?
+        .and_then(|host| host.user)
+        .map(str::to_owned))
 }
 
 async fn native_copilot_token() -> Result<Secret, ProviderError> {
@@ -791,7 +824,8 @@ async fn native_copilot_token() -> Result<Secret, ProviderError> {
             Err(error) => retain_native_error(&mut last, error),
         }
     }
-    match native_keychain("gh:github.com", None).await {
+    let account = copilot_keychain_account().await?;
+    match native_keychain("gh:github.com", account.as_deref()).await {
         Ok(Some(bytes)) => match copilot_keychain_token(&bytes) {
             Ok(Some(value)) => return Ok(value),
             Ok(None) => (),
@@ -1179,21 +1213,23 @@ mod tests {
 
     #[tokio::test]
     async fn copilot_gh_reference_uses_keychain_only_for_a_host_without_inline_token() {
-        let token = copilot_gh_reference_token(b"github.com:\n  user: fixture\n", || async {
-            Ok(Some(b"go-keyring-base64:cmlnaHQ=".to_vec()))
-        })
-        .await
-        .unwrap();
+        let token =
+            copilot_gh_reference_token(b"github.com:\n  user: fixture\n", |account| async move {
+                assert_eq!(account.as_deref(), Some("fixture"));
+                Ok(Some(b"go-keyring-base64:cmlnaHQ=".to_vec()))
+            })
+            .await
+            .unwrap();
         assert_eq!(token.0, "right");
         let inline =
-            copilot_gh_reference_token(b"github.com:\n  oauth_token: inline\n", || async {
+            copilot_gh_reference_token(b"github.com:\n  oauth_token: inline\n", |_| async {
                 panic!("inline tokens must not access Keychain")
             })
             .await
             .unwrap();
         assert_eq!(inline.0, "inline");
         assert!(
-            copilot_gh_reference_token(b"enterprise.example:\n  user: fixture\n", || async {
+            copilot_gh_reference_token(b"enterprise.example:\n  user: fixture\n", |_| async {
                 panic!("other hosts must not access GitHub Keychain")
             })
             .await

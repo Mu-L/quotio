@@ -27,15 +27,20 @@ pub(crate) fn target(
 }
 
 pub(crate) async fn authorize(input: SourceInput) -> Result<SourceInput, AccountError> {
-    let (service, mut account) = target(&input)?;
+    let (service, account) = target(&input)?;
+    let mut account = if service == "gh:github.com" {
+        crate::providers::catalog::oauth_primary::copilot_keychain_account().await?
+    } else {
+        account.map(str::to_owned)
+    };
     tokio::task::spawn_blocking(move || {
         use crate::providers::catalog::common;
         if service == "Factory CLI"
             && common::keychain_item_exists(service, Some("auth-encryption-key-security-cli"))?
         {
-            account = Some("auth-encryption-key-security-cli");
+            account = Some("auth-encryption-key-security-cli".into());
         }
-        common::authorize_keychain(service, account)
+        common::authorize_keychain(service, account.as_deref())
     })
     .await
     .map_err(|_| AccountError::Storage)??;
