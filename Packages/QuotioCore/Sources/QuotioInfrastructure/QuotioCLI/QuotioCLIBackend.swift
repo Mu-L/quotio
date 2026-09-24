@@ -906,7 +906,9 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
 
     private static func account(_ value: QuotioCLIAccount, accountKey: String? = nil) -> Account? {
         guard let provider = QuotioCLIProviderMap.domain(value.provider) else { return nil }
-        let label = QuotioCLIWarpMirror.displayLabel(value.label, provider: value.provider)
+        let label = value.origin == "borrowed_native" && provider == .copilot
+            ? accountKey ?? value.label
+            : QuotioCLIWarpMirror.displayLabel(value.label, provider: value.provider)
         let source: AccountSource = switch value.origin {
         case "borrowed_proxy": .legacyCLIProxy
         case "owned": .quotioKeychain

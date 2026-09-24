@@ -170,7 +170,11 @@ impl CopilotNativeReference {
             }
         };
         Ok(Resolved {
-            label: format!("Copilot {}", &self.identity()?[..8]),
+            label: if self.location == CopilotLocation::GhKeychain {
+                crate::providers::catalog::oauth_primary::copilot_keychain_account().await?
+            } else {
+                format!("Copilot {}", &self.identity()?[..8])
+            },
             provider: crate::cli::Provider::Catalog("copilot"),
             plan: None,
             subscription_status: None,

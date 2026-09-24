@@ -168,7 +168,7 @@ async fn validate_with_endpoint(
     {
         return Err(AccountError::Busy);
     }
-    if matches!(provider, Provider::Catalog("cursor" | "grok"))
+    if matches!(provider, Provider::Catalog("cursor" | "grok" | "copilot"))
         && let Some(resolved) = resolved
     {
         usage.account.label = resolved.label;
@@ -2082,7 +2082,15 @@ mod tests {
                 assert!(matches!(result, Err(AccountError::Busy)));
                 assert_ne!(adapter.cache_identity(&context).await.unwrap(), before);
             } else {
-                assert!(result.is_ok());
+                assert_eq!(
+                    result.unwrap().account.label,
+                    credential
+                        .resolve_reference(provider)
+                        .await
+                        .unwrap()
+                        .unwrap()
+                        .label
+                );
                 assert_eq!(std::fs::read(&path).unwrap(), original);
             }
             let requests = server.await.unwrap();

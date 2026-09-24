@@ -5,6 +5,18 @@ import XCTest
 @testable import QuotioInfrastructure
 
 final class QuotioCLIBackendTests: XCTestCase {
+    func testExistingNativeCopilotAccountUsesCurrentUsername() async throws {
+        QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[{"provider":"copilot","account_ref":{"origin":"borrowed_native","id":"native","label":"Copilot oldhash"},"account":{"id":"user","label":"github-user"},"windows":[]}],"failures":[]}"#)
+        let backend = QuotioCLIBackend(session: stubSession())
+        await backend.connect(.init(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
+        let snapshot = await backend.bootstrap(mode: .monitor)
+        XCTAssertEqual(snapshot.accountAliases[.copilot]?["native"], "github-user")
+        QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"accounts":[{"id":"native","provider":"copilot","label":"Copilot oldhash","origin":"borrowed_native","enabled":true}]}"#)
+        let accounts = await backend.accounts()
+        XCTAssertEqual(accounts.first?.displayName, "github-user")
+        XCTAssertEqual(accounts.first?.accountKey, "github-user")
+    }
+
     func testGrokNativeEmailReplacesGeneratedSourceLabel() throws {
         let data = Data(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[{"provider":"grok","account_ref":{"origin":"borrowed_native","id":"native","label":"grok native random"},"account":{"id":"user","label":"grok@example.test"},"windows":[]}],"failures":[]}"#.utf8)
         let report = try makeQuotioCLIDecoder().decode(QuotioCLIUsageReport.self, from: data)
