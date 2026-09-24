@@ -56,35 +56,86 @@ async fn discovery_rest_registers_opaque_exact_entries_without_credentials() {
             .status(),
         401
     );
-    for (index, request) in [
-        json!({"provider":"grok","kind":"grok_native","inspect":true}),
-        json!({"provider":"copilot","kind":"copilot_native","inspect":true}),
-        json!({"provider":"clinepass","kind":"quotio_custom_provider","domain":"production","inspect":true}),
+    for (index, (request, expected_count)) in [
+        (
+            json!({"provider":"grok","kind":"grok_native","inspect":true}),
+            2,
+        ),
+        (
+            json!({"provider":"copilot","kind":"copilot_native","inspect":true}),
+            1,
+        ),
+        (
+            json!({"provider":"copilot","kind":"copilot_native","location":"gh_hosts","inspect":true}),
+            1,
+        ),
+        (
+            json!({"provider":"clinepass","kind":"quotio_custom_provider","domain":"production","inspect":true}),
+            1,
+        ),
     ].into_iter().enumerate() {
-        let response = client.post(&endpoint).bearer_auth(token).json(&request).send().await.unwrap();
+        let response = client
+            .post(&endpoint)
+            .bearer_auth(token)
+            .json(&request)
+            .send()
+            .await
+            .unwrap();
         assert_eq!(response.status(), 200);
         let discovered: Value = response.json().await.unwrap();
         assert_eq!(discovered["status"], "checked", "{discovered}");
-        assert_eq!(discovered["candidates"].as_array().unwrap().len(), if index < 2 { 2 } else { 1 });
+        assert_eq!(
+            discovered["candidates"].as_array().unwrap().len(),
+            expected_count
+        );
         assert_eq!(discovered["candidates"][0]["status"], "available");
-        for forbidden in ["planted-secret", "11111111", "oauth_token", "entry_key", home.to_str().unwrap()] {
+        for forbidden in [
+            "planted-secret",
+            "11111111",
+            "oauth_token",
+            "entry_key",
+            home.to_str().unwrap(),
+        ] {
             assert!(!discovered.to_string().contains(forbidden));
         }
-        for (candidate_index, candidate) in discovered["candidates"].as_array().unwrap().iter().enumerate() {
-        let response = client.post(format!("{base}/v1/account-sources"))
-            .bearer_auth(token).header("Idempotency-Key", format!("discovery-{index}-{candidate_index}"))
-            .json(&candidate["source"]).send().await.unwrap();
-        assert_eq!(response.status(), 202);
-        let operation: Value = response.json().await.unwrap();
-        let completed = serde_json::to_value(tests::done(&state, operation["id"].as_str().unwrap()).await).unwrap();
-        assert_eq!(completed["status"], "completed", "{completed}");
-        let id = completed["result"]["account_id"].as_str().unwrap();
-        let account: Value = client.get(format!("{base}/v1/accounts/{id}")).bearer_auth(token).send().await.unwrap().json().await.unwrap();
-        assert_eq!(account["provider"], request["provider"]);
-        assert!(!account.to_string().contains("planted-secret"));
-        if request["kind"] == "quotio_custom_provider" {
-            assert_eq!(account["source_id"].as_str().unwrap().len(), 64);
-        }
+        for (candidate_index, candidate) in discovered["candidates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .enumerate()
+        {
+            let response = client
+                .post(format!("{base}/v1/account-sources"))
+                .bearer_auth(token)
+                .header(
+                    "Idempotency-Key",
+                    format!("discovery-{index}-{candidate_index}"),
+                )
+                .json(&candidate["source"])
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(response.status(), 202);
+            let operation: Value = response.json().await.unwrap();
+            let completed =
+                serde_json::to_value(tests::done(&state, operation["id"].as_str().unwrap()).await)
+                    .unwrap();
+            assert_eq!(completed["status"], "completed", "{completed}");
+            let id = completed["result"]["account_id"].as_str().unwrap();
+            let account: Value = client
+                .get(format!("{base}/v1/accounts/{id}"))
+                .bearer_auth(token)
+                .send()
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            assert_eq!(account["provider"], request["provider"]);
+            assert!(!account.to_string().contains("planted-secret"));
+            if request["kind"] == "quotio_custom_provider" {
+                assert_eq!(account["source_id"].as_str().unwrap().len(), 64);
+            }
         }
     }
     for request in [
@@ -111,7 +162,7 @@ async fn discovery_rest_registers_opaque_exact_entries_without_credentials() {
         ),
         (
             json!({"provider":"copilot","kind":"copilot_native","location":"gh_keychain","inspect":true}),
-            "unsupported",
+            "checked",
         ),
     ] {
         let value: Value = client
@@ -125,6 +176,10 @@ async fn discovery_rest_registers_opaque_exact_entries_without_credentials() {
             .await
             .unwrap();
         assert_eq!(value["status"], status);
+        if request["location"] == "gh_keychain" {
+            // No active username in the isolated host fixture: never probe another account.
+            assert!(value["candidates"].as_array().unwrap().is_empty());
+        }
     }
     // A read-only server rejects inspection even with its valid bearer token.
     let readonly = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

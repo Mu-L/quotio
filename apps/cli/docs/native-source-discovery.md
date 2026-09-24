@@ -1,6 +1,6 @@
 # Native source picker
 
-Use `POST /v1/account-sources/discover` with a management bearer token. This is an explicit user action, not a startup scan. Select a `provider` and one `kind` from that provider's `source_references` capability.
+Use `POST /v1/account-sources/discover` with a management bearer token. Clients may invoke this for a user-requested scan or enabled automatic discovery; inspection itself never grants secret access. Select a `provider` and one `kind` from that provider's `source_references` capability.
 
 ```json
 {"provider":"copilot","kind":"copilot_native","location":"apps","inspect":true}
@@ -11,7 +11,7 @@ Without `inspect: true`, the endpoint does not read native data. Fixed-location 
 Opt-in inspection supports:
 
 - Grok: entries in the standard native auth file.
-- Copilot: exactly one selected `apps` or `hosts` file. `location` is required. `gh_keychain` enumeration returns `unsupported` without accessing Keychain.
+- Copilot: an explicit `apps`, `hosts` or `gh_hosts` location inspects that file. Without `location`, use the first nonempty file source in that order. A `gh_hosts` entry without an inline token is not a file credential. If no file credential is found, probe `gh:github.com` metadata for the active username in `gh/hosts.yml` and return `permission_required`. An explicit `gh_keychain` location only probes that account. It never reads a password or displays a prompt.
 - Quotio custom providers: one required `production` or `development` preferences domain, filtered to the selected `clinepass` or `zai` provider. Disabled records are omitted. Other custom-provider types are not supported.
 
 Exact-entry candidates have generic numbered labels and opaque `source` references. Native entry keys, record UUIDs, names, paths, tokens and credential JSON are not returned. This also protects against a token planted in an entry key or display name. The backend retains only native references, not copied credentials.
@@ -29,8 +29,8 @@ Opaque references last 600 seconds, are local to one running server, and are not
 - `unreadable`: unsafe file, invalid data, access failure, or inspection limit exceeded. Errors do not contain native paths or contents.
 - `unsupported`: this platform or source inspection is not implemented.
 
-Each source is limited to 1 MiB and 64 entries. Over-limit sources are rejected rather than silently truncated. File inspection rejects symlinks in both parent and leaf components and does not open special files for blocking reads. Fixed-location inspection (`inspect: true`) is unsupported; the picker can offer the descriptor and let explicit registration validate it.
+Each source is limited to 1 MiB and 64 entries. Over-limit sources are rejected rather than silently truncated. File inspection rejects symlinks in both parent and leaf components and does not open special files for blocking reads. Fixed-location inspection reports file-presence or permission metadata; explicit registration still validates the credential. Codex native login paths intentionally support symlinks to regular files.
 
-No inspection reads `~/.cli-proxy-api`, browser cookies or other providers. It performs no network requests, login, refresh, envelope decryption, or native writes. Custom-provider preferences are read only after explicit domain/provider selection. Real Keychain presence and permission prompts are not tested by static choices.
+No inspection reads `~/.cli-proxy-api`, browser cookies or other providers. It performs no network requests, login, refresh, envelope decryption, or native writes. Custom-provider preferences are read only after explicit domain/provider selection. Static choices do not prove Keychain access; a user must explicitly authorize a pending Keychain source.
 
 Tests inject temporary native files, synthetic preferences and an in-memory vault. REST tests cover discovery through registration and account-ID retrieval for Grok, Copilot and ClinePass, including secrets planted in keys and labels. These are not live-provider or real-Keychain acceptance tests.
