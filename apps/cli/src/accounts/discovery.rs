@@ -186,8 +186,22 @@ impl Registry {
             && location
                 .as_deref()
                 .is_none_or(|location| location == "gh_keychain")
-            && crate::providers::catalog::common::keychain_item_exists("gh:github.com", None)
-                .unwrap_or(false);
+            && self
+                .home
+                .as_ref()
+                .and_then(|home| read_native(&home.join(".config/gh/hosts.yml")).ok())
+                .is_some_and(|bytes| {
+                    crate::providers::catalog::oauth_primary::copilot_gh_username(&bytes)
+                        .ok()
+                        .flatten()
+                        .is_some_and(|user| {
+                            crate::providers::catalog::common::keychain_item_exists(
+                                "gh:github.com",
+                                Some(user),
+                            )
+                            .unwrap_or(false)
+                        })
+                });
         let result = if kind == "copilot_native" && location.as_deref() == Some("gh_keychain") {
             Ok(Vec::new())
         } else if kind == "copilot_native" && location.is_none() {
@@ -195,7 +209,11 @@ impl Registry {
             let mut failure = None;
             for location in ["apps", "hosts", "gh_hosts"] {
                 match self.enumerate(provider, &kind, Some(location), None) {
-                    Ok(mut found) => references.append(&mut found),
+                    Ok(mut found) if !found.is_empty() => {
+                        references.append(&mut found);
+                        break;
+                    }
+                    Ok(_) => (),
                     Err(AccountError::NotFound) => (),
                     Err(error) if failure.is_none() => failure = Some(error),
                     Err(_) => (),
@@ -222,7 +240,7 @@ impl Registry {
             return Err(AccountError::Busy);
         }
         let mut candidates = Vec::new();
-        if keychain_present {
+        if keychain_present && references.is_empty() {
             candidates.push(json!({"label":"GitHub CLI Keychain","status":"permission_required","source":{"kind":"copilot_native","location":"gh_keychain"}}));
         }
         for (index, reference) in references.into_iter().enumerate() {
@@ -349,8 +367,9 @@ impl Registry {
         let path = home.join(relative);
         let bytes = read_native(&path)?;
         if kind == "copilot_native" && location == Some("gh_hosts") {
-            let present = crate::providers::catalog::oauth_primary::copilot_gh_host_present(&bytes)
-                .map_err(|_| AccountError::Corrupt)?;
+            let present = crate::providers::catalog::oauth_primary::copilot_gh_token(&bytes)
+                .map_err(|_| AccountError::Corrupt)?
+                .is_some();
             return Ok(if present {
                 vec![Reference::Copilot(CopilotNativeReference {
                     path: Some(path),
@@ -671,6 +690,33 @@ mod tests {
             home: Some(home),
             ..Default::default()
         };
+        let editor = dir.join(".config/github-copilot/apps.json");
+        std::fs::create_dir_all(editor.parent().unwrap()).unwrap();
+        std::fs::write(
+            &editor,
+            br#"{"github.com":{"oauth_token":"editor-secret"}}"#,
+        )
+        .unwrap();
+        let preferred = registry
+            .inspect(
+                serde_json::from_value(json!({
+                    "provider":"copilot", "kind":"copilot_native", "inspect":true
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+        assert_eq!(preferred["candidates"].as_array().unwrap().len(), 1);
+        let Reference::Copilot(selected) = registry
+            .get(
+                preferred["candidates"][0]["source"]["discovery_ref"]
+                    .as_str()
+                    .unwrap(),
+            )
+            .unwrap()
+        else {
+            panic!()
+        };
+        assert!(selected.location == CopilotLocation::Apps);
         let request = serde_json::from_value(json!({
             "provider":"copilot",
             "kind":"copilot_native",
@@ -697,6 +743,18 @@ mod tests {
         let resolved = source.resolve().await.unwrap();
         assert!(
             matches!(&resolved.credentials[0], crate::accounts::Credential::CatalogKey { token, .. } if token == "second-secret")
+        );
+        std::fs::write(&path, b"github.com:\n  user: fixture\n").unwrap();
+        assert!(
+            registry
+                .enumerate(
+                    Provider::Catalog("copilot"),
+                    "copilot_native",
+                    Some("gh_hosts"),
+                    None
+                )
+                .unwrap()
+                .is_empty()
         );
         std::fs::remove_file(&path).unwrap();
         std::os::unix::fs::symlink("/dev/zero", &path).unwrap();

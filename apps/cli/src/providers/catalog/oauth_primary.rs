@@ -697,11 +697,11 @@ fn copilot_gh_host(bytes: &[u8]) -> Result<Option<CopilotGhHost<'_>>, ProviderEr
     Ok(found.then_some(host))
 }
 
-pub(crate) fn copilot_gh_host_present(bytes: &[u8]) -> Result<bool, ProviderError> {
-    Ok(copilot_gh_host(bytes)?.is_some())
+pub(crate) fn copilot_gh_username(bytes: &[u8]) -> Result<Option<&str>, ProviderError> {
+    Ok(copilot_gh_host(bytes)?.and_then(|host| host.user))
 }
 
-fn copilot_gh_token(bytes: &[u8]) -> Result<Option<Secret>, ProviderError> {
+pub(crate) fn copilot_gh_token(bytes: &[u8]) -> Result<Option<Secret>, ProviderError> {
     copilot_gh_host(bytes)?
         .and_then(|host| host.oauth_token)
         .map_or(Ok(None), token)
@@ -743,7 +743,7 @@ pub(crate) async fn copilot_reference_token(
         }
         None => {
             let account = copilot_keychain_account().await?;
-            let bytes = native_keychain("gh:github.com", account.as_deref())
+            let bytes = native_keychain("gh:github.com", Some(&account))
                 .await?
                 .ok_or(ProviderError::Authentication)?;
             copilot_keychain_token(&bytes)?.ok_or(ProviderError::Authentication)
@@ -762,7 +762,7 @@ pub(crate) async fn copilot_gh_hosts_reference_token(
         .await?
         .ok_or(ProviderError::Authentication)?;
     copilot_gh_reference_token(&bytes, |account| async move {
-        native_keychain("gh:github.com", account.as_deref()).await
+        native_keychain("gh:github.com", Some(&account)).await
     })
     .await
 }
@@ -772,29 +772,27 @@ async fn copilot_gh_reference_token<F, Fut>(
     keychain: F,
 ) -> Result<Secret, ProviderError>
 where
-    F: FnOnce(Option<String>) -> Fut,
+    F: FnOnce(String) -> Fut,
     Fut: std::future::Future<Output = Result<Option<Vec<u8>>, ProviderError>>,
 {
     let host = copilot_gh_host(bytes)?.ok_or(ProviderError::Authentication)?;
     if let Some(raw) = host.oauth_token {
         return token(raw)?.ok_or(ProviderError::Authentication);
     }
-    let bytes = keychain(host.user.map(str::to_owned))
+    let bytes = keychain(host.user.ok_or(ProviderError::Authentication)?.to_owned())
         .await?
         .ok_or(ProviderError::Authentication)?;
     copilot_keychain_token(&bytes)?.ok_or(ProviderError::Authentication)
 }
 
-pub(crate) async fn copilot_keychain_account() -> Result<Option<String>, ProviderError> {
-    let Some(home) = home_dir() else {
-        return Ok(None);
-    };
-    let Some(bytes) = native_file(home.join(".config/gh/hosts.yml")).await? else {
-        return Ok(None);
-    };
-    Ok(copilot_gh_host(&bytes)?
-        .and_then(|host| host.user)
-        .map(str::to_owned))
+pub(crate) async fn copilot_keychain_account() -> Result<String, ProviderError> {
+    let home = home_dir().ok_or(ProviderError::Authentication)?;
+    let bytes = native_file(home.join(".config/gh/hosts.yml"))
+        .await?
+        .ok_or(ProviderError::Authentication)?;
+    copilot_gh_username(&bytes)?
+        .map(str::to_owned)
+        .ok_or(ProviderError::Authentication)
 }
 
 async fn native_copilot_token() -> Result<Secret, ProviderError> {
@@ -825,7 +823,7 @@ async fn native_copilot_token() -> Result<Secret, ProviderError> {
         }
     }
     let account = copilot_keychain_account().await?;
-    match native_keychain("gh:github.com", account.as_deref()).await {
+    match native_keychain("gh:github.com", Some(&account)).await {
         Ok(Some(bytes)) => match copilot_keychain_token(&bytes) {
             Ok(Some(value)) => return Ok(value),
             Ok(None) => (),
@@ -1195,13 +1193,21 @@ mod tests {
             .0,
             "right"
         );
-        assert!(copilot_gh_host_present(b"github.com:\n  user: fixture\n").unwrap());
+        assert!(
+            copilot_gh_host(b"github.com:\n  user: fixture\n")
+                .unwrap()
+                .is_some()
+        );
         assert!(
             copilot_gh_token(b"github.com:\n  user: fixture\n")
                 .unwrap()
                 .is_none()
         );
-        assert!(!copilot_gh_host_present(b"enterprise.example:\n  oauth_token: wrong\n").unwrap());
+        assert!(
+            copilot_gh_host(b"enterprise.example:\n  oauth_token: wrong\n")
+                .unwrap()
+                .is_none()
+        );
         assert_eq!(
             copilot_keychain_token(b"go-keyring-base64:cmlnaHQ=")
                 .unwrap()
@@ -1215,12 +1221,19 @@ mod tests {
     async fn copilot_gh_reference_uses_keychain_only_for_a_host_without_inline_token() {
         let token =
             copilot_gh_reference_token(b"github.com:\n  user: fixture\n", |account| async move {
-                assert_eq!(account.as_deref(), Some("fixture"));
+                assert_eq!(account, "fixture");
                 Ok(Some(b"go-keyring-base64:cmlnaHQ=".to_vec()))
             })
             .await
             .unwrap();
         assert_eq!(token.0, "right");
+        assert!(
+            copilot_gh_reference_token(b"github.com:\n  git_protocol: https\n", |_| async {
+                panic!("a missing active user must not trigger a service-only Keychain read")
+            })
+            .await
+            .is_err()
+        );
         let inline =
             copilot_gh_reference_token(b"github.com:\n  oauth_token: inline\n", |_| async {
                 panic!("inline tokens must not access Keychain")

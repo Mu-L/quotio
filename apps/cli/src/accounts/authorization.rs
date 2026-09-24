@@ -29,7 +29,7 @@ pub(crate) fn target(
 pub(crate) async fn authorize(input: SourceInput) -> Result<SourceInput, AccountError> {
     let (service, account) = target(&input)?;
     let mut account = if service == "gh:github.com" {
-        crate::providers::catalog::oauth_primary::copilot_keychain_account().await?
+        Some(crate::providers::catalog::oauth_primary::copilot_keychain_account().await?)
     } else {
         account.map(str::to_owned)
     };
