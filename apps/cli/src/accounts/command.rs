@@ -12,7 +12,14 @@ pub async fn run(
     if !cfg!(any(target_os = "macos", target_os = "linux")) {
         return Err(AccountError::Unsupported);
     }
-    let vault = Vault::system()?;
+    run_with_vault(command, context, Vault::system()?).await
+}
+
+async fn run_with_vault(
+    command: AccountCommand,
+    context: &ProviderContext,
+    vault: Vault,
+) -> Result<String, AccountError> {
     match command {
         AccountCommand::Authorize { provider } => {
             if provider != Provider::Antigravity {
@@ -24,7 +31,36 @@ pub async fn run(
                     .into(),
             )
         }
-        AccountCommand::List { format } => {
+        AccountCommand::Initialize => {
+            let intent = service::MutationIntent::new(
+                &super::random_string()?,
+                crate::cache::fingerprint(&["initialize_resolved_accounts"]),
+            )?;
+            let id = super::api::initialize_resolved_once(vault, intent).await?;
+            Ok(format!("Resolved account model initialized: {id}\n"))
+        }
+        AccountCommand::List {
+            format,
+            schema_version: 2,
+        } => {
+            let accounts = super::api::resolved_list(vault).await?;
+            match format {
+                Format::Json => serde_json::to_string_pretty(&accounts)
+                    .map(|value| format!("{value}\n"))
+                    .map_err(|_| AccountError::Corrupt),
+                Format::Text => Ok(accounts
+                    .accounts
+                    .iter()
+                    .map(|account| {
+                        format!(
+                            "{} {}  {}\n",
+                            account.id, account.provider_id, account.display_name
+                        )
+                    })
+                    .collect()),
+            }
+        }
+        AccountCommand::List { format, .. } => {
             let accounts = service::list(vault).await?;
             match format {
                 Format::Json => serde_json::to_string_pretty(
@@ -204,6 +240,71 @@ fn parse_settings(
 }
 #[cfg(test)]
 mod tests {
+    #[tokio::test]
+    async fn v2_cli_json_is_the_shared_resolved_account_contract() {
+        let dir = std::env::temp_dir().join(crate::accounts::random_string().unwrap());
+        let vault = super::Vault::new(
+            std::sync::Arc::new(crate::accounts::vault::tests::Memory::default()),
+            dir.join("lock"),
+        );
+        let mut tx = vault.begin().unwrap();
+        tx.document
+            .add(
+                crate::cli::Provider::Amp,
+                "Fixture name",
+                "fixture".into(),
+                crate::accounts::Credential::ApiKey {
+                    token: "not-in-the-response".into(),
+                    region: None,
+                    organization: None,
+                },
+            )
+            .unwrap();
+        tx.commit().unwrap();
+        let context = crate::providers::http::fixture::context();
+        super::run_with_vault(
+            crate::cli::AccountCommand::Initialize,
+            &context,
+            vault.clone(),
+        )
+        .await
+        .unwrap();
+        let output = super::run_with_vault(
+            crate::cli::AccountCommand::List {
+                format: crate::cli::Format::Json,
+                schema_version: 2,
+            },
+            &context,
+            vault.clone(),
+        )
+        .await
+        .unwrap();
+        let expected = crate::accounts::api::resolved_list(vault.clone())
+            .await
+            .unwrap();
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&output).unwrap(),
+            serde_json::to_value(expected).unwrap()
+        );
+        assert!(!output.contains("not-in-the-response"));
+        let legacy = super::run_with_vault(
+            crate::cli::AccountCommand::List {
+                format: crate::cli::Format::Json,
+                schema_version: 1,
+            },
+            &context,
+            vault,
+        )
+        .await
+        .unwrap();
+        assert!(
+            serde_json::from_str::<serde_json::Value>(&legacy)
+                .unwrap()
+                .is_array()
+        );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
     use super::*;
     fn key(token: &str) -> Credential {
         Credential::ApiKey {

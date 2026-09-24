@@ -127,6 +127,131 @@ impl Registry {
         Ok(())
     }
 
+    pub fn account_list(
+        &self,
+        records: &[Account],
+    ) -> Result<crate::contract::AccountList, AccountError> {
+        use super::{Credential, LabelOrigin};
+        use crate::{contract as view, domain::AccountOrigin};
+        self.validate(records)?;
+        let mut groups: BTreeMap<&str, Vec<&Account>> = BTreeMap::new();
+        for record in records {
+            groups
+                .entry(
+                    self.account_id_for_source(&record.id)
+                        .expect("validated binding"),
+                )
+                .or_default()
+                .push(record);
+        }
+        let accounts = groups
+            .into_iter()
+            .map(|(id, mut records)| {
+                // Explicit labels win; ambiguous legacy labels are preserved before generated names.
+                let priority =
+                    |record: &Account| match record.naming.as_ref().map(|name| name.origin) {
+                        Some(LabelOrigin::User) => 0,
+                        None => 1,
+                        Some(LabelOrigin::Generated) => 2,
+                    };
+                records.sort_by(|a, b| priority(a).cmp(&priority(b)).then_with(|| a.id.cmp(&b.id)));
+                let named = records[0];
+                let enabled = records.iter().any(|record| record.enabled());
+                let verified = self.bindings[&named.id].verified.is_some();
+                let sources = records
+                    .iter()
+                    .map(|record| {
+                        let metadata = super::api::AccountDto::from(*record);
+                        let owner = if record.origin() != AccountOrigin::Owned {
+                            view::RefreshOwner::ProviderTool
+                        } else if matches!(
+                            record.credential,
+                            Credential::CodexOAuth { .. }
+                                | Credential::ClaudeOAuth { .. }
+                                | Credential::GrokOAuth { .. }
+                                | Credential::FactoryOAuth { .. }
+                                | Credential::KiroOAuth { .. }
+                                | Credential::AntigravityOAuth { .. }
+                        ) {
+                            view::RefreshOwner::Host
+                        } else {
+                            view::RefreshOwner::None
+                        };
+                        view::Source {
+                            id: record.id.clone(),
+                            origin: record.origin(),
+                            kind: metadata.source_kind.unwrap_or("owned_credential").into(),
+                            location: metadata.source_location,
+                            enabled: record.enabled(),
+                            selected: false,
+                            state: if record.enabled() {
+                                view::ConnectionState::NotChecked
+                            } else {
+                                view::ConnectionState::Disabled
+                            },
+                            refresh_owner: owner,
+                            issue: None,
+                            actions: vec![],
+                        }
+                    })
+                    .collect();
+                view::Account {
+                    id: id.to_owned(),
+                    provider_id: named.provider.id().into(),
+                    display_name: named.display_name().into(),
+                    user_label: (named
+                        .naming
+                        .as_ref()
+                        .is_some_and(|name| name.origin == LabelOrigin::User))
+                    .then(|| named.label.clone()),
+                    identity: view::Identity {
+                        evidence: if verified {
+                            view::IdentityEvidence::Verified
+                        } else {
+                            view::IdentityEvidence::Unknown
+                        },
+                        username: None,
+                        email: None,
+                    },
+                    enabled,
+                    state: if enabled {
+                        view::ConnectionState::NotChecked
+                    } else {
+                        view::ConnectionState::Disabled
+                    },
+                    sources,
+                    actions: vec![],
+                }
+            })
+            .collect();
+        Ok(view::AccountList {
+            schema_version: 2,
+            revision: self.revision,
+            host: view::Host {
+                id: self.host_id.clone(),
+                platform: std::env::consts::OS.into(),
+                api_versions: vec![1, 2],
+                capabilities: BTreeMap::from([
+                    (
+                        "account_read".into(),
+                        view::Availability {
+                            available: true,
+                            reason: None,
+                        },
+                    ),
+                    (
+                        "account_write_v2".into(),
+                        view::Availability {
+                            available: false,
+                            reason: Some("not_implemented".into()),
+                        },
+                    ),
+                ]),
+            },
+            accounts,
+        })
+    }
+
     pub fn synchronize(&mut self, accounts: &[Account]) -> Result<(), AccountError> {
         let ids: HashSet<_> = accounts.iter().map(|account| account.id.as_str()).collect();
         if ids.len() != accounts.len() {
@@ -285,6 +410,17 @@ mod tests {
         registry.observe(&first, &identity("team")).unwrap();
         registry.observe(&second, &identity("team")).unwrap();
         assert_eq!(registry.resolve_id(&second), Some(first.as_str()));
+        doc.rename(&second, "User chosen name").unwrap();
+        let view = registry.account_list(&doc.accounts).unwrap();
+        let grouped = view
+            .accounts
+            .iter()
+            .find(|account| account.id == first)
+            .unwrap();
+        assert_eq!(grouped.sources.len(), 2);
+        assert_eq!(grouped.display_name, "User chosen name");
+        assert_eq!(grouped.user_label.as_deref(), Some("User chosen name"));
+        assert!(grouped.actions.is_empty()); // v2 mutation capabilities are not exposed yet.
         doc.remove(&first).unwrap();
         registry.synchronize(&doc.accounts).unwrap();
         assert_eq!(

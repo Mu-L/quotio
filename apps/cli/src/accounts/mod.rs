@@ -18,6 +18,8 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum AccountError {
+    #[error("initialize the resolved account model before requesting version 2")]
+    ModelNotInitialized,
     #[error("account storage is unavailable or access was denied")]
     Storage,
     #[error(

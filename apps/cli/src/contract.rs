@@ -143,6 +143,14 @@ pub struct Usage {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct AccountList {
+    pub schema_version: u32,
+    pub host: Host,
+    pub revision: u64,
+    pub accounts: Vec<Account>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Snapshot {
     pub schema_version: u32,
     pub host: Host,

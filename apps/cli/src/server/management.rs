@@ -16,6 +16,7 @@ pub(super) fn account_code(error: &AccountError) -> &'static str {
     match error {
         AccountError::Storage | AccountError::Corrupt => "credential_storage_unavailable",
         AccountError::Busy => "account_busy",
+        AccountError::ModelNotInitialized => "account_model_not_initialized",
         AccountError::SourceDisabled => "source_disabled",
         AccountError::CommitUncertain => "credential_commit_uncertain",
         AccountError::IdempotencyConflict => "idempotency_conflict",
@@ -52,6 +53,7 @@ fn native_source_error(error: &AccountError) -> &'static str {
 fn account_error(error: AccountError) -> ApiError {
     let status = match error {
         AccountError::NotFound => StatusCode::NOT_FOUND,
+        AccountError::ModelNotInitialized => StatusCode::CONFLICT,
         AccountError::Busy
         | AccountError::Duplicate
         | AccountError::CallbackPort
@@ -75,6 +77,36 @@ pub(super) async fn list(State(state): State<Arc<ApiState>>) -> Result<Json<Valu
         })?;
     Ok(Json(json!({"schema_version":1,"accounts":accounts})))
 }
+pub(super) async fn resolved_accounts(
+    State(state): State<Arc<ApiState>>,
+) -> Result<Json<crate::contract::AccountList>, ApiError> {
+    Ok(Json(
+        tokio::time::timeout(Duration::from_secs(10), api::resolved_list(vault(&state)?))
+            .await
+            .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "account_busy"))?
+            .map_err(account_error)?,
+    ))
+}
+
+pub(super) async fn initialize_accounts(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    ApiJson(body): ApiJson<Value>,
+) -> Result<(StatusCode, Json<Operation>), ApiError> {
+    if !body.as_object().is_some_and(|object| object.is_empty()) {
+        return Err(ApiError(StatusCode::BAD_REQUEST, "invalid_request"));
+    }
+    mutate(
+        state,
+        headers,
+        "account_model_initialize",
+        "host",
+        body,
+        Mutation::InitializeAccounts,
+    )
+    .await
+}
+
 pub(super) async fn get_account(
     State(state): State<Arc<ApiState>>,
     Path(id): Path<String>,
@@ -105,6 +137,7 @@ pub(super) async fn usage(State(state): State<Arc<ApiState>>, Path(id): Path<Str
     super::usage_response(&state, Some(account.provider.id()), Some(&id)).await
 }
 enum Mutation {
+    InitializeAccounts,
     Create(api::AccountCreateInput),
     Migrate(api::migration::Input),
     Reference(api::SourceInput),
@@ -299,6 +332,7 @@ async fn mutate(
     // Durable receipts survive both discovery expiry and server restart. Validate
     // the body fingerprint before attempting to read a live native source.
     let authorize = matches!(&mutation, Mutation::Authorize(_) | Mutation::AuthorizeVault);
+    let initialize = matches!(&mutation, Mutation::InitializeAccounts);
     let receipt = if authorize {
         None
     } else {
@@ -324,9 +358,22 @@ async fn mutate(
                         .map_err(|_| "quotio_vault_access_failed")?;
                 }
                 if let Some(id) = receipt {
-                    return Ok(json!({"account_id":id}));
+                    return Ok(if initialize {
+                        json!({"host_id": id})
+                    } else {
+                        json!({"account_id":id})
+                    });
                 }
                 match mutation {
+                    Mutation::InitializeAccounts => {
+                        let _guard = crate::accounts::service::mutation_guard(&work.commit_guard)
+                            .await
+                            .map_err(|e| account_code(&e))?;
+                        let host_id = api::initialize_resolved_once(vault, intent)
+                            .await
+                            .map_err(|e| account_code(&e))?;
+                        Ok(json!({"host_id":host_id}))
+                    }
                     Mutation::AuthorizeVault => Ok(json!({})),
                     Mutation::Migrate(input) => {
                         let (prepared, enabled) = api::migration::prepare(input, &work.context)

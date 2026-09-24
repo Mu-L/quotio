@@ -658,6 +658,35 @@ pub async fn create(
 ) -> Result<AccountDto, AccountError> {
     save(vault, prepare(context, input).await?).await
 }
+pub async fn resolved_list(vault: Vault) -> Result<crate::contract::AccountList, AccountError> {
+    tokio::task::spawn_blocking(move || {
+        let tx = vault.begin()?;
+        tx.document
+            .resolved
+            .as_ref()
+            .ok_or(AccountError::ModelNotInitialized)?
+            .account_list(&tx.document.accounts)
+    })
+    .await
+    .map_err(|_| AccountError::Storage)?
+}
+
+pub async fn initialize_resolved_once(
+    vault: Vault,
+    intent: service::MutationIntent,
+) -> Result<String, AccountError> {
+    service::commit_once(vault, intent, |document| {
+        document.enable_resolved_accounts()?;
+        Ok(document
+            .resolved
+            .as_ref()
+            .expect("initialized")
+            .host_id
+            .clone())
+    })
+    .await
+}
+
 pub async fn list(vault: Vault) -> Result<Vec<AccountDto>, AccountError> {
     Ok(service::list(vault)
         .await?

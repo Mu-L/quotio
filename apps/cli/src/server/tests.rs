@@ -1544,3 +1544,102 @@ async fn legacy_migration_rejects_invalid_and_conflicting_imports() {
     );
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[tokio::test]
+async fn resolved_account_read_contract_is_opt_in_shared_and_durable() {
+    let (state, dir, _) = fixture().await;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let token = "fixture-resolved-account-token-123456";
+    let app = router(
+        state.clone(),
+        Arc::new(security::Policy::new(address, true, None, &[], Some(token.into())).unwrap()),
+    );
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+    let base = format!("http://{address}");
+    assert_eq!(
+        client
+            .get(format!("{base}/v2/accounts"))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        401
+    );
+    assert_eq!(
+        client
+            .get(format!("{base}/v2/accounts"))
+            .bearer_auth(token)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        409
+    );
+    let initialize = || {
+        client
+            .post(format!("{base}/v2/accounts/initialize"))
+            .bearer_auth(token)
+            .header("Idempotency-Key", "initialize-fixture")
+            .json(&json!({}))
+    };
+    let response = initialize().send().await.unwrap();
+    assert_eq!(response.status(), 202);
+    let op: Value = response.json().await.unwrap();
+    let completed = done(&state, op["id"].as_str().unwrap()).await;
+    assert_eq!(completed.status, "completed");
+    let host_id = completed.result.unwrap()["host_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let expected = crate::accounts::api::resolved_list(state.vault.clone().unwrap())
+        .await
+        .unwrap();
+    let actual: Value = client
+        .get(format!("{base}/v2/accounts"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(actual, serde_json::to_value(&expected).unwrap());
+    assert_eq!(actual["host"]["id"], host_id);
+    assert_eq!(actual["accounts"][0]["display_name"], "old label");
+    assert!(!actual.to_string().contains("synthetic-vault-secret"));
+    let schema: Value = serde_json::from_str(include_str!("../../docs/openapi.json")).unwrap();
+    jsonschema::draft202012::new(
+        &json!({"$ref":"#/components/schemas/V2AccountList", "components":schema["components"]}),
+    )
+    .unwrap()
+    .validate(&actual)
+    .unwrap();
+    // Drop the process-local operation ledger: retries must use the protected durable receipt.
+    *state.operations.lock().await = Operations::default();
+    let retry: Value = initialize().send().await.unwrap().json().await.unwrap();
+    let completed = done(&state, retry["id"].as_str().unwrap()).await;
+    assert_eq!(completed.result.unwrap()["host_id"], host_id);
+    let after = crate::accounts::api::resolved_list(state.vault.clone().unwrap())
+        .await
+        .unwrap();
+    assert_eq!(after.revision, expected.revision);
+    assert_eq!(
+        client
+            .post(format!("{base}/v2/accounts/initialize"))
+            .bearer_auth(token)
+            .json(&json!({}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        400
+    );
+    server.abort();
+    std::fs::remove_dir_all(dir).unwrap();
+}

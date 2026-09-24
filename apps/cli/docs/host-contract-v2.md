@@ -1,6 +1,6 @@
 # Resolved host contract v2
 
-This is the initial typed contract, not an available `/v2` endpoint yet. v1 CLI and HTTP remain unchanged. The definitions are published under `V2*` in `openapi.json`; Rust types live in `src/contract.rs`. No frontend should switch production traffic until the resolved account service, persistent IDs/revisions and migration are implemented.
+The resolved account read API is available after explicit initialization. Full v2 snapshots and account writes are not enabled yet; production macOS still uses v1. v1 CLI and HTTP shapes remain compatible. The definitions are published under `V2*` in `openapi.json`; Rust types live in `src/contract.rs`. Frontends must not switch production CRUD or quota traffic until their corresponding v2 operations and snapshot services are available.
 
 ## Resource ownership
 
@@ -41,4 +41,12 @@ Only `VerifiedIdentity { subject, tenant }` supplied by a fresh authenticated pr
 
 Merging an unverified source into a confirmed account retains a durable redirect for its earlier logical ID. Switching a source to a different verified identity or explicitly replacing its credential never redirects an old account bookmark to the new person. Deleting one source retains the logical ID while another source remains. Corrupt cross-provider or unverified shared bindings are rejected on read.
 
-Metadata-only rollback removes the registry and returns to format 9, retaining current credentials, source IDs, names and enabled state. It never restores old tokens from a pre-migration backup. Runtime v2 routes and frontend cutover remain disabled until the resolved read/CRUD services are wired and tested.
+Metadata-only rollback removes the registry and returns to format 9, retaining current credentials, source IDs, names and enabled state. It never restores old tokens from a pre-migration backup. The read routes below use this registry; v2 CRUD and frontend cutover remain pending.
+
+## Opt-in read API
+
+- Standalone CLI: `quotio accounts initialize`, then `quotio accounts list --schema-version 2 --format json`. Without the flag, the v1 account array/text format remains the default.
+- HTTP: `POST /v2/accounts/initialize` with `{}`, bearer authentication and an `Idempotency-Key`; poll the returned operation at `/v1/operations/{id}`. The result contains `host_id`. Retries use the protected receipt even after process-local operation state is lost.
+- `GET /v2/accounts` returns the same `AccountList` as the CLI. Before initialization it returns `409 account_model_not_initialized`. GET never scans credentials, fetches provider APIs or performs migration.
+- These commands operate on the selected vault. The standalone CLI's default vault is not the macOS app's isolated vault; use the host HTTP endpoint to initialize that host's own store. Never merge namespaces implicitly.
+- Read-model sources report `not_checked` until a usage/state projection is implemented, with no selected source or invented health. The response advertises `account_write_v2: false` and no CRUD actions. Existing v1 management remains separate during the transition.
