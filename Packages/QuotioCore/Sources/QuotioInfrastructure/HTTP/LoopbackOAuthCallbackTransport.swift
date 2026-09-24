@@ -146,6 +146,10 @@ public final class LoopbackOAuthCallbackTransport: OAuthCallbackTransport, @unch
     }
 
     private func handle(_ connection: NWConnection) {
+        guard let port = lock.withLock({ listener?.port?.rawValue }) else {
+            connection.cancel()
+            return
+        }
         connection.start(queue: DispatchQueue(label: "dev.quotio.oauth.callback.connection"))
         connection.receive(minimumIncompleteLength: 1, maximumLength: 65_536) { [weak self] data, _, _, _ in
             guard let self,
@@ -157,7 +161,7 @@ public final class LoopbackOAuthCallbackTransport: OAuthCallbackTransport, @unch
             }
             let parts = requestLine.split(separator: " ")
             guard parts.count >= 2,
-                  let url = URL(string: "http://localhost\(parts[1])") else {
+                  let url = URL(string: "http://localhost:\(port)\(parts[1])") else {
                 connection.cancel()
                 return
             }
