@@ -186,8 +186,24 @@ pub use crate::domain::AccountOrigin;
 fn enabled_default() -> bool {
     true
 }
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum LabelOrigin {
+    Generated,
+    User,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct AccountNaming {
+    pub origin: LabelOrigin,
+    pub observed_name: Option<String>,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Account {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub naming: Option<AccountNaming>,
     pub id: String,
     pub provider: Provider,
     pub label: String,
@@ -207,6 +223,28 @@ pub struct AccountInfo<'a> {
     pub enabled: bool,
 }
 impl Account {
+    pub fn display_name(&self) -> &str {
+        match &self.naming {
+            Some(AccountNaming {
+                origin: LabelOrigin::Generated,
+                observed_name: Some(name),
+            }) => name,
+            _ => &self.label,
+        }
+    }
+
+    pub fn observe_name(&mut self, name: &str) -> Result<bool, AccountError> {
+        let name = validate_label(name)?;
+        let Some(naming) = &mut self.naming else {
+            return Ok(false);
+        };
+        if naming.observed_name.as_deref() == Some(&name) {
+            return Ok(false);
+        }
+        naming.observed_name = Some(name);
+        Ok(true)
+    }
+
     pub fn enabled(&self) -> bool {
         self.enabled
             && match &self.credential {
@@ -234,7 +272,7 @@ impl Account {
         AccountInfo {
             id: &self.id,
             provider: self.provider,
-            label: &self.label,
+            label: self.display_name(),
             active: self.active,
             origin: self.origin(),
             enabled: self.enabled(),
@@ -382,6 +420,7 @@ impl Document {
             self.version = self.version.max(6);
         }
         self.accounts.push(Account {
+            naming: None,
             id: id.clone(),
             provider,
             label,
@@ -392,6 +431,23 @@ impl Document {
         });
         Ok(id)
     }
+    pub fn add_named(
+        &mut self,
+        provider: Provider,
+        label: &str,
+        origin: LabelOrigin,
+        identity: String,
+        credential: Credential,
+    ) -> Result<String, AccountError> {
+        let id = self.add(provider, label, identity, credential)?;
+        self.accounts.last_mut().expect("account inserted").naming = Some(AccountNaming {
+            origin,
+            observed_name: None,
+        });
+        self.version = self.version.max(9);
+        Ok(id)
+    }
+
     pub fn select(&mut self, id: &str) -> Result<(), AccountError> {
         let provider = self
             .accounts
@@ -438,11 +494,18 @@ impl Document {
         }) {
             return Err(AccountError::Duplicate);
         }
-        self.accounts
+        let account = self
+            .accounts
             .iter_mut()
             .find(|account| account.id == id)
-            .expect("account was checked")
-            .label = label;
+            .expect("account was checked");
+        account.label = label;
+        let naming = account.naming.get_or_insert(AccountNaming {
+            origin: LabelOrigin::User,
+            observed_name: None,
+        });
+        naming.origin = LabelOrigin::User;
+        self.version = self.version.max(9);
         Ok(())
     }
     pub fn patch(
@@ -511,6 +574,11 @@ impl Document {
             .iter_mut()
             .find(|account| account.id == id)
             .expect("account was checked");
+        if account.identity != identity
+            && let Some(naming) = &mut account.naming
+        {
+            naming.observed_name = None;
+        }
         account.identity = identity;
         account.credential = credential;
         Ok(())

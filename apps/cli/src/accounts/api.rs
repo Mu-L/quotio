@@ -1,7 +1,7 @@
 //! API-neutral account operations. These types deliberately exclude credentials.
 pub mod migration;
 
-use super::{AccountError, Credential, service, vault::Vault};
+use super::{AccountError, Credential, LabelOrigin, service, vault::Vault};
 use crate::{cli::Provider, providers::ProviderContext};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -26,7 +26,7 @@ impl From<&super::Account> for AccountDto {
         Self {
             id: account.id.clone(),
             provider: account.provider,
-            label: account.label.clone(),
+            label: account.display_name().to_owned(),
             active: account.active,
             origin: account.origin(),
             enabled: account.enabled(),
@@ -199,6 +199,7 @@ pub fn prepare_grok_owned(input: GrokOwnedInput) -> Result<PreparedAccount, Acco
         return Err(AccountError::Input);
     }
     Ok(PreparedAccount {
+        name_origin: Some(LabelOrigin::User),
         provider: Provider::Catalog("grok"),
         label: super::validate_label(&input.label)?,
         identity: crate::cache::fingerprint(&["grok_owned", &input.refresh_token]),
@@ -240,6 +241,7 @@ pub fn prepare_factory_owned(input: FactoryOwnedInput) -> Result<PreparedAccount
         return Err(AccountError::Input);
     }
     Ok(PreparedAccount {
+        name_origin: Some(LabelOrigin::User),
         provider: Provider::Factory,
         label: super::validate_label(&input.label)?,
         identity: crate::cache::fingerprint(&["factory_owned", &input.refresh_token]),
@@ -281,6 +283,7 @@ pub fn prepare_kiro_owned(input: KiroOwnedInput) -> Result<PreparedAccount, Acco
     let label = super::validate_label(&input.label)?;
     let credential = crate::providers::catalog::oauth_cloud::kiro_owned_credential(input)?;
     Ok(PreparedAccount {
+        name_origin: Some(LabelOrigin::User),
         provider: Provider::Catalog("kiro"),
         label,
         credential,
@@ -311,6 +314,7 @@ pub fn prepare_antigravity_owned(
     let label = super::validate_label(&input.label)?;
     let credential = crate::providers::antigravity_auth::owned_credential(input)?;
     Ok(PreparedAccount {
+        name_origin: Some(LabelOrigin::User),
         provider: Provider::Antigravity,
         label,
         credential,
@@ -319,12 +323,26 @@ pub fn prepare_antigravity_owned(
 }
 
 impl PreparedAccount {
+    fn insert(self, document: &mut super::Document) -> Result<String, AccountError> {
+        match self.name_origin {
+            Some(origin) => document.add_named(
+                self.provider,
+                &self.label,
+                origin,
+                self.identity,
+                self.credential,
+            ),
+            None => document.add(self.provider, &self.label, self.identity, self.credential),
+        }
+    }
+
     pub(super) fn discovered(
         provider: Provider,
         identity: String,
         credential: Credential,
     ) -> Result<Self, AccountError> {
         Ok(Self {
+            name_origin: Some(LabelOrigin::Generated),
             provider,
             identity,
             credential,
@@ -333,6 +351,7 @@ impl PreparedAccount {
     }
 }
 pub struct PreparedAccount {
+    name_origin: Option<LabelOrigin>,
     provider: Provider,
     label: String,
     credential: Credential,
@@ -502,6 +521,7 @@ pub async fn prepare_source(input: SourceInput) -> Result<PreparedAccount, Accou
         resolved.label
     };
     Ok(PreparedAccount {
+        name_origin: Some(LabelOrigin::Generated),
         provider,
         label,
         identity,
@@ -524,6 +544,11 @@ pub async fn prepare(
     .map_err(|_| AccountError::Cancelled)??;
     let label = service::default_label(requested_label.as_deref(), &credential)?;
     Ok(PreparedAccount {
+        name_origin: Some(if requested_label.is_some() {
+            LabelOrigin::User
+        } else {
+            LabelOrigin::Generated
+        }),
         provider,
         label,
         credential,
@@ -571,6 +596,7 @@ pub async fn save(vault: Vault, prepared: PreparedAccount) -> Result<AccountDto,
         prepared.label,
         prepared.credential,
         prepared.identity,
+        prepared.name_origin,
     )
     .await?;
     Ok(AccountDto::from(&account))
@@ -580,15 +606,7 @@ pub async fn save_once(
     prepared: PreparedAccount,
     intent: service::MutationIntent,
 ) -> Result<String, AccountError> {
-    service::commit_once(vault, intent, move |document| {
-        document.add(
-            prepared.provider,
-            &prepared.label,
-            prepared.identity,
-            prepared.credential,
-        )
-    })
-    .await
+    service::commit_once(vault, intent, move |document| prepared.insert(document)).await
 }
 pub async fn update_once(
     vault: Vault,
@@ -617,12 +635,7 @@ pub(crate) async fn register_source_once(
         }) {
             return Ok(existing.id.clone());
         }
-        document.add(
-            prepared.provider,
-            &prepared.label,
-            prepared.identity,
-            prepared.credential,
-        )
+        prepared.insert(document)
     })
     .await
 }
@@ -688,6 +701,7 @@ mod tests {
             dir.join("lock"),
         );
         let prepared = || PreparedAccount {
+            name_origin: Some(LabelOrigin::User),
             provider: Provider::Catalog("claude"),
             label: "Claude native account".into(),
             identity: "source-identity".into(),
@@ -764,6 +778,7 @@ mod tests {
         let account = save(
             vault,
             PreparedAccount {
+                name_origin: Some(LabelOrigin::User),
                 provider: Provider::Amp,
                 label: "saved".into(),
                 credential: Credential::ApiKey {
@@ -972,6 +987,7 @@ mod tests {
         let result = save(
             vault,
             PreparedAccount {
+                name_origin: Some(LabelOrigin::User),
                 provider: Provider::Amp,
                 label: "saved".into(),
                 credential: Credential::ApiKey {
@@ -1097,6 +1113,7 @@ mod tests {
             ),
         ] {
             let account = super::super::Account {
+                naming: None,
                 id: "id".into(),
                 provider,
                 label: "Work".into(),

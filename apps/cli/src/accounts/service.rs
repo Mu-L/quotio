@@ -450,9 +450,15 @@ pub async fn add_persisted(
     label: String,
     credential: Credential,
     identity: String,
+    name_origin: Option<super::LabelOrigin>,
 ) -> Result<Account, AccountError> {
     let mut tx = begin(vault).await?;
-    let id = tx.document.add(provider, &label, identity, credential)?;
+    let id = match name_origin {
+        Some(origin) => tx
+            .document
+            .add_named(provider, &label, origin, identity, credential)?,
+        None => tx.document.add(provider, &label, identity, credential)?,
+    };
     let account = tx
         .document
         .accounts
@@ -470,9 +476,11 @@ pub async fn add(
     credential: Credential,
     identity: String,
 ) -> Result<String, AccountError> {
-    Ok(add_persisted(vault, provider, label, credential, identity)
-        .await?
-        .id)
+    Ok(
+        add_persisted(vault, provider, label, credential, identity, None)
+            .await?
+            .id,
+    )
 }
 pub async fn list(vault: Vault) -> Result<Vec<Account>, AccountError> {
     Ok(begin(vault).await?.document.accounts.clone())
@@ -814,17 +822,24 @@ impl ManagedProvider {
     async fn verify_current(
         &self,
         credential: &Credential,
-        usage: ProviderUsage,
+        mut usage: ProviderUsage,
     ) -> Result<ProviderUsage, AccountError> {
-        let tx = begin(self.vault.clone()).await?;
+        let mut tx = begin(self.vault.clone()).await?;
         let current = tx
             .document
             .accounts
-            .iter()
+            .iter_mut()
             .find(|a| a.id == self.id && a.provider == self.provider)
             .ok_or(AccountError::NotFound)?;
         if !current.enabled() || current.credential != *credential {
             return Err(AccountError::Busy);
+        }
+        if current.naming.is_some() {
+            let changed = current.observe_name(&usage.account.label)?;
+            usage.account.label = current.display_name().to_owned();
+            if changed {
+                commit(tx).await?;
+            }
         }
         Ok(usage)
     }
@@ -888,6 +903,19 @@ impl ProviderAdapter for ManagedProvider {
                 Credential::CodexOAuth { account_id, .. } => account_id.clone(),
                 credential => serde_json::to_string(credential).ok()?,
             };
+            if let Some(naming) = &account.naming {
+                return Some(crate::cache::fingerprint(&[
+                    &account.id,
+                    &account.identity,
+                    &scope,
+                    &account.label,
+                    if naming.origin == super::LabelOrigin::User {
+                        "user"
+                    } else {
+                        "generated"
+                    },
+                ]));
+            }
             Some(crate::cache::fingerprint(&[
                 &account.id,
                 &account.identity,
@@ -1077,7 +1105,7 @@ fn managed(vault: &Vault, account: &Account) -> Arc<dyn ProviderAdapter> {
     Arc::new(ManagedProvider {
         factory_oauth: matches!(account.credential, Credential::FactoryOAuth { .. }),
         origin: account.origin(),
-        label: account.label.clone(),
+        label: account.display_name().to_owned(),
         operations: Arc::new(Network),
         vault: vault.clone(),
         id: account.id.clone(),
@@ -1351,6 +1379,92 @@ mod tests {
         sync::atomic::{AtomicUsize, Ordering},
         time::Duration,
     };
+
+    #[tokio::test]
+    async fn resolved_names_persist_and_match_cli_http_without_overwriting_user_or_legacy_labels() {
+        for origin in [
+            None,
+            Some(super::super::LabelOrigin::Generated),
+            Some(super::super::LabelOrigin::User),
+        ] {
+            let dir = std::env::temp_dir().join(random_string().unwrap());
+            let vault = Vault::new(Arc::new(Memory::default()), dir.join("lock"));
+            let credential = Credential::ApiKey {
+                token: "fixture-secret".into(),
+                region: None,
+                organization: None,
+            };
+            let account = add_persisted(
+                vault.clone(),
+                Provider::Amp,
+                "Saved label".into(),
+                credential.clone(),
+                "identity".into(),
+                origin,
+            )
+            .await
+            .unwrap();
+            let adapter = ManagedProvider {
+                factory_oauth: false,
+                origin: account.origin(),
+                label: account.label.clone(),
+                operations: Arc::new(Network),
+                vault: vault.clone(),
+                id: account.id.clone(),
+                provider: account.provider,
+                provider_id: ProviderId("amp".into()),
+            };
+            let context = http::fixture::context();
+            let mut usage = MockProvider.fetch(&context).await.unwrap();
+            usage.provider = ProviderId("amp".into());
+            usage.account.label = "provider-user".into();
+            let usage = adapter.verify_current(&credential, usage).await.unwrap();
+            let expected = if origin == Some(super::super::LabelOrigin::Generated) {
+                "provider-user"
+            } else {
+                "Saved label"
+            };
+            let stored = get(vault.clone(), account.id.clone()).await.unwrap();
+            assert_eq!(stored.display_name(), expected);
+            assert_eq!(stored.info().label, expected);
+            assert_eq!(
+                super::super::api::get(vault.clone(), account.id.clone())
+                    .await
+                    .unwrap()
+                    .label,
+                expected
+            );
+            // Legacy usage serialization remains compatible until explicit migration.
+            if origin.is_some() {
+                assert_eq!(usage.account.label, expected);
+            }
+            assert_eq!(stored.id, account.id);
+            assert!(stored.credential == credential);
+            let before = adapter.cache_identity(&context).await.unwrap();
+            rename(vault.clone(), account.id.clone(), "My account".into())
+                .await
+                .unwrap();
+            assert_ne!(
+                super::managed(
+                    &vault,
+                    &get(vault.clone(), account.id.clone()).await.unwrap()
+                )
+                .cache_identity(&context)
+                .await
+                .unwrap(),
+                before
+            );
+            let mut next = usage;
+            next.account.label = "renamed-upstream".into();
+            let refreshed = adapter.verify_current(&credential, next).await.unwrap();
+            assert_eq!(refreshed.account.label, "My account");
+            assert_eq!(
+                get(vault.clone(), account.id).await.unwrap().display_name(),
+                "My account"
+            );
+            std::fs::remove_dir_all(dir).unwrap();
+        }
+    }
     #[tokio::test]
     async fn vault_contention_times_out_before_mutation_and_recovers() {
         let path = std::env::temp_dir().join(format!(
@@ -1893,7 +2007,7 @@ mod tests {
                 let reader = ManagedProvider {
                     factory_oauth: false,
                     origin: account.origin(),
-                    label: account.label.clone(),
+                    label: account.display_name().to_owned(),
                     operations: Arc::new(HttpQuota(endpoint)),
                     vault: vault.clone(),
                     id: id.clone(),
@@ -2001,7 +2115,7 @@ mod tests {
                 let reader = ManagedProvider {
                     factory_oauth: false,
                     origin: account.origin(),
-                    label: account.label.clone(),
+                    label: account.display_name().to_owned(),
                     operations: Arc::new(HttpQuota(endpoint)),
                     vault: vault.clone(),
                     id: id.clone(),
@@ -2287,7 +2401,7 @@ mod tests {
                 let managed = ManagedProvider {
                     factory_oauth: false,
                     origin: account.origin(),
-                    label: account.label.clone(),
+                    label: account.display_name().to_owned(),
                     operations: Arc::new(Network),
                     vault: vault.clone(),
                     id: id.clone(),
@@ -3335,6 +3449,7 @@ mod tests {
     fn factory_saved_api_keys_keep_idempotent_quota_reads() {
         let (vault, _, _, _, path) = setup(0, false, false, false);
         let account = Account {
+            naming: None,
             id: "fixture".into(),
             provider: Provider::Factory,
             label: "API key".into(),
@@ -3892,6 +4007,7 @@ mod tests {
     #[test]
     fn automatic_detection_excludes_mock_disabled_providers_and_disabled_accounts() {
         let account = |provider: Provider, enabled| Account {
+            naming: None,
             id: format!("{}-account", provider.id()),
             provider,
             label: "Test".into(),

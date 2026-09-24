@@ -44,7 +44,7 @@ pub async fn run(
                                 if a.active { "*" } else { " " },
                                 a.id,
                                 a.provider.to_possible_value().expect("provider").get_name(),
-                                a.label
+                                a.display_name()
                             )
                         })
                         .collect())
@@ -167,8 +167,22 @@ pub async fn run(
                 _ => return Err(AccountError::Unsupported),
             };
             let usage = service::validate(context, provider, &credential).await?;
+            let origin = if label.is_some() {
+                super::LabelOrigin::User
+            } else {
+                super::LabelOrigin::Generated
+            };
             let label = service::default_label(label.as_deref(), &credential)?;
-            let id = service::add(vault, provider, label, credential, usage.account.id).await?;
+            let id = service::add_persisted(
+                vault,
+                provider,
+                label,
+                credential,
+                usage.account.id,
+                Some(origin),
+            )
+            .await?
+            .id;
             Ok(format!("Account validated and saved: {id}\n"))
         }
     }

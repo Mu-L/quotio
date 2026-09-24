@@ -756,7 +756,20 @@ async fn codex_source_rest_child() {
     let bytes = serde_json::to_string(&document.document).unwrap();
     assert!(!bytes.contains("synthetic-native-secret"));
     assert!(!bytes.contains("synthetic-owner-refresh"));
-    assert_eq!(document.document.version, 4);
+    assert_eq!(document.document.version, 9);
+    assert_eq!(
+        document
+            .document
+            .accounts
+            .iter()
+            .find(|account| account.id == id)
+            .unwrap()
+            .naming
+            .as_ref()
+            .unwrap()
+            .origin,
+        crate::accounts::LabelOrigin::User
+    );
     drop(document);
     let response: Value = client
         .delete(format!("{base}/v1/accounts/{id}"))

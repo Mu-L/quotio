@@ -330,7 +330,14 @@ impl Vault {
                 }
                 let doc: Document =
                     serde_json::from_slice(&bytes).map_err(|_| AccountError::Corrupt)?;
-                if !matches!(doc.version, 1..=8)
+                if !matches!(doc.version, 1..=9)
+                    || (doc.version < 9 && doc.accounts.iter().any(|a| a.naming.is_some()))
+                    || doc.accounts.iter().any(|a| {
+                        a.naming
+                            .as_ref()
+                            .and_then(|n| n.observed_name.as_ref())
+                            .is_some_and(|name| super::validate_label(name).is_err())
+                    })
                     || (doc.version < 8
                         && (!doc.antigravity_refresh_owners.is_empty()
                             || doc.accounts.iter().any(|a| {
@@ -439,6 +446,14 @@ impl Transaction {
         if !self.document.claude_refresh_owners.is_empty() {
             self.document.version = self.document.version.max(6);
         }
+        if self
+            .document
+            .accounts
+            .iter()
+            .any(|account| account.naming.is_some())
+        {
+            self.document.version = self.document.version.max(9);
+        }
         let bytes = serde_json::to_vec(&self.document).map_err(|_| AccountError::Corrupt)?;
         if bytes.len() > 1024 * 1024 {
             return Err(AccountError::Input);
@@ -494,6 +509,55 @@ pub(crate) mod tests {
             region: None,
             organization: None,
         }
+    }
+
+    #[test]
+    fn naming_metadata_requires_format_nine_and_legacy_documents_are_not_upgraded_on_read() {
+        use crate::accounts::LabelOrigin;
+        let memory = Arc::new(Memory::default());
+        let dir = std::env::temp_dir().join(random_string().unwrap());
+        let vault = Vault::new(memory.clone(), dir.join("lock"));
+        let mut tx = vault.begin().unwrap();
+        tx.document
+            .add(
+                Provider::Amp,
+                "Legacy custom label",
+                "old".into(),
+                credential(),
+            )
+            .unwrap();
+        tx.commit().unwrap();
+        let original = memory.read().unwrap().unwrap();
+        let tx = vault.begin().unwrap();
+        assert!(tx.document.accounts[0].naming.is_none());
+        assert_eq!(tx.document.version, 1);
+        drop(tx);
+        assert_eq!(memory.read().unwrap().unwrap(), original);
+        let mut tx = vault.begin().unwrap();
+        tx.document
+            .add_named(
+                Provider::Amp,
+                "Generated",
+                LabelOrigin::Generated,
+                "new".into(),
+                credential(),
+            )
+            .unwrap();
+        tx.commit().unwrap();
+        let tx = vault.begin().unwrap();
+        assert_eq!(tx.document.version, 9);
+        assert!(tx.document.accounts[0].naming.is_none());
+        drop(tx);
+        let mut value: serde_json::Value =
+            serde_json::from_slice(&memory.read().unwrap().unwrap()).unwrap();
+        value["version"] = 8.into();
+        memory.write(&serde_json::to_vec(&value).unwrap()).unwrap();
+        assert!(matches!(vault.begin(), Err(AccountError::Corrupt)));
+        value["version"] = 9.into();
+        value["accounts"][1]["naming"]["observed_name"] = "bad\nname".into();
+        memory.write(&serde_json::to_vec(&value).unwrap()).unwrap();
+        assert!(matches!(vault.begin(), Err(AccountError::Corrupt)));
+        std::fs::remove_dir_all(dir).unwrap();
     }
     #[test]
     fn lock_excludes_other_descriptors_in_the_same_process() {
@@ -772,7 +836,7 @@ pub(crate) mod tests {
             let bytes = memory.read().unwrap().unwrap();
             assert_old_reader_rejects(&bytes);
             let tx = vault.begin().unwrap();
-            assert_eq!(tx.document.version, 5);
+            assert_eq!(tx.document.version, 9); // Explicit rename also records label provenance.
             assert_eq!(tx.document.factory_refresh_owners.len(), 1);
         }
         // A pre-fix document is accepted by the old model, which drops the ledger.

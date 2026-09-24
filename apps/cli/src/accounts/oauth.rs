@@ -807,10 +807,23 @@ impl OAuthSessionManager {
                 .account
                 .id
             };
+            let origin = if label.is_some() {
+                super::LabelOrigin::User
+            } else {
+                super::LabelOrigin::Generated
+            };
             let label = service::default_label(label.as_deref(), &credential)?;
             let _guard = service::mutation_guard(&self.commit_guard).await?;
-            let account_id =
-                service::add(self.vault.clone(), provider, label, credential, identity).await?;
+            let account_id = service::add_persisted(
+                self.vault.clone(),
+                provider,
+                label,
+                credential,
+                identity,
+                Some(origin),
+            )
+            .await?
+            .id;
             self.generation.fetch_add(1, Ordering::SeqCst);
             Ok::<_, AccountError>(account_id)
         }
@@ -1598,7 +1611,7 @@ mod session_tests {
         let tx = manager.vault.begin().unwrap();
         assert_eq!(tx.document.accounts[0].identity, "fixture-id");
         assert_eq!(tx.document.claude_refresh_owners.len(), 1);
-        assert_eq!(tx.document.version, 6);
+        assert_eq!(tx.document.version, 9);
         drop(tx);
         assert_eq!(task.await.unwrap().len(), 1);
     }

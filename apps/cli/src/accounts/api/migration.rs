@@ -127,6 +127,7 @@ pub fn prepare(
     };
     Ok((
         PreparedAccount {
+            name_origin: None,
             provider,
             label,
             credential,
