@@ -38,6 +38,10 @@ case "${1:-}" in
         ;;
 esac
 
+echo "==> Stopping any running ${PROJECT_NAME} process"
+pkill -x "${PROJECT_NAME}" 2>/dev/null || true
+sleep 0.5
+
 mkdir -p "${BUILD_DIR}"
 
 if [ -d "${DERIVED_DATA}" ] && {
@@ -64,10 +68,6 @@ if [ ! -d "${APP_PATH}" ]; then
     echo "error: built app not found at ${APP_PATH}" >&2
     exit 1
 fi
-
-echo "==> Stopping any running ${PROJECT_NAME} process"
-pkill -x "${PROJECT_NAME}" 2>/dev/null || true
-sleep 0.5
 
 case "${MODE}" in
     run)

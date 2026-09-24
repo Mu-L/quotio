@@ -65,5 +65,9 @@ fi
 
 DESTINATION="${TARGET_BUILD_DIR:?}/${CONTENTS_FOLDER_PATH:?}/Helpers/quotio-cli"
 mkdir -p "$(dirname "${DESTINATION}")"
-cp "${STAGED_BINARY}" "${DESTINATION}"
-chmod 755 "${DESTINATION}"
+# Replace the inode so a running helper and macOS signature caches keep the old image.
+TEMP_DESTINATION="$(mktemp "${DESTINATION}.XXXXXX")"
+trap 'rm -f "${TEMP_DESTINATION}"' EXIT
+cp "${STAGED_BINARY}" "${TEMP_DESTINATION}"
+chmod 755 "${TEMP_DESTINATION}"
+mv -f "${TEMP_DESTINATION}" "${DESTINATION}"
