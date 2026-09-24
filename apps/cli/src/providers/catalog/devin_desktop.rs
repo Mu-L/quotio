@@ -258,6 +258,25 @@ fn parse_usage(
         windows.push(window);
     }
     let mut usage = common::usage("devin-desktop", key, "desktop", windows)?;
+    if let Some(id) = status
+        .get("userId")
+        .and_then(Value::as_str)
+        .filter(|id| !id.is_empty())
+    {
+        usage.account.id = crate::cache::fingerprint(&[
+            "devin-desktop",
+            id,
+            status
+                .get("teamId")
+                .and_then(Value::as_str)
+                .unwrap_or_default(),
+        ]);
+    }
+    usage.account.label = ["email", "name"]
+        .iter()
+        .filter_map(|field| status.get(*field).and_then(Value::as_str))
+        .find_map(|value| crate::accounts::validate_label(value).ok())
+        .unwrap_or_else(|| "Devin Desktop account".into());
     usage.account.plan = info
         .and_then(|info| info.get("planName"))
         .and_then(Value::as_str)
@@ -277,6 +296,29 @@ mod tests {
     };
     use serde_json::json;
     use std::sync::Arc;
+
+    #[test]
+    fn native_sessions_share_user_identity_but_keep_teams_separate() {
+        let mut root = json!({"userStatus":{"userId":"user-1","teamId":"team-1","email":"person@example.test","planStatus":{"dailyQuotaRemainingPercent":50}}});
+        let first =
+            parse_usage(&root, &Secret("cli-key".into()), OffsetDateTime::UNIX_EPOCH).unwrap();
+        let second = parse_usage(
+            &root,
+            &Secret("desktop-key".into()),
+            OffsetDateTime::UNIX_EPOCH,
+        )
+        .unwrap();
+        assert_eq!(first.account.id, second.account.id);
+        assert_eq!(first.account.label, "person@example.test");
+        root["userStatus"]["teamId"] = json!("other-team");
+        let other = parse_usage(
+            &root,
+            &Secret("desktop-key".into()),
+            OffsetDateTime::UNIX_EPOCH,
+        )
+        .unwrap();
+        assert_ne!(first.account.id, other.account.id);
+    }
 
     #[test]
     fn native_parsers_reject_other_servers_and_ambiguous_credentials() {
