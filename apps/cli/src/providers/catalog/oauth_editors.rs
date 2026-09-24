@@ -1340,19 +1340,25 @@ pub(crate) fn grok_auth_path() -> Option<PathBuf> {
     directories::BaseDirs::new().map(|dirs| dirs.home_dir().join(".grok/auth.json"))
 }
 
-pub(crate) fn grok_entry_token(
+pub(crate) fn grok_entry_login(
     path: &Path,
     entry_key: &str,
     now: OffsetDateTime,
-) -> Result<Secret, ProviderError> {
+) -> Result<(Secret, String), ProviderError> {
     let bytes = read_regular_file(path, MAX_NATIVE_FILE_BYTES)?;
     let root: Value = serde_json::from_slice(&bytes).map_err(|_| ProviderError::Authentication)?;
     let entry = root.get(entry_key).ok_or(ProviderError::Authentication)?;
     let selected = serde_json::json!({entry_key: entry});
-    grok_native_token_from_bytes(
+    let token = grok_native_token_from_bytes(
         &serde_json::to_vec(&selected).map_err(|_| ProviderError::Authentication)?,
         now,
-    )
+    )?;
+    let label = ["email", "username"]
+        .iter()
+        .filter_map(|field| entry.get(*field).and_then(Value::as_str))
+        .find_map(|value| crate::accounts::validate_label(value).ok())
+        .unwrap_or_else(|| "Grok account".into());
+    Ok((token, label))
 }
 
 fn grok_native_token(path: &Path, now: OffsetDateTime) -> Result<Secret, ProviderError> {

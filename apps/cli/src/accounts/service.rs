@@ -168,7 +168,7 @@ async fn validate_with_endpoint(
     {
         return Err(AccountError::Busy);
     }
-    if provider == Provider::Catalog("cursor")
+    if matches!(provider, Provider::Catalog("cursor" | "grok"))
         && let Some(resolved) = resolved
     {
         usage.account.label = resolved.label;
@@ -2472,7 +2472,7 @@ mod tests {
             std::fs::create_dir(&dir).unwrap();
             let path = dir.join("auth.json");
             let data = serde_json::json!({
-                "https://auth.x.ai::first": {"key":"fixture-first", "expires_at":"2099-01-01T00:00:00Z"},
+                "https://auth.x.ai::first": {"key":"fixture-first", "email":"grok@example.test", "expires_at":"2099-01-01T00:00:00Z"},
                 "https://auth.x.ai::second": {"key":"fixture-second", "expires_at":"2099-01-01T00:00:00Z"}
             });
             std::fs::write(&path, data.to_string()).unwrap();
@@ -2480,6 +2480,7 @@ mod tests {
                 path: path.clone(),
                 entry_key: "https://auth.x.ai::first".into(),
             };
+            assert_eq!(source.resolve().await.unwrap().label, "grok@example.test");
             let mut second = source.clone();
             second.entry_key = "https://auth.x.ai::second".into();
             assert_ne!(source.identity().unwrap(), second.identity().unwrap());

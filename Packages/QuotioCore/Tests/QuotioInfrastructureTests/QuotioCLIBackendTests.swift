@@ -5,6 +5,12 @@ import XCTest
 @testable import QuotioInfrastructure
 
 final class QuotioCLIBackendTests: XCTestCase {
+    func testGrokNativeEmailReplacesGeneratedSourceLabel() throws {
+        let data = Data(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[{"provider":"grok","account_ref":{"origin":"borrowed_native","id":"native","label":"grok native random"},"account":{"id":"user","label":"grok@example.test"},"windows":[]}],"failures":[]}"#.utf8)
+        let report = try makeQuotioCLIDecoder().decode(QuotioCLIUsageReport.self, from: data)
+        XCTAssertEqual(QuotioCLIUsageMapper.snapshot(report).accountAliases[.grok]?["native"], "grok@example.test")
+    }
+
     func testDevinNativeSourcesUseVerifiedIdentityAndEmail() throws {
         let data = Data(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[{"provider":"devin-desktop","account_ref":{"origin":"borrowed_native","id":"cli","label":"Devin Desktop credentials.toml"},"account":{"id":"user-team","label":"person@example.test"},"windows":[]},{"provider":"devin-desktop","account_ref":{"origin":"borrowed_native","id":"desktop","label":"Devin Desktop state.vscdb"},"account":{"id":"user-team","label":"person@example.test"},"windows":[]}],"failures":[]}"#.utf8)
         let report = try makeQuotioCLIDecoder().decode(QuotioCLIUsageReport.self, from: data)

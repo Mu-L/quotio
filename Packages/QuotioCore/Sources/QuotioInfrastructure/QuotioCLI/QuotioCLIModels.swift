@@ -268,7 +268,7 @@ struct QuotioCLIUsageMapper {
             let referenceLabel = usage.accountRef.map {
                 QuotioCLIWarpMirror.displayLabel($0.label, provider: usage.provider)
             }
-            let nativeLabel = usage.accountRef?.origin == "borrowed_native" && provider == .devin
+            let nativeLabel = usage.accountRef?.origin == "borrowed_native" && [.devin, .grok].contains(provider)
                 ? usage.account.label.nilIfEmpty : nil
             let preferredKey = nativeLabel ?? referenceLabel?.nilIfEmpty
                 ?? usage.account.label.nilIfEmpty

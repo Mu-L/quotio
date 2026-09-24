@@ -577,10 +577,10 @@ impl GrokNativeReference {
     pub async fn resolve(&self) -> Result<Resolved, AccountError> {
         self.identity()?;
         let source = self.clone();
-        let token = tokio::time::timeout(
+        let (token, label) = tokio::time::timeout(
             std::time::Duration::from_secs(10),
             tokio::task::spawn_blocking(move || {
-                crate::providers::catalog::oauth_editors::grok_entry_token(
+                crate::providers::catalog::oauth_editors::grok_entry_login(
                     &source.path,
                     &source.entry_key,
                     time::OffsetDateTime::now_utc(),
@@ -591,7 +591,7 @@ impl GrokNativeReference {
         .map_err(|_| AccountError::Busy)?
         .map_err(|_| AccountError::Storage)??;
         Ok(Resolved {
-            label: format!("Grok {}", &self.identity()?[..8]),
+            label,
             provider: crate::cli::Provider::Catalog("grok"),
             plan: None,
             subscription_status: None,
