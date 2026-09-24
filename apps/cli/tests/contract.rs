@@ -83,3 +83,37 @@ async fn mock_serializer_matches_the_shared_frontend_fixture() {
     invalid["providers"][0]["windows"][0]["quota"]["state"] = json!("invented");
     assert!(!validator("UsageReport").is_valid(&invalid));
 }
+
+#[test]
+fn resolved_v2_snapshot_roundtrips_and_enforces_account_source_boundaries() {
+    use quotio::contract::Snapshot;
+    let fixture: Value =
+        serde_json::from_str(include_str!("fixtures/contracts/snapshot-v2.json")).unwrap();
+    validator("V2Snapshot").validate(&fixture).unwrap();
+    let snapshot: Snapshot = serde_json::from_value(fixture.clone()).unwrap();
+    snapshot.validate().unwrap();
+    assert_eq!(serde_json::to_value(&snapshot).unwrap(), fixture);
+    assert!(snapshot.usage[0].metrics.is_empty()); // Valid plan-only account.
+    assert_eq!(snapshot.accounts[1].sources.len(), 2); // One account, two sources.
+    for mutate in [
+        |s: &mut Snapshot| s.accounts[1].id = s.accounts[0].id.clone(),
+        |s: &mut Snapshot| s.accounts[1].sources[0].id = s.accounts[0].sources[0].id.clone(),
+        |s: &mut Snapshot| s.usage[0].account_id = "missing".into(),
+        |s: &mut Snapshot| s.accounts[1].sources[1].selected = true,
+        |s: &mut Snapshot| s.accounts[0].enabled = false,
+        |s: &mut Snapshot| s.schema_version = 1,
+    ] {
+        let mut invalid = snapshot.clone();
+        mutate(&mut invalid);
+        assert!(invalid.validate().is_err());
+    }
+    let mut missing = fixture.clone();
+    missing["accounts"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("display_name");
+    assert!(!validator("V2Snapshot").is_valid(&missing));
+    let mut invalid = fixture;
+    invalid["usage"][0]["freshness"] = json!("invented");
+    assert!(!validator("V2Snapshot").is_valid(&invalid));
+}

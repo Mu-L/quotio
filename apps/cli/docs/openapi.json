@@ -3765,6 +3765,557 @@
             "minimum": 0
           }
         }
+      },
+      "V2Availability": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "available",
+          "reason"
+        ],
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "^[a-z0-9_-]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "V2Host": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "platform",
+          "api_versions",
+          "capabilities"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "macos",
+              "linux",
+              "windows"
+            ]
+          },
+          "api_versions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "capabilities": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/V2Availability"
+            }
+          }
+        }
+      },
+      "V2Identity": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "evidence",
+          "username",
+          "email"
+        ],
+        "properties": {
+          "evidence": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "local",
+              "verified"
+            ]
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512,
+                "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512,
+                "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "V2ConnectionState": {
+        "type": "string",
+        "enum": [
+          "ready",
+          "not_checked",
+          "needs_authorization",
+          "needs_login",
+          "unavailable",
+          "disabled"
+        ]
+      },
+      "V2Action": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "available",
+          "reason",
+          "interaction"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[a-z0-9_-]+$"
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "^[a-z0-9_-]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "interaction": {
+            "type": "string",
+            "enum": [
+              "client",
+              "host",
+              "host_user"
+            ]
+          }
+        }
+      },
+      "V2Issue": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "retryable",
+          "action"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[a-z0-9_-]+$"
+          },
+          "retryable": {
+            "type": "boolean"
+          },
+          "action": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/V2Action"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "V2Source": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "origin",
+          "kind",
+          "location",
+          "enabled",
+          "selected",
+          "state",
+          "refresh_owner",
+          "issue",
+          "actions"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "borrowed_native",
+              "owned",
+              "borrowed_proxy"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[a-z0-9_-]+$"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "^[a-z0-9_-]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "selected": {
+            "type": "boolean"
+          },
+          "state": {
+            "$ref": "#/components/schemas/V2ConnectionState"
+          },
+          "refresh_owner": {
+            "type": "string",
+            "enum": [
+              "host",
+              "provider_tool",
+              "none"
+            ]
+          },
+          "issue": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/V2Issue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/V2Action"
+            }
+          }
+        }
+      },
+      "V2Account": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "provider_id",
+          "display_name",
+          "user_label",
+          "identity",
+          "enabled",
+          "state",
+          "sources",
+          "actions"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "provider_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[a-z0-9_-]+$"
+          },
+          "display_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512,
+            "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+          },
+          "user_label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512,
+                "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "identity": {
+            "$ref": "#/components/schemas/V2Identity"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "state": {
+            "$ref": "#/components/schemas/V2ConnectionState"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/V2Source"
+            }
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/V2Action"
+            }
+          }
+        }
+      },
+      "V2Metric": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "display_name",
+          "quota",
+          "amounts",
+          "consumption",
+          "resets_at",
+          "reset_description",
+          "fetched_at",
+          "provenance"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "display_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512,
+            "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+          },
+          "quota": {
+            "$ref": "#/components/schemas/Quota"
+          },
+          "amounts": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuotaAmounts"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "consumption": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Consumption"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resets_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reset_description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512,
+                "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fetched_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/Provenance"
+          }
+        }
+      },
+      "V2Usage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "account_id",
+          "freshness",
+          "fetched_at",
+          "expires_at",
+          "plan",
+          "metrics",
+          "issue"
+        ],
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "freshness": {
+            "type": "string",
+            "enum": [
+              "not_loaded",
+              "fresh",
+              "stale",
+              "unavailable"
+            ]
+          },
+          "fetched_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512,
+                "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metrics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/V2Metric"
+            }
+          },
+          "issue": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/V2Issue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "V2Snapshot": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version",
+          "host",
+          "revision",
+          "generated_at",
+          "accounts",
+          "usage"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": 2
+          },
+          "host": {
+            "$ref": "#/components/schemas/V2Host"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "accounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/V2Account"
+            }
+          },
+          "usage": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/V2Usage"
+            }
+          }
+        },
+        "description": "Draft resolved host contract; no /v2 routes are exposed until persistence and compatibility migration are implemented."
       }
     }
   },
