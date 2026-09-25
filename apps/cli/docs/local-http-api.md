@@ -145,8 +145,9 @@ HTTPS URL, display a supplied device code or manual-code field, and poll the ses
 read that account instead of constructing a client-side name or identity.
 
 Native inspection does not grant OS access or open background permission dialogs.
-An explicit authorization request can require interaction on the host. Native
-references remain bounded and read-only; access/refresh tokens and private source
+An explicit authorization request can require interaction on the host. Scan status
+and pending permissions persist in the protected vault across restart; reads recheck
+registered and removed sources. Native references remain bounded and read-only; access/refresh tokens and private source
 paths are never returned in discovery results.
 
 ## Authentication and HTTPS deployment

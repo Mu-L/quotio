@@ -291,6 +291,8 @@ pub struct MutationReceipt {
 #[derive(Default, Serialize, Deserialize)]
 pub struct Document {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_discovery: Option<discovery::host::Report>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resolved: Option<resolved::Registry>,
     pub version: u8,
     pub accounts: Vec<Account>,
@@ -309,6 +311,7 @@ impl Document {
     pub fn empty() -> Self {
         Self {
             resolved: None,
+            native_discovery: None,
             version: 1,
             accounts: vec![],
             mutation_receipts: Default::default(),
@@ -322,7 +325,7 @@ impl Document {
     pub fn enable_resolved_accounts(&mut self) -> Result<(), AccountError> {
         if self.resolved.is_none() {
             self.resolved = Some(resolved::Registry::new(&self.accounts)?);
-            self.version = 10;
+            self.version = self.version.max(10);
         }
         Ok(())
     }

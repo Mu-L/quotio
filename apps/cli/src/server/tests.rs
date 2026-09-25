@@ -55,7 +55,6 @@ pub(super) async fn fixture() -> (Arc<ApiState>, std::path::PathBuf, String) {
     (
         Arc::new(ApiState {
             discovery: Default::default(),
-            native_discovery: Default::default(),
             native_scan_lock: Mutex::new(()),
             settings: RwLock::new(view),
             store,
@@ -2130,7 +2129,13 @@ async fn scheduled_discovery_and_refresh_obey_host_tracking() {
         settings.values.automatically_discover_logins = false;
     }
     native::scheduled(&state).await.unwrap();
-    assert!(state.native_discovery.read().await.scans.is_empty());
+    assert!(
+        crate::accounts::discovery::host::status(state.vault.clone().unwrap())
+            .await
+            .unwrap()
+            .scans
+            .is_empty()
+    );
     state
         .settings
         .write()
@@ -2138,7 +2143,9 @@ async fn scheduled_discovery_and_refresh_obey_host_tracking() {
         .values
         .automatically_discover_logins = true;
     native::scheduled(&state).await.unwrap();
-    let report = state.native_discovery.read().await;
+    let report = crate::accounts::discovery::host::status(state.vault.clone().unwrap())
+        .await
+        .unwrap();
     assert_eq!(report.scans.len(), 1);
     assert_eq!(report.scans[0].provider, Provider::Mock);
     drop(report);

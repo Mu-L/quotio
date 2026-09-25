@@ -14,19 +14,19 @@ pub struct Permission {
     pub kind: String,
     pub location: Option<String>,
 }
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct Failure {
     pub provider: Provider,
     pub kind: String,
-    pub code: &'static str,
+    pub code: String,
 }
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct Scan {
     pub provider: Provider,
     #[serde(with = "time::serde::rfc3339")]
     pub at: OffsetDateTime,
 }
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct Report {
     pub schema_version: u32,
     pub scans: Vec<Scan>,
@@ -110,7 +110,7 @@ pub async fn scan(
                     report.failures.push(Failure {
                         provider,
                         kind: source.kind.into(),
-                        code: "source_inspection_unavailable",
+                        code: "source_inspection_unavailable".into(),
                     });
                     continue;
                 }
@@ -119,7 +119,7 @@ pub async fn scan(
                 report.failures.push(Failure {
                     provider,
                     kind: source.kind.into(),
-                    code: "source_inspection_unavailable",
+                    code: "source_inspection_unavailable".into(),
                 });
             }
             for candidate in value["candidates"].as_array().into_iter().flatten() {
@@ -168,30 +168,32 @@ pub async fn scan(
                     Err(_) => report.failures.push(Failure {
                         provider,
                         kind: source.kind.into(),
-                        code: "source_registration_failed",
+                        code: "source_registration_failed".into(),
                     }),
                 }
             }
         }
     }
-    refresh(vault, report).await
+    tokio::task::spawn_blocking(move || {
+        let mut tx = vault.begin()?;
+        let mut current = tx.document.native_discovery.clone().unwrap_or_default();
+        current.merge(report);
+        current.apply_document(&tx.document);
+        if tx.document.native_discovery.as_ref() != Some(&current) {
+            tx.document.native_discovery = Some(current.clone());
+            tx.commit()?;
+        }
+        Ok(current)
+    })
+    .await
+    .map_err(|_| AccountError::Storage)?
 }
 
-pub async fn refresh(vault: Vault, mut report: Report) -> Result<Report, AccountError> {
+pub async fn status(vault: Vault) -> Result<Report, AccountError> {
     tokio::task::spawn_blocking(move || {
         let tx = vault.begin()?;
-        let providers: Vec<_> = report.scans.iter().map(|scan| scan.provider).collect();
-        report.known_sources.clear();
-        report.apply_registered(&tx.document.accounts, &providers);
-        if let Some(registry) = &tx.document.resolved {
-            report.permissions.retain(|source| {
-                !registry.permission_suppressed(
-                    source.provider,
-                    &source.kind,
-                    source.location.as_deref(),
-                )
-            });
-        }
+        let mut report = tx.document.native_discovery.clone().unwrap_or_default();
+        report.apply_document(&tx.document);
         Ok(report)
     })
     .await
@@ -199,6 +201,35 @@ pub async fn refresh(vault: Vault, mut report: Report) -> Result<Report, Account
 }
 
 impl Report {
+    fn merge(&mut self, report: Report) {
+        let providers: Vec<_> = report.scans.iter().map(|scan| scan.provider).collect();
+        self.permissions
+            .retain(|source| !providers.contains(&source.provider));
+        self.failures
+            .retain(|source| !providers.contains(&source.provider));
+        self.scans
+            .retain(|scan| !providers.contains(&scan.provider));
+        self.permissions.extend(report.permissions);
+        self.failures.extend(report.failures);
+        self.scans.extend(report.scans);
+        self.registered = report.registered;
+    }
+
+    fn apply_document(&mut self, document: &crate::accounts::Document) {
+        let providers: Vec<_> = self.scans.iter().map(|scan| scan.provider).collect();
+        self.known_sources.clear();
+        self.apply_registered(&document.accounts, &providers);
+        if let Some(registry) = &document.resolved {
+            self.permissions.retain(|source| {
+                !registry.permission_suppressed(
+                    source.provider,
+                    &source.kind,
+                    source.location.as_deref(),
+                )
+            });
+        }
+    }
+
     fn apply_registered(&mut self, accounts: &[crate::accounts::Account], providers: &[Provider]) {
         for account in accounts {
             if !providers.contains(&account.provider) {
@@ -225,6 +256,46 @@ impl Report {
 mod tests {
     use super::*;
     use crate::accounts::{random_string, vault::tests::Memory};
+
+    #[tokio::test]
+    async fn reports_survive_restart_and_repeated_identical_scans_do_not_write() {
+        use crate::accounts::vault::Backend;
+        let dir = std::env::temp_dir().join(random_string().unwrap());
+        let memory = Arc::new(Memory::default());
+        let vault = Vault::new(memory.clone(), dir.join("lock"));
+        let registry = Arc::new(Mutex::new(Registry {
+            home: Some(dir.clone()),
+            ..Registry::default()
+        }));
+        let now = OffsetDateTime::UNIX_EPOCH;
+        scan(
+            vault.clone(),
+            registry.clone(),
+            &[Provider::Mock],
+            now,
+            false,
+        )
+        .await
+        .unwrap();
+        let original = memory.read().unwrap().unwrap();
+        scan(vault, registry, &[Provider::Mock], now, false)
+            .await
+            .unwrap();
+        assert_eq!(memory.read().unwrap().unwrap(), original);
+        let restarted = Vault::new(memory.clone(), dir.join("lock"));
+        let report = status(restarted.clone()).await.unwrap();
+        assert_eq!(report.scans.len(), 1);
+        assert_eq!(report.scans[0].provider, Provider::Mock);
+        assert_eq!(report.scans[0].at, now);
+        assert_eq!(restarted.begin().unwrap().document.version, 14);
+        let mut downgraded: serde_json::Value = serde_json::from_slice(&original).unwrap();
+        downgraded["version"] = 13.into();
+        memory
+            .write(&serde_json::to_vec(&downgraded).unwrap())
+            .unwrap();
+        assert!(matches!(restarted.begin(), Err(AccountError::Corrupt)));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn a_registered_file_does_not_hide_another_keychain_location() {
@@ -317,7 +388,7 @@ mod tests {
         let id = tx.document.accounts[0].id.clone();
         tx.document.patch(&id, None, None, Some(false)).unwrap();
         tx.commit().unwrap();
-        let before = serde_json::to_vec(&vault.begin().unwrap().document).unwrap();
+        let before = serde_json::to_vec(&vault.begin().unwrap().document.accounts).unwrap();
         let second = scan(
             vault.clone(),
             registry.clone(),
@@ -331,7 +402,7 @@ mod tests {
         let tx = vault.begin().unwrap();
         assert!(!tx.document.accounts[0].enabled());
         assert!(tx.document.mutation_receipts.is_empty());
-        assert_eq!(serde_json::to_vec(&tx.document).unwrap(), before);
+        assert_eq!(serde_json::to_vec(&tx.document.accounts).unwrap(), before);
         assert_eq!(std::fs::read(&file).unwrap(), original);
         drop(tx);
         crate::accounts::api::resolved_list(vault.clone())

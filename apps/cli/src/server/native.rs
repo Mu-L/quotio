@@ -11,19 +11,15 @@ pub(super) struct Request {
 }
 
 pub(super) async fn status(State(state): State<Arc<ApiState>>) -> Result<Json<Report>, ApiError> {
-    let report = state.native_discovery.read().await.clone();
     let Some(vault) = state.vault.clone() else {
-        return Ok(Json(report));
+        return Ok(Json(Report::default()));
     };
-    host::refresh(vault, report)
-        .await
-        .map(Json)
-        .map_err(|error| {
-            ApiError(
-                StatusCode::SERVICE_UNAVAILABLE,
-                management::account_code(&error),
-            )
-        })
+    host::status(vault).await.map(Json).map_err(|error| {
+        ApiError(
+            StatusCode::SERVICE_UNAVAILABLE,
+            management::account_code(&error),
+        )
+    })
 }
 
 pub(super) async fn start(
@@ -104,26 +100,7 @@ async fn scan(
     .await
     .map_err(|error| management::account_code(&error))?;
     let changed = report.registered > 0;
-    let mut current = state.native_discovery.write().await;
-    current
-        .permissions
-        .retain(|source| !providers.contains(&source.provider));
-    current
-        .known_sources
-        .retain(|source| !providers.contains(&source.provider));
-    current
-        .failures
-        .retain(|failure| !providers.contains(&failure.provider));
-    current
-        .scans
-        .retain(|scan| !providers.contains(&scan.provider));
-    current.permissions.extend(report.permissions);
-    current.known_sources.extend(report.known_sources);
-    current.failures.extend(report.failures);
-    current.scans.extend(report.scans);
-    current.registered = report.registered;
-    let value = serde_json::to_value(&*current).map_err(|_| "invalid_snapshot");
-    drop(current);
+    let value = serde_json::to_value(&report).map_err(|_| "invalid_snapshot");
     if changed {
         state.invalidate().await;
     }

@@ -114,7 +114,6 @@ struct ApiState {
     operations: Mutex<Operations>,
     jobs: std::sync::Mutex<Vec<tokio::task::AbortHandle>>,
     discovery: Arc<std::sync::Mutex<crate::accounts::discovery::Registry>>,
-    native_discovery: RwLock<crate::accounts::discovery::host::Report>,
     native_scan_lock: Mutex<()>,
     status: Mutex<RefreshStatus>,
     context: ProviderContext,
@@ -816,7 +815,6 @@ pub async fn run(args: ServeArgs) -> Result<(), ServerError> {
     });
     let state = Arc::new(ApiState {
         discovery: Default::default(),
-        native_discovery: Default::default(),
         native_scan_lock: Mutex::new(()),
         settings: RwLock::new(view),
         store,

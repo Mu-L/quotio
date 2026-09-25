@@ -330,7 +330,12 @@ impl Vault {
                 }
                 let doc: Document =
                     serde_json::from_slice(&bytes).map_err(|_| AccountError::Corrupt)?;
-                if !matches!(doc.version, 1..=13)
+                if !matches!(doc.version, 1..=14)
+                    || (doc.version < 14 && doc.native_discovery.is_some())
+                    || doc
+                        .native_discovery
+                        .as_ref()
+                        .is_some_and(|report| report.schema_version != 2)
                     || (doc.version < 13
                         && doc
                             .resolved
@@ -480,7 +485,10 @@ impl Transaction {
                 .revision
                 .checked_add(1)
                 .ok_or(AccountError::Corrupt)?;
-            self.document.version = 13;
+            self.document.version = self.document.version.max(13);
+        }
+        if self.document.native_discovery.is_some() {
+            self.document.version = self.document.version.max(14);
         }
         let bytes = serde_json::to_vec(&self.document).map_err(|_| AccountError::Corrupt)?;
         if bytes.len() > 1024 * 1024 {
