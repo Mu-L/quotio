@@ -6,6 +6,14 @@ use std::collections::BTreeMap;
 use time::OffsetDateTime;
 pub mod snapshot;
 
+pub(crate) fn valid_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 256
+        && id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b"-_".contains(&byte))
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Availability {
     pub available: bool,
@@ -162,6 +170,8 @@ pub struct AccountList {
     pub host: Host,
     pub revision: u64,
     pub accounts: Vec<Account>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub account_redirects: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -176,6 +186,8 @@ pub struct Snapshot {
     pub usage: Vec<Usage>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub provider_issues: BTreeMap<String, Issue>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub account_redirects: BTreeMap<String, String>,
 }
 
 impl Snapshot {
@@ -184,7 +196,7 @@ impl Snapshot {
     pub fn validate(&self) -> Result<(), &'static str> {
         use std::collections::HashSet;
         if self.schema_version != 2
-            || self.host.id.is_empty()
+            || !valid_id(&self.host.id)
             || !self.host.api_versions.contains(&2)
         {
             return Err("incompatible_contract");
@@ -192,7 +204,7 @@ impl Snapshot {
         let mut accounts = HashSet::new();
         let mut sources = HashSet::new();
         for account in &self.accounts {
-            if account.id.is_empty()
+            if !valid_id(&account.id)
                 || !accounts.insert(&account.id)
                 || account.provider_id.is_empty()
                 || account.display_name.trim().is_empty()
@@ -206,7 +218,7 @@ impl Snapshot {
                 return Err("invalid_account");
             }
             for source in &account.sources {
-                if source.id.is_empty()
+                if !valid_id(&source.id)
                     || !sources.insert(&source.id)
                     || (source.selected && (!source.enabled || !account.enabled))
                 {
@@ -214,14 +226,35 @@ impl Snapshot {
                 }
             }
         }
+        if self.account_redirects.iter().any(|(old, target)| {
+            !valid_id(old) || accounts.contains(old) || !accounts.contains(target)
+        }) {
+            return Err("invalid_account_redirect");
+        }
         let mut usages = HashSet::new();
         for usage in &self.usage {
+            if matches!(usage.freshness, Freshness::Fresh | Freshness::Stale)
+                && usage.fetched_at.is_none()
+            {
+                return Err("invalid_usage_timestamp");
+            }
+            if let Some(profile) = &usage.codex_profile {
+                let mut dates = HashSet::new();
+                if profile
+                    .daily_usage
+                    .iter()
+                    .any(|day| !dates.insert(&day.date))
+                {
+                    return Err("invalid_profile");
+                }
+            }
             if !accounts.contains(&usage.account_id) || !usages.insert(&usage.account_id) {
                 return Err("invalid_usage_account");
             }
             let mut metrics = HashSet::new();
             for metric in &usage.metrics {
-                if metric.id.is_empty() || !metrics.insert(&metric.id) || !metric.quota.is_valid() {
+                if !valid_id(&metric.id) || !metrics.insert(&metric.id) || !metric.quota.is_valid()
+                {
                     return Err("invalid_metric");
                 }
             }

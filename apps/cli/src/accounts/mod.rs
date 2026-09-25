@@ -32,6 +32,8 @@ pub enum AccountError {
     IdempotencyFull,
     #[error("saved account data is invalid; no changes were made")]
     Corrupt,
+    #[error("the collected host snapshot is invalid")]
+    Snapshot,
     #[error("another account operation is in progress; retry shortly")]
     Busy,
     #[error("account not found")]

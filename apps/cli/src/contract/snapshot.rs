@@ -78,10 +78,15 @@ fn include_external(accounts: &mut Vec<Account>, report: &UsageReport) {
 
 fn issue(code: ProviderError) -> Issue {
     let action = match code {
-        ProviderError::Authentication | ProviderError::OwnerRefreshRequired => Some("sign_in"),
+        ProviderError::Authentication => Some("sign_in"),
+        ProviderError::OwnerRefreshRequired => Some("refresh_in_source_app"),
         ProviderError::CredentialStorage | ProviderError::LocalCredentialStorage => {
             Some("authorize")
         }
+        ProviderError::Timeout
+        | ProviderError::Transient
+        | ProviderError::RateLimited
+        | ProviderError::Cancelled => Some("retry"),
         _ => None,
     };
     Issue {
@@ -101,7 +106,11 @@ fn issue(code: ProviderError) -> Issue {
             kind: kind.into(),
             available: true,
             reason: None,
-            interaction: InteractionLocation::HostUser,
+            interaction: if kind == "retry" {
+                InteractionLocation::Host
+            } else {
+                InteractionLocation::HostUser
+            },
         }),
     }
 }
@@ -117,6 +126,20 @@ fn state(code: ProviderError) -> ConnectionState {
         ProviderError::SourceDisabled => ConnectionState::Disabled,
         _ => ConnectionState::Unavailable,
     }
+}
+
+pub(crate) fn metric_id(window: &crate::domain::QuotaWindow) -> String {
+    window
+        .metric_id
+        .as_ref()
+        .filter(|id| valid_id(id))
+        .cloned()
+        .unwrap_or_else(|| {
+            crate::cache::fingerprint(&[
+                "metric",
+                window.metric_id.as_deref().unwrap_or(&window.label),
+            ])
+        })
 }
 
 fn observation(
@@ -158,11 +181,7 @@ fn observation(
             .windows
             .iter()
             .map(|window| Metric {
-                // Legacy adapters identify windows by label; explicit metric IDs take precedence.
-                id: window
-                    .metric_id
-                    .clone()
-                    .unwrap_or_else(|| crate::cache::fingerprint(&["metric", &window.label])),
+                id: metric_id(window),
                 display_name: window.label.clone(),
                 note: window.note.clone(),
                 quota: window.quota.clone(),
@@ -196,6 +215,7 @@ pub fn project(
         accounts: accounts.accounts,
         usage: Vec::new(),
         provider_issues: BTreeMap::new(),
+        account_redirects: accounts.account_redirects,
     };
     include_external(&mut snapshot.accounts, report);
     for failure in &report.failures {
@@ -338,7 +358,8 @@ pub fn digest(snapshot: &Snapshot) -> Result<String, crate::accounts::AccountErr
         &snapshot.accounts,
         &snapshot.usage,
         &snapshot.provider_issues,
+        &snapshot.account_redirects,
     ))
-    .map_err(|_| crate::accounts::AccountError::Corrupt)?;
+    .map_err(|_| crate::accounts::AccountError::Snapshot)?;
     Ok(crate::cache::fingerprint(&[&content]))
 }

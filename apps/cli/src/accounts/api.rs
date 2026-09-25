@@ -763,7 +763,7 @@ pub async fn resolved_snapshot(
             now,
             ttl,
         )
-        .map_err(|_| AccountError::Corrupt)?;
+        .map_err(|_| AccountError::Snapshot)?;
         let digest = crate::contract::snapshot::digest(&snapshot)?;
         if registry.snapshot_digest.as_ref() != Some(&digest) {
             registry.snapshot_digest = Some(digest);

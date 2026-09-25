@@ -17,6 +17,7 @@ pub(super) fn account_code(error: &AccountError) -> &'static str {
         AccountError::Storage | AccountError::Corrupt => "credential_storage_unavailable",
         AccountError::Busy => "account_busy",
         AccountError::SourceDisabled => "source_disabled",
+        AccountError::Snapshot => "invalid_snapshot",
         AccountError::CommitUncertain => "credential_commit_uncertain",
         AccountError::IdempotencyConflict => "idempotency_conflict",
         AccountError::IdempotencyFull => "idempotency_full",

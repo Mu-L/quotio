@@ -316,6 +316,7 @@ impl Registry {
             .collect();
         Ok(view::AccountList {
             schema_version: 2,
+            account_redirects: self.redirects.clone(),
             revision: self.revision,
             host: view::Host {
                 id: self.host_id.clone(),

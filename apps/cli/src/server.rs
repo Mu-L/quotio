@@ -301,6 +301,7 @@ async fn resolved_snapshot(
     let mut accounts = match previous.as_ref() {
         Some(snapshot) => crate::contract::AccountList {
             schema_version: 2,
+            account_redirects: std::collections::BTreeMap::new(),
             host: snapshot.host.clone(),
             revision: snapshot.revision,
             accounts: Vec::new(),

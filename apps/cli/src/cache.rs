@@ -311,16 +311,7 @@ fn diagnostic(message: &str) {
     eprintln!("quotio: {message}");
 }
 fn valid(usage: &ProviderUsage) -> bool {
-    !usage.windows.is_empty()
-        && usage.windows.iter().all(|w| {
-            w.quota.is_valid()
-                && w.consumption.as_ref().is_none_or(|c| {
-                    c.used.is_finite() && c.used >= 0.0 && !c.unit.trim().is_empty()
-                })
-                && w.amounts
-                    .as_ref()
-                    .is_none_or(|a| a.remaining.is_finite() && a.limit.is_none_or(f64::is_finite))
-        })
+    !usage.windows.is_empty() && crate::fetch::valid_usage(usage)
 }
 fn read(path: &Path) -> io::Result<Option<ProviderUsage>> {
     let mut options = OpenOptions::new();

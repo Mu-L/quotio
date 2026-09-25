@@ -80,15 +80,7 @@ impl Collector {
         };
         for (index, result) in results {
             let result = result.and_then(|usage| {
-                if usage.provider != ids[index]
-                    || !usage.has_observations()
-                    || usage.windows.iter().any(|window| {
-                        !window.quota.is_valid()
-                            || window.consumption.as_ref().is_some_and(|c| {
-                                !c.used.is_finite() || c.used < 0.0 || c.unit.trim().is_empty()
-                            })
-                    })
-                {
+                if usage.provider != ids[index] || !valid_usage(&usage) {
                     Err(ProviderError::InvalidData)
                 } else {
                     Ok(usage)
@@ -111,6 +103,33 @@ impl Collector {
         report.include_diagnostics();
         report
     }
+}
+
+pub(crate) fn valid_usage(usage: &ProviderUsage) -> bool {
+    let mut metrics = std::collections::HashSet::new();
+    let mut dates = std::collections::HashSet::new();
+    usage.has_observations()
+        && usage
+            .account
+            .verified
+            .as_ref()
+            .is_none_or(VerifiedIdentity::is_valid)
+        && usage.codex_profile.as_ref().is_none_or(|profile| {
+            profile
+                .daily_usage
+                .iter()
+                .all(|day| dates.insert(&day.date))
+        })
+        && usage.windows.iter().all(|window| {
+            metrics.insert(crate::contract::snapshot::metric_id(window))
+                && window.quota.is_valid()
+                && window.consumption.as_ref().is_none_or(|value| {
+                    value.used.is_finite() && value.used >= 0.0 && !value.unit.trim().is_empty()
+                })
+                && window.amounts.as_ref().is_none_or(|value| {
+                    value.remaining.is_finite() && value.limit.is_none_or(f64::is_finite)
+                })
+        })
 }
 
 // Prefer a managed snapshot only when it identifies the same account. Email-only

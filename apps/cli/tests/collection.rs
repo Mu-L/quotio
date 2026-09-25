@@ -628,3 +628,32 @@ async fn plan_only_responses_are_successful_without_inventing_metrics() {
         }
     }
 }
+
+struct DuplicateMetrics;
+impl ProviderAdapter for DuplicateMetrics {
+    fn id(&self) -> ProviderId {
+        ProviderId("invalid-fixture".into())
+    }
+    fn fetch<'a>(&'a self, context: &'a ProviderContext) -> FetchFuture<'a> {
+        Box::pin(async move {
+            let mut usage = MockProvider.fetch(context).await?;
+            usage.provider = self.id();
+            usage.windows.push(usage.windows[0].clone());
+            Ok(usage)
+        })
+    }
+}
+
+#[tokio::test]
+async fn malformed_source_metrics_do_not_discard_another_providers_usage() {
+    let report = collector()
+        .collect(request(vec![
+            Arc::new(MockProvider),
+            Arc::new(DuplicateMetrics),
+        ]))
+        .await;
+    assert_eq!(report.providers.len(), 1);
+    assert_eq!(report.providers[0].provider.0, "mock");
+    assert_eq!(report.failures.len(), 1);
+    assert_eq!(report.failures[0].code, ProviderError::InvalidData);
+}

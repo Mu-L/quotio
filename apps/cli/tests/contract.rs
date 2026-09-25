@@ -131,6 +131,11 @@ fn resolved_v2_snapshot_roundtrips_and_enforces_account_source_boundaries() {
         |s: &mut Snapshot| s.accounts[1].sources[1].selected = true,
         |s: &mut Snapshot| s.accounts[0].enabled = false,
         |s: &mut Snapshot| s.schema_version = 1,
+        |s: &mut Snapshot| s.usage[0].fetched_at = None,
+        |s: &mut Snapshot| {
+            s.account_redirects.insert("old".into(), "missing".into());
+        },
+        |s: &mut Snapshot| s.accounts[0].id = "invalid/id".into(),
     ] {
         let mut invalid = snapshot.clone();
         mutate(&mut invalid);
@@ -282,6 +287,7 @@ async fn snapshot_includes_unregistered_observations_without_reading_credentials
     let mut accounts: AccountList =
         serde_json::from_str(include_str!("fixtures/contracts/accounts-v2.json")).unwrap();
     accounts.accounts.clear();
+    accounts.account_redirects.clear();
     let context = ProviderContext {
         http: reqwest::Client::new(),
         clock: Arc::new(Fixture),
@@ -331,6 +337,7 @@ fn failed_unregistered_probes_report_provider_issues_without_inventing_accounts(
     let mut accounts: AccountList =
         serde_json::from_str(include_str!("fixtures/contracts/accounts-v2.json")).unwrap();
     accounts.accounts.clear();
+    accounts.account_redirects.clear();
     for reference in [
         None,
         Some(AccountRef {
@@ -363,5 +370,49 @@ fn failed_unregistered_probes_report_provider_issues_without_inventing_accounts(
         let value = serde_json::to_value(&snapshot).unwrap();
         validator("V2Snapshot").validate(&value).unwrap();
         assert!(!value.to_string().contains("internal detail"));
+    }
+}
+
+#[test]
+fn recovery_actions_distinguish_owner_login_from_host_retry() {
+    use quotio::{
+        contract::{AccountList, InteractionLocation, snapshot::project},
+        domain::{ProviderFailure, ProviderId},
+        error::ProviderError,
+    };
+    let mut accounts: AccountList =
+        serde_json::from_str(include_str!("fixtures/contracts/accounts-v2.json")).unwrap();
+    accounts.accounts.clear();
+    accounts.account_redirects.clear();
+    for (code, kind, interaction) in [
+        (
+            ProviderError::OwnerRefreshRequired,
+            "refresh_in_source_app",
+            InteractionLocation::HostUser,
+        ),
+        (ProviderError::Timeout, "retry", InteractionLocation::Host),
+    ] {
+        let report = UsageReport {
+            schema_version: 1,
+            generated_at: datetime!(2026-01-01 0:00 UTC),
+            providers: vec![],
+            failures: vec![ProviderFailure {
+                account_ref: None,
+                provider: ProviderId("mock".into()),
+                code,
+                message: code.to_string(),
+            }],
+        };
+        let snapshot = project(
+            accounts.clone(),
+            &report,
+            report.generated_at,
+            time::Duration::minutes(5),
+        )
+        .unwrap();
+        let action = snapshot.provider_issues["mock"].action.as_ref().unwrap();
+        assert_eq!(action.kind, kind);
+        assert_eq!(action.interaction, interaction);
+        assert!(action.available);
     }
 }

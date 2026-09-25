@@ -402,7 +402,7 @@ async fn run() -> ExitCode {
                             },
                         );
                         quotio::contract::snapshot::project(accounts, &report, now, ttl)
-                            .map_err(|_| quotio::accounts::AccountError::Corrupt)
+                            .map_err(|_| quotio::accounts::AccountError::Snapshot)
                     })
             };
             let mut snapshot = match snapshot {
@@ -428,6 +428,12 @@ async fn run() -> ExitCode {
                     .any(|account| account.id == usage.account_id)
             });
             let failures = output::text::snapshot_failures(&snapshot);
+            snapshot.account_redirects.retain(|_, target| {
+                snapshot
+                    .accounts
+                    .iter()
+                    .any(|account| account.id == *target)
+            });
             if !failures.is_empty() {
                 eprint!("{failures}");
             }

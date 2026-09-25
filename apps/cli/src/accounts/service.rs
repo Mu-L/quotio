@@ -325,10 +325,7 @@ async fn validate_credential(
         usage.account.id = account_id.clone();
         usage.account.label = email.clone();
     }
-    if !usage.has_observations()
-        || usage.account.id.is_empty()
-        || usage.windows.iter().any(|w| !w.quota.is_valid())
-    {
+    if !crate::fetch::valid_usage(&usage) || usage.account.id.is_empty() {
         return Err(ProviderError::InvalidData.into());
     }
     Ok(usage)

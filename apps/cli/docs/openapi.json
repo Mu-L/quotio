@@ -2340,6 +2340,7 @@
           "accounts"
         ],
         "properties": {
+          "account_redirects": {"type": "object", "additionalProperties": {"type": "string"}},
           "schema_version": {
             "const": 2
           },
@@ -4660,6 +4661,7 @@
       },
       "V2Usage": {
         "type": "object",
+        "allOf": [{"if": {"properties": {"freshness": {"enum": ["fresh", "stale"]}}}, "then": {"properties": {"fetched_at": {"type": "string", "format": "date-time"}}}}],
         "additionalProperties": false,
         "required": [
           "account_id",
@@ -4756,6 +4758,7 @@
           "usage"
         ],
         "properties": {
+          "account_redirects": {"type": "object", "additionalProperties": {"type": "string"}},
           "provider_issues": {"type": "object", "additionalProperties": {"$ref": "#/components/schemas/V2Issue"}},
           "schema_version": {
             "const": 2
