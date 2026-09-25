@@ -188,3 +188,135 @@ fn resolved_read_projection_matches_the_frontend_fixture() {
         serde_json::from_str(include_str!("fixtures/contracts/accounts-v2.json")).unwrap();
     assert_eq!(value, fixture);
 }
+
+#[tokio::test]
+async fn snapshot_selects_healthy_sources_and_preserves_quota_semantics() {
+    use quotio::{
+        contract::{AccountList, ConnectionState, Freshness, snapshot::project},
+        domain::{AccountRef, ProviderFailure},
+        error::ProviderError,
+    };
+    let accounts: AccountList =
+        serde_json::from_str(include_str!("fixtures/contracts/accounts-v2.json")).unwrap();
+    let context = ProviderContext {
+        http: reqwest::Client::new(),
+        clock: Arc::new(Fixture),
+        credentials: Arc::new(Fixture),
+    };
+    let mut value = Provider::Mock.adapter().fetch(&context).await.unwrap();
+    value.provider.0 = "amp".into();
+    value.account_ref = Some(AccountRef {
+        id: "source-b".into(),
+        label: "Ignored source label".into(),
+        origin: None,
+    });
+    value.windows[0].note = Some("Provider detail".into());
+    value.windows[0].metric_id = None;
+    value.windows[0].label = "Quota 5-hour 日本語".into();
+    let mut report = UsageReport {
+        schema_version: 1,
+        generated_at: context.clock.now(),
+        providers: vec![value],
+        failures: vec![ProviderFailure {
+            provider: quotio::domain::ProviderId("amp".into()),
+            account_ref: Some(AccountRef {
+                id: "source-a".into(),
+                label: "Ignored".into(),
+                origin: None,
+            }),
+            code: ProviderError::Authentication,
+            message: "not exposed".into(),
+        }],
+    };
+    let now = context.clock.now();
+    let snapshot = project(accounts.clone(), &report, now, time::Duration::minutes(5)).unwrap();
+    validator("V2Snapshot")
+        .validate(&serde_json::to_value(&snapshot).unwrap())
+        .unwrap();
+    assert_eq!(snapshot.accounts.len(), 1);
+    assert_eq!(snapshot.accounts[0].display_name, "Work");
+    assert_eq!(snapshot.accounts[0].state, ConnectionState::Ready);
+    assert_eq!(
+        snapshot.accounts[0].sources[0].state,
+        ConnectionState::NeedsLogin
+    );
+    assert!(snapshot.accounts[0].sources[1].selected);
+    assert_eq!(snapshot.usage[0].freshness, Freshness::Fresh);
+    assert!(snapshot.usage[0].issue.is_none());
+    assert_eq!(
+        snapshot.usage[0].metrics[0].note.as_deref(),
+        Some("Provider detail")
+    );
+    for (metric, window) in snapshot.usage[0]
+        .metrics
+        .iter()
+        .zip(&report.providers[0].windows)
+    {
+        assert_eq!(metric.quota, window.quota);
+        assert_eq!(metric.amounts, window.amounts);
+    }
+    let stale = project(
+        accounts.clone(),
+        &report,
+        now + time::Duration::minutes(6),
+        time::Duration::minutes(5),
+    )
+    .unwrap();
+    assert_eq!(stale.usage[0].freshness, Freshness::Stale);
+    report.providers[0].windows.clear();
+    report.providers[0].account.plan = Some("Pro".into());
+    let plan = project(accounts.clone(), &report, now, time::Duration::minutes(5)).unwrap();
+    assert!(plan.usage[0].metrics.is_empty());
+    assert_eq!(plan.usage[0].freshness, Freshness::Fresh);
+    let mut disabled = accounts;
+    disabled.accounts[0].enabled = false;
+    let disabled = project(disabled, &report, now, time::Duration::minutes(5)).unwrap();
+    assert_eq!(disabled.accounts[0].state, ConnectionState::Disabled);
+    assert!(disabled.accounts[0].sources.iter().all(|s| !s.selected));
+    assert_eq!(disabled.usage[0].freshness, Freshness::NotLoaded);
+}
+
+#[tokio::test]
+async fn snapshot_includes_unregistered_observations_without_reading_credentials() {
+    use quotio::contract::{AccountList, Freshness, snapshot::project};
+    let mut accounts: AccountList =
+        serde_json::from_str(include_str!("fixtures/contracts/accounts-v2.json")).unwrap();
+    accounts.accounts.clear();
+    let context = ProviderContext {
+        http: reqwest::Client::new(),
+        clock: Arc::new(Fixture),
+        credentials: Arc::new(Fixture),
+    };
+    let report = UsageReport {
+        schema_version: 1,
+        generated_at: context.clock.now(),
+        providers: vec![Provider::Mock.adapter().fetch(&context).await.unwrap()],
+        failures: vec![],
+    };
+    let result = project(
+        accounts.clone(),
+        &report,
+        context.clock.now(),
+        time::Duration::minutes(5),
+    )
+    .unwrap();
+    validator("V2Snapshot")
+        .validate(&serde_json::to_value(&result).unwrap())
+        .unwrap();
+    assert_eq!(result.accounts.len(), 1);
+    assert_eq!(result.accounts[0].display_name, "Demo account");
+    assert!(result.accounts[0].actions.is_empty());
+    assert_eq!(result.usage[0].freshness, Freshness::Fresh);
+    assert_eq!(
+        result.accounts[0].id,
+        project(
+            accounts,
+            &report,
+            context.clock.now(),
+            time::Duration::minutes(5)
+        )
+        .unwrap()
+        .accounts[0]
+            .id
+    );
+}

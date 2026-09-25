@@ -10,6 +10,16 @@
     }
   ],
   "paths": {
+    "/v2/snapshot": {
+      "get": {
+        "summary": "Read resolved account, source health and usage state",
+        "security": [{"bearerAuth": []}],
+        "responses": {
+          "200": {"description": "Consistent resolved snapshot", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/V2Snapshot"}}}},
+          "503": {"description": "Host account state is unavailable"}
+        }
+      }
+    },
     "/v2/accounts/{id}": {
       "parameters": [
         {
@@ -4579,6 +4589,7 @@
           "provenance"
         ],
         "properties": {
+          "note": {"type": "string"},
           "id": {
             "type": "string",
             "minLength": 1,
@@ -4660,6 +4671,11 @@
           "issue"
         ],
         "properties": {
+          "subscription_status": {"type": "string"},
+          "reset_credits": {"$ref": "#/components/schemas/ResetCredits"},
+          "antigravity_subscription": {"$ref": "#/components/schemas/AntigravitySubscriptionInfo"},
+          "codex_profile": {"$ref": "#/components/schemas/CodexProfileAnalytics"},
+          "codex_reset_credits": {"$ref": "#/components/schemas/CodexResetCreditInventory"},
           "account_id": {
             "type": "string",
             "minLength": 1,

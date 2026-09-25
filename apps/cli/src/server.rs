@@ -105,6 +105,7 @@ struct ApiState {
     settings: RwLock<SettingsView>,
     store: SettingsStore,
     snapshot: RwLock<Option<(u64, UsageReport)>>,
+    transient_snapshot: Mutex<Option<crate::contract::Snapshot>>,
     generation: Arc<AtomicU64>,
     commit_guard: Arc<Mutex<()>>,
     refresh_lock: Mutex<()>,
@@ -148,6 +149,7 @@ fn router(state: Arc<ApiState>, policy: Arc<security::Policy>) -> Router {
     Router::new()
         .route("/openapi.json", get(openapi::document))
         .route("/health", get(health))
+        .route("/v2/snapshot", get(resolved_snapshot))
         .route("/v1/status", get(status))
         .route(
             "/v1/accounts",
@@ -250,6 +252,89 @@ async fn provider(State(state): State<Arc<ApiState>>, Path(id): Path<String>) ->
     ))
     .into_response()
 }
+async fn resolved_snapshot(
+    State(state): State<Arc<ApiState>>,
+) -> Result<Json<crate::contract::Snapshot>, ApiError> {
+    let _guard = crate::accounts::service::mutation_guard(&state.commit_guard)
+        .await
+        .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "account_busy"))?;
+    let now = state.context.clock.now();
+    let ttl = time::Duration::seconds(
+        state
+            .settings
+            .read()
+            .await
+            .values
+            .cache_ttl_seconds
+            .min(i64::MAX as u64) as i64,
+    );
+    let report = state
+        .snapshot
+        .read()
+        .await
+        .as_ref()
+        .filter(|(generation, _)| *generation == state.generation.load(Ordering::SeqCst))
+        .map(|(_, report)| report.clone())
+        .unwrap_or(UsageReport {
+            schema_version: 1,
+            generated_at: now,
+            providers: Vec::new(),
+            failures: Vec::new(),
+        });
+    if !state.no_saved_accounts {
+        let vault = state.vault.clone().ok_or(ApiError(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "account_storage_disabled",
+        ))?;
+        return crate::accounts::api::resolved_snapshot(vault, report, now, ttl)
+            .await
+            .map(Json)
+            .map_err(|error| {
+                ApiError(
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    management::account_code(&error),
+                )
+            });
+    }
+    // This mode deliberately never opens the protected account vault. Its host ID is session-scoped.
+    let mut previous = state.transient_snapshot.lock().await;
+    let mut accounts = match previous.as_ref() {
+        Some(snapshot) => crate::contract::AccountList {
+            schema_version: 2,
+            host: snapshot.host.clone(),
+            revision: snapshot.revision,
+            accounts: Vec::new(),
+        },
+        None => crate::accounts::resolved::Registry::new(&[])
+            .and_then(|registry| registry.account_list(&[]))
+            .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "host_state_unavailable"))?,
+    };
+    accounts.host.capabilities.insert(
+        "account_write_v2".into(),
+        crate::contract::Availability {
+            available: false,
+            reason: Some("no_saved_accounts".into()),
+        },
+    );
+    let mut snapshot = crate::contract::snapshot::project(accounts, &report, now, ttl)
+        .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "invalid_snapshot"))?;
+    let digest = crate::contract::snapshot::digest(&snapshot)
+        .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "invalid_snapshot"))?;
+    if previous
+        .as_ref()
+        .and_then(|old| crate::contract::snapshot::digest(old).ok())
+        .as_ref()
+        != Some(&digest)
+    {
+        snapshot.revision = snapshot.revision.checked_add(1).ok_or(ApiError(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "revision_exhausted",
+        ))?;
+    }
+    *previous = Some(snapshot.clone());
+    Ok(Json(snapshot))
+}
+
 async fn usage(State(state): State<Arc<ApiState>>) -> Response {
     usage_response(&state, None, None).await
 }
@@ -766,6 +851,7 @@ pub async fn run(args: ServeArgs) -> Result<(), ServerError> {
         settings: RwLock::new(view),
         store,
         snapshot: RwLock::new(None),
+        transient_snapshot: Mutex::new(None),
         generation,
         commit_guard,
         refresh_lock: Mutex::new(()),

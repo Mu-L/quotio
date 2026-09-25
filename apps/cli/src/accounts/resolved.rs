@@ -22,6 +22,8 @@ pub struct Registry {
     redirects: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     labels: BTreeMap<String, Option<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) snapshot_digest: Option<String>,
 }
 
 impl Registry {
@@ -32,6 +34,7 @@ impl Registry {
             bindings: BTreeMap::new(),
             redirects: BTreeMap::new(),
             labels: BTreeMap::new(),
+            snapshot_digest: None,
         };
         state.synchronize(accounts)?;
         Ok(state)
@@ -367,6 +370,11 @@ impl Registry {
     }
 
     pub fn validate(&self, accounts: &[Account]) -> Result<(), AccountError> {
+        if self.snapshot_digest.as_ref().is_some_and(|digest| {
+            digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+        }) {
+            return Err(AccountError::Corrupt);
+        }
         let valid_id = |id: &str| {
             !id.is_empty()
                 && id.len() <= 256

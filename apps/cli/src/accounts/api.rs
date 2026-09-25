@@ -733,6 +733,52 @@ pub async fn resolved_list(vault: Vault) -> Result<crate::contract::AccountList,
     resolved_view(vault, None).await
 }
 
+pub async fn resolved_snapshot(
+    vault: Vault,
+    mut report: crate::domain::UsageReport,
+    now: time::OffsetDateTime,
+    ttl: time::Duration,
+) -> Result<crate::contract::Snapshot, AccountError> {
+    tokio::task::spawn_blocking(move || {
+        let mut tx = vault.begin()?;
+        tx.document.enable_resolved_accounts()?;
+        report.providers.retain(|usage| {
+            let record = usage.account_ref.as_ref().and_then(|reference| {
+                tx.document
+                    .accounts
+                    .iter()
+                    .find(|record| record.id == reference.id)
+            });
+            record.is_none_or(|record| {
+                !matches!(
+                    record.credential,
+                    Credential::ApiKey { .. } | Credential::CatalogKey { .. }
+                ) || record.identity == usage.account.id
+            })
+        });
+        let registry = tx.document.resolved.as_mut().expect("initialized");
+        let mut snapshot = crate::contract::snapshot::project(
+            registry.account_list(&tx.document.accounts)?,
+            &report,
+            now,
+            ttl,
+        )
+        .map_err(|_| AccountError::Corrupt)?;
+        let digest = crate::contract::snapshot::digest(&snapshot)?;
+        if registry.snapshot_digest.as_ref() != Some(&digest) {
+            registry.snapshot_digest = Some(digest);
+            snapshot.revision = registry
+                .revision
+                .checked_add(1)
+                .ok_or(AccountError::Corrupt)?;
+            tx.commit()?;
+        }
+        Ok(snapshot)
+    })
+    .await
+    .map_err(|_| AccountError::Storage)?
+}
+
 pub async fn resolved_get(
     vault: Vault,
     id: String,

@@ -1,6 +1,6 @@
 # Resolved host contract v2
 
-The resolved account read API initializes its protected metadata automatically on first access. Full v2 snapshots are not enabled yet; production macOS still uses v1. There is no CLI schema-selection flag or compatibility guarantee for the old account array. Older production routes are being removed as the frontend cutover proceeds. The definitions are published under `V2*` in `openapi.json`; Rust types live in `src/contract.rs`. Frontends must not switch production CRUD or quota traffic until their corresponding v2 operations and snapshot services are available.
+The resolved account read API initializes its protected metadata automatically on first access. Resolved snapshots are available at `GET /v2/snapshot`; production macOS has not switched to that endpoint yet. There is no CLI schema-selection flag or compatibility guarantee for the old account array. Older production routes are being removed as the frontend cutover proceeds. The definitions are published under `V2*` in `openapi.json`; Rust types live in `src/contract.rs`. Frontends must not switch production CRUD or quota traffic until their corresponding v2 operations and snapshot services are available.
 
 ## Resource ownership
 
@@ -49,7 +49,7 @@ Data migration preserves current credentials, source IDs, names and enabled stat
 - HTTP: `GET /v2/accounts` uses the same service. First access atomically initializes protected metadata, preserving original source IDs and credentials. Repeated reads keep the host ID and revision stable.
 - CLI `use` and `remove` accept logical account IDs, including a group whose original source was removed. Removing a logical account unlinks all its registered sources, never external provider login files.
 - The standalone CLI's default vault is not the macOS app's isolated vault. Use the appropriate host connection; never merge namespaces implicitly.
-- The current read projection reports `not_checked` until the quota/state projection is implemented. It advertises the supported logical-account and source actions. Full quota-state projection and production UI cutover remain in progress.
+- Account-list reads report `not_checked`; use `/v2/snapshot` for source health and quota state. It advertises the supported logical-account and source actions. Production UI cutover remains in progress.
 
 ## Logical account and source mutations
 
@@ -58,3 +58,11 @@ Data migration preserves current credentials, source IDs, names and enabled stat
 - `PATCH/DELETE /v2/sources/{id}` targets exactly one physical source record. PATCH accepts boolean `enabled` and replacement `api_key` for owned API-key sources. Replacement validates with the provider before committing; omitted settings/region/organization are preserved and null resets them. Settings changes require a replacement key. A changed credential during validation rejects the write. A new identity detaches the source and returns its new logical account ID. DELETE leaves the logical account alive while another source remains. Neither operation edits the provider's external login.
 - Writes require bearer authentication, management mode and an `Idempotency-Key`. They use the existing durable mutation ledger and operation polling. A conflicting body with the same key is rejected.
 - Logical user labels live in the protected registry, independent of source labels, so deleting the original source does not drop the account name. Format 11 records this policy. Display precedence and action availability are decided in Rust; frontends forward the selected resource scope.
+
+## Resolved snapshots
+
+`GET /v2/snapshot` combines registered accounts with collected observations. Rust chooses one enabled source per account, preferring fresh results over stale results and a working source over a failed source. It preserves metric states, amounts, notes, reset descriptions and provider supplemental observations. A secondary source failure stays on that source instead of hiding another source's quota. A plan-only success has no invented metrics.
+
+Snapshot reads use the current vault under its transaction lock. Deleted sources cannot reappear from an old report, and replacing an API-key identity discards that identity's old quota. Format 12 persists a digest of account/usage state: the revision increases when those values change, including freshness transitions, but not on an unchanged read. The response is published only after the revision commits.
+
+With `--no-saved-accounts`, snapshots do not access the protected vault. Default/environment/mock observations remain visible with no account-write actions. This mode's host ID and revision are scoped to the server session; restarting it creates a new host ID. Normal account-backed hosts retain the vault's host ID across restarts.

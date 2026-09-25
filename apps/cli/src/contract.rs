@@ -4,6 +4,7 @@ use crate::domain::{AccountOrigin, Consumption, Provenance, Quota, QuotaAmounts}
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use time::OffsetDateTime;
+pub mod snapshot;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Availability {
@@ -110,6 +111,8 @@ pub struct Account {
 pub struct Metric {
     pub id: String,
     pub display_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
     pub quota: Quota,
     pub amounts: Option<QuotaAmounts>,
     pub consumption: Option<Consumption>,
@@ -139,6 +142,16 @@ pub struct Usage {
     #[serde(with = "time::serde::rfc3339::option")]
     pub expires_at: Option<OffsetDateTime>,
     pub plan: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subscription_status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reset_credits: Option<crate::domain::ResetCredits>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub antigravity_subscription: Option<crate::domain::AntigravitySubscriptionInfo>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_profile: Option<crate::domain::CodexProfileAnalytics>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_reset_credits: Option<crate::domain::CodexResetCreditInventory>,
     pub metrics: Vec<Metric>,
     pub issue: Option<Issue>,
 }

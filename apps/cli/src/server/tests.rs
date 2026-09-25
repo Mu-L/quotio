@@ -58,6 +58,7 @@ pub(super) async fn fixture() -> (Arc<ApiState>, std::path::PathBuf, String) {
             settings: RwLock::new(view),
             store,
             snapshot: RwLock::new(None),
+            transient_snapshot: Mutex::new(None),
             generation,
             commit_guard: guard,
             refresh_lock: Mutex::new(()),
@@ -1564,6 +1565,31 @@ async fn resolved_account_read_contract_is_automatic_shared_and_durable() {
     let base = format!("http://{address}");
     assert_eq!(
         client
+            .get(format!("{base}/v2/snapshot"))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        401
+    );
+    let snapshot: Value = client
+        .get(format!("{base}/v2/snapshot"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let document: Value = serde_json::from_str(include_str!("../../docs/openapi.json")).unwrap();
+    jsonschema::draft202012::new(
+        &json!({"$ref":"#/components/schemas/V2Snapshot", "components":document["components"]}),
+    )
+    .unwrap()
+    .validate(&snapshot)
+    .unwrap();
+    assert_eq!(
+        client
             .get(format!("{base}/v2/accounts"))
             .send()
             .await
@@ -1873,5 +1899,126 @@ async fn logical_account_and_source_crud_have_distinct_atomic_scopes() {
     let remaining = accounts::api::resolved_list(vault).await.unwrap();
     assert_eq!(remaining.accounts.len(), 1);
     assert_eq!(remaining.accounts[0].id, unrelated);
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[tokio::test]
+async fn resolved_snapshots_keep_revisions_and_do_not_resurrect_unlinked_sources() {
+    let (state, dir, id) = fixture().await;
+    let mut owned_state = Arc::try_unwrap(state).ok().unwrap();
+    owned_state.no_saved_accounts = false;
+    let state = Arc::new(owned_state);
+    let mut value = Provider::Mock
+        .adapter()
+        .fetch(&state.context)
+        .await
+        .unwrap();
+    value.provider.0 = "amp".into();
+    value.account.id = "fake-identity".into();
+    for window in &mut value.windows {
+        window.fetched_at = state.context.clock.now();
+    }
+    value.account_ref = Some(crate::domain::AccountRef {
+        id: id.clone(),
+        label: "source".into(),
+        origin: Some(crate::domain::AccountOrigin::Owned),
+    });
+    *state.snapshot.write().await = Some((
+        0,
+        UsageReport {
+            schema_version: 1,
+            generated_at: state.context.clock.now(),
+            providers: vec![value],
+            failures: vec![],
+        },
+    ));
+    let Json(first) = resolved_snapshot(State(state.clone()))
+        .await
+        .unwrap_or_else(|_| panic!());
+    assert_eq!(first.usage[0].freshness, crate::contract::Freshness::Fresh);
+    let Json(repeated) = resolved_snapshot(State(state.clone()))
+        .await
+        .unwrap_or_else(|_| panic!());
+    assert_eq!(first.revision, repeated.revision);
+    assert_eq!(first.host.id, repeated.host.id);
+    let vault = state.vault.clone().unwrap();
+    let restarted = accounts::api::resolved_snapshot(
+        vault.clone(),
+        state.snapshot.read().await.as_ref().unwrap().1.clone(),
+        state.context.clock.now(),
+        time::Duration::seconds(300),
+    )
+    .await
+    .unwrap();
+    assert_eq!(restarted.revision, first.revision);
+    {
+        let mut tx = vault.begin().unwrap();
+        tx.document
+            .replace_api_key(
+                &id,
+                Provider::Amp,
+                "new-identity".into(),
+                Credential::ApiKey {
+                    token: "replacement-fixture".into(),
+                    region: None,
+                    organization: None,
+                },
+            )
+            .unwrap();
+        tx.commit().unwrap();
+    }
+    let Json(replaced) = resolved_snapshot(State(state.clone()))
+        .await
+        .unwrap_or_else(|_| panic!());
+    assert!(replaced.usage[0].metrics.is_empty());
+    assert_eq!(
+        replaced.usage[0].freshness,
+        crate::contract::Freshness::NotLoaded
+    );
+    assert_ne!(replaced.accounts[0].id, first.accounts[0].id);
+    accounts::service::remove_resolved(vault, replaced.accounts[0].id.clone())
+        .await
+        .unwrap();
+    let Json(deleted) = resolved_snapshot(State(state.clone()))
+        .await
+        .unwrap_or_else(|_| panic!());
+    assert!(deleted.accounts.is_empty());
+    assert!(deleted.usage.is_empty());
+    assert!(deleted.revision > first.revision);
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[tokio::test]
+async fn resolved_snapshot_without_saved_accounts_uses_no_vault() {
+    let (state, dir, _) = fixture().await;
+    let mut state = Arc::try_unwrap(state).ok().unwrap();
+    state.vault = None;
+    let state = Arc::new(state);
+    *state.snapshot.write().await = Some((
+        0,
+        UsageReport {
+            schema_version: 1,
+            generated_at: state.context.clock.now(),
+            providers: vec![
+                Provider::Mock
+                    .adapter()
+                    .fetch(&state.context)
+                    .await
+                    .unwrap(),
+            ],
+            failures: vec![],
+        },
+    ));
+    let Json(first) = resolved_snapshot(State(state.clone()))
+        .await
+        .unwrap_or_else(|_| panic!());
+    let Json(second) = resolved_snapshot(State(state.clone()))
+        .await
+        .unwrap_or_else(|_| panic!());
+    assert_eq!(first.accounts.len(), 1);
+    assert_eq!(first.accounts[0].provider_id, "mock");
+    assert_eq!(first.host.id, second.host.id);
+    assert_eq!(first.revision, second.revision);
+    assert!(!first.host.capabilities["account_write_v2"].available);
     std::fs::remove_dir_all(dir).unwrap();
 }

@@ -245,7 +245,7 @@ pub struct CodexResetCredit {
     #[serde(with = "time::serde::rfc3339::option")]
     pub expires_at: Option<OffsetDateTime>,
 }
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct ProviderFailure {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub account_ref: Option<AccountRef>,
@@ -253,7 +253,7 @@ pub struct ProviderFailure {
     pub code: ProviderError,
     pub message: String,
 }
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct UsageReport {
     pub schema_version: u32,
     #[serde(with = "time::serde::rfc3339")]
