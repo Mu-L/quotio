@@ -9,7 +9,6 @@ mod operations;
 mod security;
 #[cfg(test)]
 mod tests;
-mod usage_queries;
 use crate::{
     cli::{Provider, ServeArgs},
     config::Config,
@@ -155,16 +154,6 @@ fn router(state: Arc<ApiState>, policy: Arc<security::Policy>) -> Router {
         .route("/v2/snapshot", get(resolved_snapshot))
         .route("/v2/discovery", get(native::status).post(native::start))
         .route("/v2/status", get(status))
-        .route(
-            "/v1/accounts",
-            get(management::list).post(management::create),
-        )
-        .route(
-            "/v1/accounts/{id}",
-            get(management::get_account)
-                .patch(management::patch)
-                .delete(management::remove),
-        )
         .route("/v2/migrations/accounts", post(management::migrate))
         .route("/v2/sources", post(management::reference))
         .route("/v2/sources/discover", post(management::discover))
@@ -173,7 +162,6 @@ fn router(state: Arc<ApiState>, policy: Arc<security::Policy>) -> Router {
             "/v2/account-vault/authorize",
             post(management::authorize_vault),
         )
-        .route("/v1/accounts/{id}/usage", get(management::usage))
         .route("/v2/auth/sessions", post(management::begin))
         .route(
             "/v2/auth/sessions/{id}",
@@ -199,9 +187,6 @@ fn router(state: Arc<ApiState>, policy: Arc<security::Policy>) -> Router {
         )
         .route("/v2/providers", get(providers))
         .route("/v2/providers/{id}", get(provider))
-        .route("/v1/usage", get(usage))
-        .route("/v1/usage/queries", post(usage_queries::start))
-        .route("/v1/usage/{id}", get(provider_usage))
         .route("/v2/settings", get(settings).patch(patch_settings))
         .route("/v2/refresh", post(manual_refresh))
         .route("/v2/operations/{id}", get(operation))
@@ -340,66 +325,6 @@ async fn resolved_snapshot(
     Ok(Json(snapshot))
 }
 
-async fn usage(State(state): State<Arc<ApiState>>) -> Response {
-    usage_response(&state, None, None).await
-}
-async fn provider_usage(State(state): State<Arc<ApiState>>, Path(id): Path<String>) -> Response {
-    if !state
-        .settings
-        .read()
-        .await
-        .values
-        .enabled_providers
-        .contains(&id)
-    {
-        return error(StatusCode::NOT_FOUND, "provider_not_enabled");
-    }
-    usage_response(&state, Some(&id), None).await
-}
-async fn usage_response(
-    state: &ApiState,
-    provider: Option<&str>,
-    account: Option<&str>,
-) -> Response {
-    let _guard = match crate::accounts::service::mutation_guard(&state.commit_guard).await {
-        Ok(guard) => guard,
-        Err(_) => return error(StatusCode::SERVICE_UNAVAILABLE, "account_busy"),
-    };
-    let snapshot = state.snapshot.read().await;
-    let Some((generation, report)) = &*snapshot else {
-        return error(StatusCode::SERVICE_UNAVAILABLE, "not_ready");
-    };
-    if *generation != state.generation.load(Ordering::SeqCst) {
-        state.wake.notify_one();
-        return error(StatusCode::SERVICE_UNAVAILABLE, "not_ready");
-    }
-    let mut value = match serde_json::to_value(report) {
-        Ok(value) => value,
-        Err(_) => return error(StatusCode::INTERNAL_SERVER_ERROR, "encoding_failed"),
-    };
-    // A server snapshot can outlive its earliest reset credit between refreshes.
-    for (entry, usage) in value["providers"]
-        .as_array_mut()
-        .unwrap()
-        .iter_mut()
-        .zip(&report.providers)
-    {
-        if usage
-            .reset_credits
-            .as_ref()
-            .is_some_and(|c| !c.valid_at(state.context.clock.now()))
-        {
-            entry.as_object_mut().unwrap().remove("reset_credits");
-        }
-    }
-    for field in ["providers", "failures"] {
-        value[field].as_array_mut().unwrap().retain(|entry| {
-            provider.is_none_or(|p| entry["provider"] == p)
-                && account.is_none_or(|a| entry["account_ref"]["id"] == a)
-        });
-    }
-    Json(value).into_response()
-}
 async fn settings(State(state): State<Arc<ApiState>>) -> Result<Json<SettingsView>, ApiError> {
     let _guard = crate::accounts::service::mutation_guard(&state.commit_guard)
         .await
@@ -706,7 +631,7 @@ async fn refresh(state: &ApiState, request: Option<RefreshRequest>) -> Result<Va
         state.wake.notify_one();
         return Err("state_changed");
     }
-    let result = json!({"providers":successes,"failures":failures,"report":&report});
+    let result = json!({"providers":successes,"failures":failures});
     let mut snapshot = state.snapshot.write().await;
     if !merge_refresh_report(
         &mut snapshot,

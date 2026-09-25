@@ -142,11 +142,19 @@ async fn rest_refresh_reuses_the_cli_cache() {
     let client = reqwest::Client::builder().no_proxy().build().unwrap();
     tokio::time::timeout(Duration::from_secs(10), async {
         loop {
-            let response = client.get(format!("{base}/v1/usage")).send().await.unwrap();
+            let response = client
+                .get(format!("{base}/v2/snapshot"))
+                .send()
+                .await
+                .unwrap();
             if response.status().is_success() {
                 let value: serde_json::Value = response.json().await.unwrap();
-                assert_eq!(value["providers"].as_array().unwrap().len(), 1);
-                break;
+                if value["usage"]
+                    .as_array()
+                    .is_some_and(|usage| usage.len() == 1)
+                {
+                    break;
+                }
             }
             tokio::time::sleep(Duration::from_millis(25)).await;
         }

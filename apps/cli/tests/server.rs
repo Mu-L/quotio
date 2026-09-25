@@ -161,7 +161,7 @@ async fn http_snapshots_security_and_process_shutdown() {
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
     assert!(ready);
-    let response = get("/v1/usage").send().await.unwrap();
+    let response = get("/v2/snapshot").send().await.unwrap();
     assert_eq!(response.status(), 200);
     assert_eq!(response.headers()["cache-control"], "no-store");
     assert!(
@@ -170,20 +170,16 @@ async fn http_snapshots_security_and_process_shutdown() {
             .contains_key("access-control-allow-origin")
     );
     let snapshot: serde_json::Value = response.json().await.unwrap();
-    let fixture: serde_json::Value =
-        serde_json::from_str(include_str!("fixtures/contracts/usage-v1.json")).unwrap();
-    assert_eq!(snapshot["providers"], fixture["providers"]);
-    assert_eq!(snapshot["schema_version"], 1);
-    assert_eq!(snapshot["providers"][0]["provider"], "mock");
-    assert_eq!(snapshot["failures"].as_array().unwrap().len(), 0);
-    let filtered: serde_json::Value = get("/v1/usage/mock")
-        .send()
-        .await
-        .unwrap()
-        .json()
-        .await
-        .unwrap();
-    assert_eq!(snapshot, filtered);
+    assert_eq!(snapshot["schema_version"], 2);
+    assert_eq!(snapshot["accounts"][0]["provider_id"], "mock");
+    assert_eq!(snapshot["usage"][0]["metrics"].as_array().unwrap().len(), 3);
+    assert_eq!(
+        snapshot["usage"][0]["metrics"][0]["quota"]["state"],
+        "available"
+    );
+    assert!(snapshot.get("providers").is_none());
+    assert_eq!(get("/v1/usage").send().await.unwrap().status(), 404);
+    assert_eq!(get("/v1/accounts").send().await.unwrap().status(), 404);
     let catalog: serde_json::Value = get("/v2/providers")
         .send()
         .await
@@ -206,10 +202,10 @@ async fn http_snapshots_security_and_process_shutdown() {
     .unwrap();
     assert_eq!(catalog, expected);
     for (path, status) in [
-        ("/v1/usage/codex", 404),
-        ("/v1/usage/not-a-provider", 404),
+        ("/v2/snapshot/codex", 404),
+        ("/v2/snapshot/not-a-provider", 404),
         ("/missing", 404),
-        ("/v1/usage?token=private", 400),
+        ("/v2/snapshot?token=private", 400),
     ] {
         let response = get(path).send().await.unwrap();
         assert_eq!(response.status(), status);
@@ -253,7 +249,7 @@ async fn http_snapshots_security_and_process_shutdown() {
     );
     assert_eq!(
         client
-            .post(format!("{base}/v1/usage"))
+            .post(format!("{base}/v2/snapshot"))
             .bearer_auth(token)
             .send()
             .await

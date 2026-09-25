@@ -143,17 +143,9 @@ async fn empty_onboarding_settings_refresh_and_revision_conflicts() {
     let op: Value = response.json().await.unwrap();
     let done = server.done(op["id"].as_str().unwrap()).await;
     assert_eq!(done["status"], "completed");
-    assert_eq!(done["result"]["report"]["providers"][0]["provider"], "mock");
-    assert_eq!(
-        done["result"]["report"]["providers"]
-            .as_array()
-            .unwrap()
-            .len(),
-        1
-    );
-    assert_eq!(done["result"]["report"]["failures"], json!([]));
-    let usage = server.get("/v1/usage/mock").await;
-    assert_eq!(usage["providers"][0]["provider"], "mock");
+    assert_eq!(done["result"], json!({"providers":1,"failures":0}));
+    let usage = server.get("/v2/snapshot").await;
+    assert_eq!(usage["accounts"][0]["provider_id"], "mock");
     assert_eq!(
         server
             .request(reqwest::Method::POST, "/v2/refresh")
@@ -336,8 +328,8 @@ async fn server_events_exclude_request_secrets() {
 }
 
 #[tokio::test]
-async fn explicit_usage_queries_require_management_and_validate_before_provider_io() {
-    for (arguments, expected) in [(vec![], 405), (vec!["--manage"], 400)] {
+async fn retired_usage_queries_are_not_served_or_logged() {
+    for (arguments, expected) in [(vec![], 405), (vec!["--manage"], 404)] {
         let server = Server::start(&arguments).await;
         let response = server.request(reqwest::Method::POST, "/v1/usage/queries")
             .json(&json!({"provider":"openrouter","client_account_id":"client","label":"work","access_token":"fixture-invalid\n"}))

@@ -722,10 +722,10 @@ async fn codex_source_rest_child() {
     assert_eq!(replay["id"], operation["id"]);
     for enabled in [false, true] {
         let response = client
-            .patch(format!("{base}/v1/accounts/{id}"))
+            .patch(format!("{base}/v2/accounts/{id}"))
             .bearer_auth(token)
             .header("Idempotency-Key", format!("codex-enabled-{enabled}"))
-            .json(&json!({"enabled":enabled,"label":"Native Codex fixture"}))
+            .json(&json!({"enabled":enabled,"user_label":"Native Codex fixture"}))
             .send()
             .await
             .unwrap();
@@ -736,7 +736,7 @@ async fn codex_source_rest_child() {
             "completed"
         );
         let account: Value = client
-            .get(format!("{base}/v1/accounts/{id}"))
+            .get(format!("{base}/v2/accounts/{id}"))
             .bearer_auth(token)
             .send()
             .await
@@ -753,16 +753,16 @@ async fn codex_source_rest_child() {
             .unwrap();
         assert_eq!(alias.status(), 409);
         assert_eq!(account["enabled"], enabled);
-        assert_eq!(account["origin"], "borrowed_native");
-        assert_eq!(account["source_kind"], "codex_native");
-        assert_eq!(account["label"], "Native Codex fixture");
+        assert_eq!(account["sources"][0]["origin"], "borrowed_native");
+        assert_eq!(account["sources"][0]["kind"], "codex_native");
+        assert_eq!(account["display_name"], "Native Codex fixture");
         assert!(!account.to_string().contains("synthetic-native-secret"));
     }
     let document = state.vault.as_ref().unwrap().begin().unwrap();
     let bytes = serde_json::to_string(&document.document).unwrap();
     assert!(!bytes.contains("synthetic-native-secret"));
     assert!(!bytes.contains("synthetic-owner-refresh"));
-    assert_eq!(document.document.version, 9);
+    assert_eq!(document.document.version, 13);
     assert_eq!(
         document
             .document
@@ -774,11 +774,11 @@ async fn codex_source_rest_child() {
             .as_ref()
             .unwrap()
             .origin,
-        crate::accounts::LabelOrigin::User
+        crate::accounts::LabelOrigin::Generated
     );
     drop(document);
     let response: Value = client
-        .delete(format!("{base}/v1/accounts/{id}"))
+        .delete(format!("{base}/v2/accounts/{id}"))
         .bearer_auth(token)
         .header("Idempotency-Key", "codex-remove")
         .send()
@@ -793,7 +793,7 @@ async fn codex_source_rest_child() {
     );
     assert_eq!(
         client
-            .get(format!("{base}/v1/accounts/{id}"))
+            .get(format!("{base}/v2/accounts/{id}"))
             .bearer_auth(token)
             .send()
             .await
@@ -841,6 +841,9 @@ async fn read_only_reset_credit_snapshots_expire_without_changing_quota() {
         .await
         .unwrap();
     usage.provider = ProviderId("codex".into());
+    for window in &mut usage.windows {
+        window.fetched_at = now;
+    }
     usage.reset_credits = Some(crate::domain::ResetCredits {
         available_count: 2,
         earliest_expires_at: Some(now + time::Duration::seconds(1)),
@@ -859,21 +862,12 @@ async fn read_only_reset_credit_snapshots_expire_without_changing_quota() {
     for (seconds, present) in [(0, true), (1, false)] {
         Arc::get_mut(&mut state).unwrap().context.clock =
             Arc::new(FixedClock(now + time::Duration::seconds(seconds)));
-        let response = usage_response(&state, Some("codex"), None).await;
-        assert_eq!(response.status(), StatusCode::OK);
-        let bytes = axum::body::to_bytes(response.into_body(), 65536)
+        let Json(value) = resolved_snapshot(State(state.clone()))
             .await
-            .unwrap();
-        let value: Value = serde_json::from_slice(&bytes).unwrap();
-        assert_eq!(
-            value["providers"][0].get("reset_credits").is_some(),
-            present
-        );
-        assert_eq!(
-            value["providers"][0]["windows"].as_array().unwrap().len(),
-            3
-        );
-        assert_eq!(value["generated_at"], "1970-01-01T00:00:00Z");
+            .unwrap_or_else(|_| panic!());
+        assert_eq!(value.usage[0].reset_credits.is_some(), present);
+        assert_eq!(value.usage[0].metrics.len(), 3);
+        assert_eq!(value.generated_at, now + time::Duration::seconds(seconds));
     }
     // Read serialization does not mutate the underlying observation.
     assert!(
@@ -887,7 +881,7 @@ async fn read_only_reset_credit_snapshots_expire_without_changing_quota() {
 async fn antigravity_owned_intake_is_explicit_and_idempotent() {
     let (state, dir, _) = fixture().await;
     let body = json!({"kind":"antigravity_owned","label":"Owned Antigravity","access_token":"synthetic-antigravity-access","refresh_token":"synthetic-antigravity-refresh","expires_at":0,"client_id":"1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com","client_secret":"synthetic-client-secret"});
-    let (_, Json(op)) = management::create(
+    let (_, Json(op)) = management::resolved_create(
         State(state.clone()),
         key("antigravity-intake"),
         ApiJson(body.clone()),
@@ -895,7 +889,7 @@ async fn antigravity_owned_intake_is_explicit_and_idempotent() {
     .await
     .unwrap_or_else(|_| panic!());
     assert_eq!(done(&state, &op.id).await.status, "completed");
-    let (_, Json(retry)) = management::create(
+    let (_, Json(retry)) = management::resolved_create(
         State(state.clone()),
         key("antigravity-intake"),
         ApiJson(body.clone()),
@@ -903,22 +897,23 @@ async fn antigravity_owned_intake_is_explicit_and_idempotent() {
     .await
     .unwrap_or_else(|_| panic!());
     assert_eq!(retry.id, op.id);
-    let Json(accounts) = management::list(State(state.clone()))
+    let Json(account_list) = management::resolved_accounts(State(state.clone()))
         .await
         .unwrap_or_else(|_| panic!());
+    let accounts = serde_json::to_value(account_list).unwrap();
     assert!(!accounts.to_string().contains("synthetic-"));
     let account = accounts["accounts"]
         .as_array()
         .unwrap()
         .iter()
-        .find(|a| a["provider"] == "antigravity")
+        .find(|a| a["provider_id"] == "antigravity")
         .unwrap();
-    assert_eq!(account["origin"], "owned");
+    assert_eq!(account["sources"][0]["origin"], "owned");
     for field in ["path", "endpoint", "provider", "owned"] {
         let mut invalid = body.clone();
         invalid[field] = "fixture".into();
         assert!(matches!(
-            management::create(
+            management::resolved_create(
                 State(state.clone()),
                 key("invalid-antigravity"),
                 ApiJson(invalid)
@@ -933,7 +928,7 @@ async fn antigravity_owned_intake_is_explicit_and_idempotent() {
 async fn kiro_owned_intake_is_explicit_and_idempotent() {
     let (state, dir, _) = fixture().await;
     let body = json!({"kind":"kiro_owned","label":"Owned Kiro","access_token":"synthetic-kiro-access","refresh_token":"synthetic-kiro-refresh","expires_at":0,"authMethod":"Social","region":"us-east-1"});
-    let (_, Json(op)) = management::create(
+    let (_, Json(op)) = management::resolved_create(
         State(state.clone()),
         key("kiro-intake"),
         ApiJson(body.clone()),
@@ -941,7 +936,7 @@ async fn kiro_owned_intake_is_explicit_and_idempotent() {
     .await
     .unwrap_or_else(|_| panic!());
     assert_eq!(done(&state, &op.id).await.status, "completed");
-    let (_, Json(retry)) = management::create(
+    let (_, Json(retry)) = management::resolved_create(
         State(state.clone()),
         key("kiro-intake"),
         ApiJson(body.clone()),
@@ -949,22 +944,28 @@ async fn kiro_owned_intake_is_explicit_and_idempotent() {
     .await
     .unwrap_or_else(|_| panic!());
     assert_eq!(retry.id, op.id);
-    let Json(accounts) = management::list(State(state.clone()))
+    let Json(account_list) = management::resolved_accounts(State(state.clone()))
         .await
         .unwrap_or_else(|_| panic!());
+    let accounts = serde_json::to_value(account_list).unwrap();
     assert!(!accounts.to_string().contains("synthetic-kiro"));
     let account = accounts["accounts"]
         .as_array()
         .unwrap()
         .iter()
-        .find(|a| a["provider"] == "kiro")
+        .find(|a| a["provider_id"] == "kiro")
         .unwrap();
-    assert_eq!(account["origin"], "owned");
+    assert_eq!(account["sources"][0]["origin"], "owned");
     for field in ["path", "endpoint", "provider", "owned", "machine"] {
         let mut invalid = body.clone();
         invalid[field] = "fixture".into();
         assert!(matches!(
-            management::create(State(state.clone()), key("invalid-kiro"), ApiJson(invalid)).await,
+            management::resolved_create(
+                State(state.clone()),
+                key("invalid-kiro"),
+                ApiJson(invalid)
+            )
+            .await,
             Err(ApiError(StatusCode::BAD_REQUEST, _))
         ));
     }
@@ -974,7 +975,7 @@ async fn kiro_owned_intake_is_explicit_and_idempotent() {
 async fn factory_owned_intake_is_explicit_and_idempotent() {
     let (state, dir, _) = fixture().await;
     let body = json!({"kind":"factory_owned","label":"Owned Factory","access_token":"synthetic-factory-access","refresh_token":"synthetic-factory-refresh","organization_id":"org"});
-    let (_, Json(op)) = management::create(
+    let (_, Json(op)) = management::resolved_create(
         State(state.clone()),
         key("factory-intake"),
         ApiJson(body.clone()),
@@ -982,7 +983,7 @@ async fn factory_owned_intake_is_explicit_and_idempotent() {
     .await
     .unwrap_or_else(|_| panic!());
     assert_eq!(done(&state, &op.id).await.status, "completed");
-    let (_, Json(retry)) = management::create(
+    let (_, Json(retry)) = management::resolved_create(
         State(state.clone()),
         key("factory-intake"),
         ApiJson(body.clone()),
@@ -990,17 +991,18 @@ async fn factory_owned_intake_is_explicit_and_idempotent() {
     .await
     .unwrap_or_else(|_| panic!());
     assert_eq!(retry.id, op.id);
-    let Json(accounts) = management::list(State(state.clone()))
+    let Json(account_list) = management::resolved_accounts(State(state.clone()))
         .await
         .unwrap_or_else(|_| panic!());
+    let accounts = serde_json::to_value(account_list).unwrap();
     assert!(!accounts.to_string().contains("synthetic-factory"));
     let account = accounts["accounts"]
         .as_array()
         .unwrap()
         .iter()
-        .find(|a| a["provider"] == "factory")
+        .find(|a| a["provider_id"] == "factory")
         .unwrap();
-    assert_eq!(account["origin"], "owned");
+    assert_eq!(account["sources"][0]["origin"], "owned");
     for field in [
         "path",
         "owned",
@@ -1013,7 +1015,7 @@ async fn factory_owned_intake_is_explicit_and_idempotent() {
         let mut invalid = body.clone();
         invalid[field] = "fixture".into();
         assert!(matches!(
-            management::create(
+            management::resolved_create(
                 State(state.clone()),
                 key("invalid-factory"),
                 ApiJson(invalid)
@@ -1028,7 +1030,7 @@ async fn factory_owned_intake_is_explicit_and_idempotent() {
 async fn grok_owned_intake_is_explicit_secret_free_and_idempotent() {
     let (state, dir, _) = fixture().await;
     let body = json!({"kind":"grok_owned","label":"Owned Grok","access_token":"synthetic-grok-access","refresh_token":"synthetic-grok-refresh","expires_at":0});
-    let (_, Json(op)) = management::create(
+    let (_, Json(op)) = management::resolved_create(
         State(state.clone()),
         key("grok-intake"),
         ApiJson(body.clone()),
@@ -1036,7 +1038,7 @@ async fn grok_owned_intake_is_explicit_secret_free_and_idempotent() {
     .await
     .unwrap_or_else(|_| panic!());
     assert_eq!(done(&state, &op.id).await.status, "completed");
-    let (_, Json(retry)) = management::create(
+    let (_, Json(retry)) = management::resolved_create(
         State(state.clone()),
         key("grok-intake"),
         ApiJson(body.clone()),
@@ -1044,24 +1046,30 @@ async fn grok_owned_intake_is_explicit_secret_free_and_idempotent() {
     .await
     .unwrap_or_else(|_| panic!());
     assert_eq!(retry.id, op.id);
-    let Json(accounts) = management::list(State(state.clone()))
+    let Json(account_list) = management::resolved_accounts(State(state.clone()))
         .await
         .unwrap_or_else(|_| panic!());
+    let accounts = serde_json::to_value(account_list).unwrap();
     assert!(!accounts.to_string().contains("synthetic-grok"));
     let rows = accounts["accounts"].as_array().unwrap();
-    let account = rows.iter().find(|a| a["provider"] == "grok").unwrap();
-    assert_eq!(account["origin"], "owned");
+    let account = rows.iter().find(|a| a["provider_id"] == "grok").unwrap();
+    assert_eq!(account["sources"][0]["origin"], "owned");
     let id = account["id"].as_str().unwrap().to_owned();
     for field in ["path", "entry_key", "owned", "provider"] {
         let mut invalid = body.clone();
         invalid[field] = "fixture".into();
         assert!(matches!(
-            management::create(State(state.clone()), key("invalid-grok"), ApiJson(invalid)).await,
+            management::resolved_create(
+                State(state.clone()),
+                key("invalid-grok"),
+                ApiJson(invalid)
+            )
+            .await,
             Err(ApiError(StatusCode::BAD_REQUEST, _))
         ));
     }
     assert!(matches!(management::reference(State(state.clone()), key("invalid-source"), ApiJson(json!({"kind":"grok_native","entry_key":"https://auth.x.ai::fixture","path":"/tmp/auth.json"}))).await, Err(ApiError(StatusCode::BAD_REQUEST, _))));
-    let (_, Json(disable)) = management::patch(
+    let (_, Json(disable)) = management::resolved_patch(
         State(state.clone()),
         Path(id.clone()),
         key("disable-grok"),
@@ -1070,9 +1078,10 @@ async fn grok_owned_intake_is_explicit_secret_free_and_idempotent() {
     .await
     .unwrap_or_else(|_| panic!());
     assert_eq!(done(&state, &disable.id).await.status, "completed");
-    let (_, Json(remove)) = management::remove(State(state.clone()), Path(id), key("remove-grok"))
-        .await
-        .unwrap_or_else(|_| panic!());
+    let (_, Json(remove)) =
+        management::resolved_remove(State(state.clone()), Path(id), key("remove-grok"))
+            .await
+            .unwrap_or_else(|_| panic!());
     assert_eq!(done(&state, &remove.id).await.status, "completed");
     std::fs::remove_dir_all(dir).unwrap();
 }
@@ -1080,13 +1089,14 @@ async fn grok_owned_intake_is_explicit_secret_free_and_idempotent() {
 #[tokio::test]
 async fn account_http_services_are_secret_free_idempotent_and_fenced() {
     let (state, dir, id) = fixture().await;
-    let Json(accounts) = management::list(State(state.clone()))
+    let Json(account_list) = management::resolved_accounts(State(state.clone()))
         .await
         .unwrap_or_else(|_| panic!());
+    let accounts = serde_json::to_value(account_list).unwrap();
     assert!(!accounts.to_string().contains("synthetic-vault-secret"));
-    assert!(!accounts.to_string().contains("credential"));
-    let body = json!({"label":"new label","active":true});
-    let (_, Json(op)) = management::patch(
+    assert!(!accounts.to_string().contains("synthetic-vault-secret"));
+    let body = json!({"user_label":"new label","active":true});
+    let (_, Json(op)) = management::resolved_patch(
         State(state.clone()),
         Path(id.clone()),
         key("change-1"),
@@ -1096,7 +1106,7 @@ async fn account_http_services_are_secret_free_idempotent_and_fenced() {
     .unwrap_or_else(|_| panic!());
     assert_eq!(done(&state, &op.id).await.status, "completed");
     assert_eq!(state.generation.load(Ordering::SeqCst), 1);
-    let (_, Json(retry)) = management::patch(
+    let (_, Json(retry)) = management::resolved_patch(
         State(state.clone()),
         Path(id.clone()),
         key("change-1"),
@@ -1106,16 +1116,16 @@ async fn account_http_services_are_secret_free_idempotent_and_fenced() {
     .unwrap_or_else(|_| panic!());
     assert_eq!(op.id, retry.id);
     assert!(matches!(
-        management::patch(
+        management::resolved_patch(
             State(state.clone()),
             Path(id.clone()),
             key("change-1"),
-            ApiJson(json!({"label":"different"}))
+            ApiJson(json!({"user_label":"different"}))
         )
         .await,
         Err(ApiError(StatusCode::CONFLICT, _))
     ));
-    let (_, Json(invalid)) = management::create(
+    let (_, Json(invalid)) = management::resolved_create(
         State(state.clone()),
         key("create-1"),
         ApiJson(json!({"provider":"amp","api_key":""})),
@@ -1127,12 +1137,12 @@ async fn account_http_services_are_secret_free_idempotent_and_fenced() {
         Some("invalid_credential")
     );
     let (_, Json(remove)) =
-        management::remove(State(state.clone()), Path(id.clone()), key("remove-1"))
+        management::resolved_remove(State(state.clone()), Path(id.clone()), key("remove-1"))
             .await
             .unwrap_or_else(|_| panic!());
     assert_eq!(done(&state, &remove.id).await.status, "completed");
     assert!(matches!(
-        management::get_account(State(state.clone()), Path(id)).await,
+        management::resolved_account(State(state.clone()), Path(id)).await,
         Err(ApiError(StatusCode::NOT_FOUND, _))
     ));
     // A late pre-delete refresh cannot be read even if its report arrives afterwards.
@@ -1145,10 +1155,10 @@ async fn account_http_services_are_secret_free_idempotent_and_fenced() {
             failures: vec![],
         },
     ));
-    assert_eq!(
-        usage_response(&state, None, None).await.status(),
-        StatusCode::SERVICE_UNAVAILABLE
-    );
+    let Json(snapshot) = resolved_snapshot(State(state.clone()))
+        .await
+        .unwrap_or_else(|_| panic!());
+    assert!(snapshot.usage.is_empty());
     std::fs::remove_dir_all(dir).unwrap();
 }
 #[tokio::test]
@@ -1202,10 +1212,10 @@ async fn blocked_mutation_guard_returns_bounded_errors() {
     let (state, dir, _) = fixture().await;
     let held = state.commit_guard.lock().await;
     tokio::time::pause();
-    assert_eq!(
-        usage_response(&state, None, None).await.status(),
-        StatusCode::SERVICE_UNAVAILABLE
-    );
+    assert!(matches!(
+        resolved_snapshot(State(state.clone())).await,
+        Err(ApiError(StatusCode::SERVICE_UNAVAILABLE, _))
+    ));
     assert!(matches!(
         settings(State(state.clone())).await,
         Err(ApiError(StatusCode::CONFLICT, "settings_busy"))
@@ -1380,8 +1390,8 @@ async fn zero_refresh_interval_waits_without_scheduling_a_deadline() {
 #[tokio::test]
 async fn account_retry_survives_loss_of_in_memory_operations() {
     let (state, dir, id) = fixture().await;
-    let body = json!({"label":"first change"});
-    let (_, Json(first)) = management::patch(
+    let body = json!({"user_label":"first change"});
+    let (_, Json(first)) = management::resolved_patch(
         State(state.clone()),
         Path(id.clone()),
         key("durable-key"),
@@ -1390,18 +1400,17 @@ async fn account_retry_survives_loss_of_in_memory_operations() {
     .await
     .unwrap_or_else(|_| panic!());
     assert_eq!(done(&state, &first.id).await.status, "completed");
-    // Another intent can change the account before the original caller retries.
-    crate::accounts::service::patch(
-        state.vault.clone().unwrap(),
-        id.clone(),
-        Some("later change".into()),
-        None,
-        None,
+    let (_, Json(later)) = management::resolved_patch(
+        State(state.clone()),
+        Path(id.clone()),
+        key("later-name"),
+        ApiJson(json!({"user_label":"later change"})),
     )
     .await
-    .unwrap();
+    .unwrap_or_else(|_| panic!());
+    assert_eq!(done(&state, &later.id).await.status, "completed");
     *state.operations.lock().await = Operations::default();
-    let (_, Json(retry)) = management::patch(
+    let (_, Json(retry)) = management::resolved_patch(
         State(state.clone()),
         Path(id.clone()),
         key("durable-key"),
@@ -1411,16 +1420,16 @@ async fn account_retry_survives_loss_of_in_memory_operations() {
     .unwrap_or_else(|_| panic!());
     assert_ne!(first.id, retry.id);
     assert_eq!(done(&state, &retry.id).await.status, "completed");
-    let Json(account) = management::get_account(State(state.clone()), Path(id.clone()))
+    let Json(account) = management::resolved_account(State(state.clone()), Path(id.clone()))
         .await
         .unwrap_or_else(|_| panic!());
-    assert_eq!(account.label, "later change");
+    assert_eq!(account.display_name, "later change");
     *state.operations.lock().await = Operations::default();
-    let conflict = management::patch(
+    let conflict = management::resolved_patch(
         State(state.clone()),
         Path(id),
         key("durable-key"),
-        ApiJson(json!({"label":"different intent"})),
+        ApiJson(json!({"user_label":"different intent"})),
     )
     .await
     .err()

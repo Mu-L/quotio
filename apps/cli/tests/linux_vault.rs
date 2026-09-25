@@ -205,7 +205,7 @@ async fn rest_reports_locked_storage_instead_of_empty_accounts() {
         .timeout(std::time::Duration::from_secs(5))
         .build()
         .unwrap()
-        .get(format!("{base}/v1/accounts"))
+        .get(format!("{base}/v2/accounts"))
         .bearer_auth(token)
         .send()
         .await
@@ -294,6 +294,7 @@ async fn native_reference_lifecycle(
         base: &str,
         token: &str,
         response: reqwest::Response,
+        expected: &str,
     ) -> serde_json::Value {
         assert_eq!(response.status(), 202);
         let mut op: serde_json::Value = response.json().await.unwrap();
@@ -313,7 +314,7 @@ async fn native_reference_lifecycle(
                 .await
                 .unwrap();
         }
-        assert_eq!(op["status"], "completed", "{op}");
+        assert_eq!(op["status"], expected, "{op}");
         assert!(!op.to_string().contains("native-fixture-key"));
         op
     }
@@ -325,19 +326,19 @@ async fn native_reference_lifecycle(
         .send()
         .await
         .unwrap();
-    let op = finish(&client, base, token, response).await;
+    let op = finish(&client, base, token, response, "completed").await;
     let id = op["result"]["account_id"].as_str().unwrap();
     let response = client
-        .patch(format!("{base}/v1/accounts/{id}"))
+        .patch(format!("{base}/v2/accounts/{id}"))
         .bearer_auth(token)
         .header("Idempotency-Key", "native-disable")
         .json(&serde_json::json!({"enabled":false}))
         .send()
         .await
         .unwrap();
-    finish(&client, base, token, response).await;
+    finish(&client, base, token, response, "completed").await;
     let account: serde_json::Value = client
-        .get(format!("{base}/v1/accounts/{id}"))
+        .get(format!("{base}/v2/accounts/{id}"))
         .bearer_auth(token)
         .send()
         .await
@@ -345,7 +346,7 @@ async fn native_reference_lifecycle(
         .json()
         .await
         .unwrap();
-    assert_eq!(account["origin"], "borrowed_native");
+    assert_eq!(account["sources"][0]["origin"], "borrowed_native");
     assert_eq!(account["enabled"], false);
     let settings: serde_json::Value = client
         .get(format!("{base}/v2/settings"))
@@ -372,7 +373,7 @@ async fn native_reference_lifecycle(
         .send()
         .await
         .unwrap();
-    let refreshed = finish(&client, base, token, response).await;
+    let refreshed = finish(&client, base, token, response, "failed").await;
     let alias = client
         .post(format!("{base}/v2/refresh"))
         .bearer_auth(token)
@@ -382,14 +383,7 @@ async fn native_reference_lifecycle(
         .unwrap();
     assert_eq!(alias.status(), 409);
 
-    assert_eq!(
-        refreshed["result"]["report"]["providers"],
-        serde_json::json!([])
-    );
-    assert_eq!(
-        refreshed["result"]["report"]["failures"][0]["code"],
-        "source_disabled"
-    );
+    assert_eq!(refreshed["error"], "source_disabled");
     let response = client
         .patch(format!("{base}/v2/settings"))
         .bearer_auth(token)
@@ -399,13 +393,13 @@ async fn native_reference_lifecycle(
         .unwrap();
     assert!(response.status().is_success());
     let response = client
-        .delete(format!("{base}/v1/accounts/{id}"))
+        .delete(format!("{base}/v2/accounts/{id}"))
         .bearer_auth(token)
         .header("Idempotency-Key", "native-remove")
         .send()
         .await
         .unwrap();
-    finish(&client, base, token, response).await;
+    finish(&client, base, token, response, "completed").await;
     assert_eq!(fs::read(source).unwrap(), original.as_bytes());
     child.kill().await.unwrap();
     child.wait().await.unwrap();

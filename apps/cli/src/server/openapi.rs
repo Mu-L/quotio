@@ -60,11 +60,10 @@ mod tests {
             "/v2/status",
             "/v2/providers",
             "/v2/providers/{id}",
-            "/v1/usage",
-            "/v1/usage/{id}",
-            "/v1/accounts",
-            "/v1/accounts/{id}",
-            "/v1/accounts/{id}/usage",
+            "/v2/snapshot",
+            "/v2/accounts",
+            "/v2/accounts/{id}",
+            "/v2/sources/{id}",
             "/v2/auth/sessions",
             "/v2/auth/sessions/{id}",
             "/v2/auth/sessions/{id}/callback",
@@ -112,21 +111,21 @@ mod tests {
                 .any(|v| v == "null")
         );
         assert!(
-            paths["/v1/accounts"]["post"]["security"]
+            paths["/v2/accounts"]["post"]["security"]
                 .as_array()
                 .unwrap()
                 .iter()
                 .any(|s| s["bearerAuth"].is_array())
         );
         assert!(
-            paths["/v1/usage"]["get"]["security"]
+            paths["/v2/snapshot"]["get"]["security"]
                 .as_array()
                 .unwrap()
                 .iter()
                 .any(|value| value.as_object().is_some_and(|object| object.is_empty()))
         );
         assert!(
-            paths["/v1/accounts"]["post"]["parameters"]
+            paths["/v2/accounts"]["post"]["parameters"]
                 .as_array()
                 .unwrap()
                 .iter()

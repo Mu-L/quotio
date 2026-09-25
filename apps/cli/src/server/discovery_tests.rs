@@ -123,7 +123,7 @@ async fn discovery_rest_registers_opaque_exact_entries_without_credentials() {
             assert_eq!(completed["status"], "completed", "{completed}");
             let id = completed["result"]["account_id"].as_str().unwrap();
             let account: Value = client
-                .get(format!("{base}/v1/accounts/{id}"))
+                .get(format!("{base}/v2/accounts/{id}"))
                 .bearer_auth(token)
                 .send()
                 .await
@@ -131,10 +131,10 @@ async fn discovery_rest_registers_opaque_exact_entries_without_credentials() {
                 .json()
                 .await
                 .unwrap();
-            assert_eq!(account["provider"], request["provider"]);
+            assert_eq!(account["provider_id"], request["provider"]);
             assert!(!account.to_string().contains("planted-secret"));
             if request["kind"] == "quotio_custom_provider" {
-                assert_eq!(account["source_id"].as_str().unwrap().len(), 64);
+                assert_eq!(account["sources"][0]["kind"], "quotio_custom_provider");
             }
         }
     }

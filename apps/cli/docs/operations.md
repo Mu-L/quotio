@@ -25,7 +25,7 @@ and requires `QUOTIO_VAULT_KEY_FILE` or `QUOTIO_VAULT_KEY_FD` at startup.
    The config must exist when explicitly supplied; an empty file supports initial
    setup. Omit provider, timeout and refresh interval flags to manage those fields
    through settings API calls.
-5. Read `/v2/status`, `/v2/settings`, `/v2/providers` and `/v1/usage` using bearer
+5. Read `/v2/status`, `/v2/settings`, `/v2/providers` and `/v2/snapshot` using bearer
    authentication. A ready snapshot can contain provider failures: inspect the
    `failures` array and each account's `fetched_at`, not readiness alone.
 
