@@ -12,11 +12,6 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
         let force: Bool
         let disabledProxyAuthFiles: [String]
     }
-    private struct APIKeyBody: Encodable {
-        let provider: String?
-        let label: String
-        let apiKey: String
-    }
     private struct EnabledBody: Encodable { let enabled: Bool }
     private struct NativeSourceBody: Encodable {
         let kind: String
@@ -341,40 +336,6 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
             )
         } catch {
             throw Self.accountFailure(error)
-        }
-    }
-
-    public func synchronizeWarpTokens(_ tokens: [WarpToken]) async throws {
-        guard let client else { throw QuotioHostClientError.disconnected }
-        let response: QuotioCLIAccountList = try await client.request("v1/accounts")
-        guard response.schemaVersion == 1 else { throw QuotioHostClientError.incompatible }
-        let existing = response.accounts.filter(QuotioCLIWarpMirror.isMirror)
-        var retained = Set<String>()
-        for token in tokens where token.isEnabled {
-            let account = existing.first {
-                QuotioCLIWarpMirror.displayLabel($0.label, provider: $0.provider)
-                    .caseInsensitiveCompare(token.name) == .orderedSame
-            }
-            let body = try JSONEncoder.quotioCLI.encode(APIKeyBody(
-                provider: account == nil ? "warp" : nil,
-                label: QuotioCLIWarpMirror.storageLabel(token.name),
-                apiKey: token.token
-            ))
-            try await mutate(
-                client: client,
-                path: account.map { "v1/accounts/\($0.id)" } ?? "v1/accounts",
-                method: account == nil ? "POST" : "PATCH",
-                body: body
-            )
-            if let account { retained.insert(account.id) }
-        }
-        for account in existing where !retained.contains(account.id) {
-            try await mutate(
-                client: client,
-                path: "v1/accounts/\(account.id)",
-                method: "DELETE",
-                body: nil
-            )
         }
     }
 

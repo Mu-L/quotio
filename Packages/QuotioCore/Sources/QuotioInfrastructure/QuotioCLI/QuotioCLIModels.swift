@@ -1,22 +1,6 @@
 import Foundation
 import QuotioDomain
 
-struct QuotioCLIAccountList: Decodable, Sendable {
-    let schemaVersion: Int
-    let accounts: [QuotioCLIAccount]
-}
-
-struct QuotioCLIAccount: Decodable, Sendable {
-    let id: String
-    let provider: String
-    let label: String
-    let origin: String
-    let enabled: Bool
-    let sourceKind: String?
-    let sourceLocation: String?
-    let sourceId: String?
-}
-
 struct QuotioCLIOperation: Decodable, Sendable {
     let id: String
     let status: String
@@ -33,25 +17,6 @@ struct QuotioCLIOAuthSession: Decodable, Sendable {
     let status: String
     let accountId: String?
     let errorCode: String?
-}
-
-enum QuotioCLIWarpMirror {
-    private static let prefix = "__quotio_local_warp__:"
-
-    static func storageLabel(_ label: String) -> String { prefix + label }
-
-    static func displayLabel(_ label: String, provider: String) -> String {
-        guard provider == "warp", label.hasPrefix(prefix) else { return label }
-        return String(label.dropFirst(prefix.count))
-    }
-
-    static func isMirror(_ account: QuotioCLIAccount) -> Bool {
-        isMirror(provider: account.provider, origin: account.origin, label: account.label)
-    }
-
-    static func isMirror(provider: String, origin: String?, label: String?) -> Bool {
-        provider == "warp" && origin == "owned" && label?.hasPrefix(prefix) == true
-    }
 }
 
 enum QuotioCLIProviderMap {

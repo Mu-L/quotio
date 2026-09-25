@@ -168,8 +168,7 @@ enum CompositionRoot {
             )
         )
         let warpTokenScreenModel = WarpTokenScreenModel(
-            repository: warpTokenRepository,
-            synchronize: quotioBackend.synchronizeWarpTokens
+            repository: warpTokenRepository
         )
         let quotaScreenModel = QuotaScreenModel(
             coordinator: quotioBackend
@@ -372,7 +371,6 @@ enum CompositionRoot {
         )
         let credentialMigrationModel = CredentialMigrationScreenModel {
             let result = await legacyMigration.migrate()
-            await warpTokenScreenModel.load()
             await accountsScreenModel.reloadAccounts()
             return result
         }
@@ -717,7 +715,6 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
         if await reconnectQuotioServer() {
             await credentialMigrationModel.migrate()
         } else {
-            await warpTokenScreenModel.load()
         }
         await tunnel.refreshInstallation()
         await proxyManagement.initialize()

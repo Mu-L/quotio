@@ -411,23 +411,6 @@ final class QuotioCLIBackendTests: XCTestCase {
         XCTAssertTrue(QuotioCLIURLProtocol.requests().isEmpty)
     }
 
-    func testSynchronizeWarpTokensOnlyUpdatesAndRemovesMirroredAccounts() async throws {
-        QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"accounts":[{"id":"monitor","provider":"warp","label":"Monitor","origin":"owned","enabled":true,"source_kind":null},{"id":"warp-1","provider":"warp","label":"__quotio_local_warp__:Work","origin":"owned","enabled":true,"source_kind":null},{"id":"warp-2","provider":"warp","label":"__quotio_local_warp__:Old","origin":"owned","enabled":true,"source_kind":null}]}"#)
-        QuotioCLIURLProtocol.enqueue(#"{"id":"operation-1","status":"completed","error":null}"#)
-        QuotioCLIURLProtocol.enqueue(#"{"id":"operation-2","status":"completed","error":null}"#)
-        let backend = QuotioCLIBackend(session: stubSession())
-        await backend.connect(QuotioHostConnection(
-            baseURL: URL(string: "http://127.0.0.1:43210")!,
-            token: "private-token"
-        ))
-
-        try await backend.synchronizeWarpTokens([WarpToken(name: "Work", token: "new-token")])
-
-        let requests = QuotioCLIURLProtocol.requests()
-        XCTAssertEqual(requests.map(\.httpMethod), ["GET", "PATCH", "DELETE"])
-        XCTAssertEqual(requests.map { $0.url?.path }, ["/v1/accounts", "/v1/accounts/warp-1", "/v1/accounts/warp-2"])
-    }
-
     func testDeviceCodeExpiryComesFromHostStateAndCleansUpTheSession() async throws {
         let expired = Int64(Date().timeIntervalSince1970) + 3600
         QuotioCLIURLProtocol.enqueue(#"{"provider":"copilot","workflow":"device_code","user_code":"CODE","id":"session-1","url":"https://github.com/login/device","expires_at":\#(expired),"status":"waiting","account_id":null,"error_code":null}"#)
