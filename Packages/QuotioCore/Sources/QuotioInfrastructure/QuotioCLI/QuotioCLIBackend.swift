@@ -79,7 +79,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
 
     public func refresh(_ request: QuotaFetchRequest) async -> QuotaSnapshot {
         selectMode(request.mode)
-        guard let provider = QuotioCLIProviderMap.cli(request.provider) else { return snapshot }
+        let provider = request.provider.rawValue
         var resolvedAccountID: String?
         if case .account(let accountKey) = request.scope {
             resolvedAccountID = await accountID(provider: provider, accountKey: accountKey)
@@ -105,7 +105,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
         force: Bool = false
     ) async -> QuotaSnapshot {
         selectMode(mode)
-        let selected = providers?.compactMap(QuotioCLIProviderMap.cli) ?? []
+        let selected = providers?.map(\.rawValue) ?? []
         await performRefresh(providers: selected, accountID: nil, mode: mode, force: force)
         return snapshot
     }
@@ -160,7 +160,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
     }
 
     public func rescanNativeAccounts(for provider: QuotaProvider) async {
-        guard let id = QuotioCLIProviderMap.cli(provider) else { return }
+        let id = provider.rawValue
         await discoverNativeAccounts(providerID: id, restoreRemoved: true)
     }
 
@@ -174,14 +174,14 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
             permissions: (report?.permissions ?? []).compactMap(Self.permission),
             knownSources: (report?.knownSources ?? []).compactMap(Self.permission),
             scannedAt: Dictionary((report?.scans ?? []).compactMap { scan in
-                QuotioCLIProviderMap.domain(scan.provider).map { ($0, scan.at) }
+                QuotaProvider(rawValue: scan.provider).map { ($0, scan.at) }
             }, uniquingKeysWith: { _, latest in latest }),
-            failedProviders: Set((report?.failures ?? []).compactMap { QuotioCLIProviderMap.domain($0.provider) })
+            failedProviders: Set((report?.failures ?? []).compactMap { QuotaProvider(rawValue: $0.provider) })
         )
     }
 
     private static func permission(_ value: QuotioHostDiscovery.Permission) -> NativeSourcePermission? {
-        guard let provider = QuotioCLIProviderMap.domain(value.provider) else { return nil }
+        guard let provider = QuotaProvider(rawValue: value.provider) else { return nil }
         return .init(provider: provider, kind: value.kind, location: value.location, keychainAccount: value.keychainAccount)
     }
 
@@ -214,7 +214,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
                 throw NativeSourceAuthorizationFailure.unknown
             }
         }
-        await discoverNativeAccounts(providerID: QuotioCLIProviderMap.cli(source.provider))
+        await discoverNativeAccounts(providerID: source.provider.rawValue)
     }
 
     public func accountStorageRequiresAuthorization() async -> Bool { storageRequiresAuthorization }
@@ -285,10 +285,10 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
             let enabled: Bool
             let credential: StoredCredential
         }
-        guard let domainProvider = QuotaProvider(rawValue: account.providerID.rawValue),
-              let provider = QuotioCLIProviderMap.cli(domainProvider) else {
+        guard let domainProvider = QuotaProvider(rawValue: canonicalLegacyMacProviderID(account.providerID.rawValue)) else {
             throw QuotioHostClientError.incompatible
         }
+        let provider = domainProvider.rawValue
         var credential = credential
         if domainProvider == .antigravity {
             let parameters = AntigravityAccountSwitcher.oauthClientParameters
@@ -348,10 +348,10 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
         fields: [String: String] = [:]
     ) async throws {
         guard let client,
-              let provider = QuotaProvider(rawValue: providerID.rawValue),
-              let cliProvider = QuotioCLIProviderMap.cli(provider) else {
+              let provider = QuotaProvider(rawValue: providerID.rawValue) else {
             throw AccountServiceFailure.invalidCredential
         }
+        let cliProvider = provider.rawValue
         do {
             if let id = existingAccountID {
                 let host = try await client.snapshot()
@@ -440,7 +440,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
         guard epoch == connectionID else { throw QuotioHostClientError.disconnected }
         guard catalog.schemaVersion == 2 else { throw QuotioHostClientError.incompatible }
         return try catalog.providers.map { value in
-            guard let id = QuotioCLIProviderMap.domain(value.id) else { throw QuotioHostClientError.incompatible }
+            guard let id = QuotaProvider(rawValue: value.id) else { throw QuotioHostClientError.incompatible }
             return MonitoringProvider(id: id, displayName: value.displayName,
                 actions: Set(value.actions.filter(\.available).map(\.kind)),
                 inputs: value.capabilities.settings.map { .init(name: $0.name, fieldPath: $0.fieldPath, required: $0.required, values: $0.values) })
@@ -458,13 +458,10 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
     public func updateMonitoringSettings(_ settings: MonitoringSettings) async throws -> MonitoringSettings {
         guard let client else { throw QuotioHostClientError.disconnected }
         let epoch = connectionID
-        func hostID(_ id: String) -> String {
-            QuotaProvider(rawValue: id).flatMap(QuotioCLIProviderMap.cli) ?? id
-        }
         let body = try JSONSerialization.data(withJSONObject: [
             "revision": settings.revision,
-            "enabled_providers": settings.enabledProviders.map(hostID).sorted(),
-            "disabled_providers": settings.disabledProviders.map(hostID).sorted(),
+            "enabled_providers": settings.enabledProviders.sorted(),
+            "disabled_providers": settings.disabledProviders.sorted(),
             "automatically_discover_logins": settings.automaticallyDiscoverLogins,
             "refresh_interval": settings.refreshInterval,
         ])
@@ -474,11 +471,10 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
     }
 
     private static func monitoringSettings(_ value: QuotioHostSettings) -> MonitoringSettings {
-        func domainID(_ id: String) -> String { QuotioCLIProviderMap.domain(id)?.rawValue ?? id }
         return MonitoringSettings(
             revision: value.revision,
-            enabledProviders: Set(value.enabledProviders.map(domainID)),
-            disabledProviders: Set(value.disabledProviders.map(domainID)),
+            enabledProviders: Set(value.enabledProviders),
+            disabledProviders: Set(value.disabledProviders),
             automaticallyDiscoverLogins: value.automaticallyDiscoverLogins,
             refreshInterval: value.refreshInterval
         )
@@ -493,7 +489,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
     ) async {
         removeDisabledProxyQuotas()
         guard let client, activeMode == mode else { return }
-        let domainProviders = Set(providers.compactMap(QuotioCLIProviderMap.domain))
+        let domainProviders = Set(providers.compactMap(QuotaProvider.init(rawValue:)))
         snapshot.refreshingProviders.formUnion(domainProviders)
         publish()
         do {
@@ -578,7 +574,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
     }
 
     private static func resolvedAccount(_ value: QuotioHostSnapshot.Account) -> Account? {
-        guard let provider = QuotioCLIProviderMap.domain(value.providerId) else { return nil }
+        guard let provider = QuotaProvider(rawValue: value.providerId) else { return nil }
         func sourceKind(_ origin: String) -> AccountSource {
             switch origin {
             case "owned": .quotioKeychain
@@ -616,7 +612,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
 
     private func disabledProxyAccountIDs() -> Set<String> {
         Set((authFileState?.disabledAuthFileNames() ?? []).flatMap { name in
-            Self.supportedProviders.compactMap(QuotioCLIProviderMap.cli).map {
+            Self.supportedProviders.map(\.rawValue).map {
                 Self.sourceID(["cli_proxy_auth_file", $0, name])
             }
         })

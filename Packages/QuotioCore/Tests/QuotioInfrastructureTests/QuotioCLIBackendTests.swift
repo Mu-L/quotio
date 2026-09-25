@@ -114,6 +114,22 @@ final class QuotioCLIBackendTests: XCTestCase {
         }
     }
 
+    func testCanonicalDevinProvidersRemainDistinctAndRouteWithoutAliases() async throws {
+        let backend = QuotioCLIBackend(session: stubSession())
+        await backend.connect(.init(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
+        let entries = ["devin", "devin-desktop"].map { id in
+            ["id": id, "display_name": id, "actions": [], "capabilities": ["operations": [], "settings": []]] as [String: Any]
+        }
+        let data = try JSONSerialization.data(withJSONObject: ["schema_version": 2, "providers": entries])
+        QuotioCLIURLProtocol.enqueue(String(decoding: data, as: UTF8.self))
+        let providers = try await backend.monitoringProviders()
+        XCTAssertEqual(Set(providers.map(\.id.rawValue)), ["devin", "devin-desktop"])
+        QuotioCLIURLProtocol.enqueue(#"{"id":"create","status":"completed"}"#)
+        try await backend.saveAPIKey(providerID: .init(rawValue: "devin"), label: "Cloud", apiKey: "fixture", existingAccountID: nil)
+        let body = try XCTUnwrap(QuotioCLIURLProtocol.body(forPath: "/v2/accounts"))
+        XCTAssertEqual((try JSONSerialization.jsonObject(with: body) as? [String: Any])?["provider"] as? String, "devin")
+    }
+
     func testProviderCatalogKeepsUnknownProvidersAndUsesHostActions() async throws {
         let backend = QuotioCLIBackend(session: stubSession())
         await backend.connect(.init(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))

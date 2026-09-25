@@ -64,14 +64,16 @@ public final class UserDefaultsMenuBarPreferencesRepository: MenuBarPreferencesR
             defaults.set(maximum, forKey: "menuBarMaxItems")
         }
 
-        let selectedItems = loadSelectedItems()
+        let legacyIDs = defaults.object(forKey: "menuBarProviderSelectionV2") == nil
+        let selection = defaults.dictionary(forKey: "menuBarProviderSelectionV2") ?? [:]
+        let selectedItems = loadSelectedItems(legacyIDs: legacyIDs, selection: selection)
+        let selectedProvider = legacyIDs ? defaults.string(forKey: "menuBarSelectedProvider").map(canonicalLegacyMacProviderID) : selection["provider"] as? String
         return MenuBarPreferences(
             showMenuBarIcon: defaults.bool(forKey: "showMenuBarIcon"),
             showQuotaInMenuBar: defaults.bool(forKey: "menuBarShowQuota"),
             menuBarMaxItems: maximum,
             selectedItems: Array(selectedItems.prefix(maximum)),
-            selectedProvider: defaults.string(forKey: "menuBarSelectedProvider")
-                .flatMap(QuotaProvider.init(rawValue:)),
+            selectedProvider: selectedProvider.flatMap(QuotaProvider.init(rawValue:)),
             colorMode: MenuBarColorMode(rawValue: defaults.string(forKey: "menuBarColorMode") ?? "") ?? .colored,
             quotaDisplayMode: QuotaDisplayMode(rawValue: defaults.string(forKey: "quotaDisplayMode") ?? "") ?? .used,
             quotaDisplayStyle: QuotaDisplayStyle(rawValue: defaults.string(forKey: "quotaDisplayStyle") ?? "") ?? .card,
@@ -88,7 +90,6 @@ public final class UserDefaultsMenuBarPreferencesRepository: MenuBarPreferencesR
         defaults.set(preferences.showMenuBarIcon, forKey: "showMenuBarIcon")
         defaults.set(preferences.showQuotaInMenuBar, forKey: "menuBarShowQuota")
         defaults.set(maximum, forKey: "menuBarMaxItems")
-        defaults.set(preferences.selectedProvider?.rawValue ?? "", forKey: "menuBarSelectedProvider")
         defaults.set(preferences.colorMode.rawValue, forKey: "menuBarColorMode")
         defaults.set(preferences.quotaDisplayMode.rawValue, forKey: "quotaDisplayMode")
         defaults.set(preferences.quotaDisplayStyle.rawValue, forKey: "quotaDisplayStyle")
@@ -98,7 +99,7 @@ public final class UserDefaultsMenuBarPreferencesRepository: MenuBarPreferencesR
         defaults.set(preferences.modelAggregationMode.rawValue, forKey: "modelAggregationMode")
         defaults.set(preferences.hasUserModifiedMenuBar, forKey: "hasUserModifiedMenuBar")
         if let data = try? JSONEncoder().encode(Array(preferences.selectedItems.prefix(maximum))) {
-            defaults.set(data, forKey: "menuBarSelectedQuotaItems")
+            defaults.set(["items": data, "provider": preferences.selectedProvider?.rawValue ?? ""], forKey: "menuBarProviderSelectionV2")
         }
     }
 
@@ -108,17 +109,13 @@ public final class UserDefaultsMenuBarPreferencesRepository: MenuBarPreferencesR
         }
     }
 
-    private func loadSelectedItems() -> [MenuBarQuotaItem] {
-        guard let data = defaults.data(forKey: "menuBarSelectedQuotaItems"),
-              let decoded = try? JSONDecoder().decode([MenuBarQuotaItem].self, from: data) else {
-            return []
+    private func loadSelectedItems(legacyIDs: Bool, selection: [String: Any]) -> [MenuBarQuotaItem] {
+        let data = legacyIDs ? defaults.data(forKey: "menuBarSelectedQuotaItems") : selection["items"] as? Data
+        guard let data, let decoded = try? JSONDecoder().decode([MenuBarQuotaItem].self, from: data) else { return [] }
+        guard legacyIDs else { return decoded }
+        return decoded.filter { $0.provider != "gemini-cli" }.map {
+            MenuBarQuotaItem(provider: canonicalLegacyMacProviderID($0.provider), accountKey: $0.accountKey)
         }
-
-        let current = decoded.filter { $0.provider != "gemini-cli" }
-        if current != decoded, let migrated = try? JSONEncoder().encode(current) {
-            defaults.set(migrated, forKey: "menuBarSelectedQuotaItems")
-        }
-        return current
     }
 
     private static func clampItemCount(_ value: Int) -> Int {

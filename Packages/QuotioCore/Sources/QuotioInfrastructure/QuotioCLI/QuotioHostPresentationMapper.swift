@@ -19,12 +19,12 @@ struct QuotioHostPresentationMapper {
         let mapper = Self(bundle: bundle, locale: locale)
         var snapshot = QuotaSnapshot(lastUpdated: host.generatedAt)
         for (id, issue) in host.providerIssues ?? [:] {
-            guard let provider = QuotioCLIProviderMap.domain(id) else { continue }
+            guard let provider = QuotaProvider(rawValue: id) else { continue }
             snapshot.issues[provider] = QuotaRefreshIssue(kind: .failed, occurredAt: host.generatedAt,
                 reason: QuotaRefreshFailureReason(rawValue: issue.code), recoveryAction: recoveryAction(issue.action))
         }
         for account in host.accounts {
-            guard let provider = QuotioCLIProviderMap.domain(account.providerId) else { continue }
+            guard let provider = QuotaProvider(rawValue: account.providerId) else { continue }
             let key = account.id
             let usage = host.usage.first(where: { $0.accountId == key })
             let connection: ConnectionState = switch account.state {
@@ -67,7 +67,7 @@ struct QuotioHostPresentationMapper {
         }
         for (previous, current) in host.accountRedirects ?? [:] {
             guard let account = host.accounts.first(where: { $0.id == current }),
-                  let provider = QuotioCLIProviderMap.domain(account.providerId) else { continue }
+                  let provider = QuotaProvider(rawValue: account.providerId) else { continue }
             snapshot.accountAliases[provider, default: [:]][previous] = current
         }
         return snapshot

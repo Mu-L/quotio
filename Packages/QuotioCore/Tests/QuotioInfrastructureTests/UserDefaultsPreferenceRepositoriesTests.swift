@@ -35,6 +35,28 @@ final class UserDefaultsPreferenceRepositoriesTests: XCTestCase {
         XCTAssertTrue(defaults.bool(forKey: "autoStartProxy"))
     }
 
+    func testLegacyDevinPreferencesCannotAliasTheCanonicalDevinAPIProvider() throws {
+        defaults.set(["devin", "github-copilot"], forKey: "disabledProviders")
+        defaults.set("devin", forKey: "menuBarSelectedProvider")
+        defaults.set(try JSONEncoder().encode([MenuBarQuotaItem(provider: "devin", accountKey: "account")]), forKey: "menuBarSelectedQuotaItems")
+        let tracking = UserDefaultsProviderTrackingPreferencesRepository(defaults: defaults)
+        let menu = UserDefaultsMenuBarPreferencesRepository(defaults: defaults)
+        XCTAssertEqual(tracking.load().disabledProviders, [.devin, .copilot])
+        XCTAssertEqual(menu.load().selectedProvider?.rawValue, "devin-desktop")
+        XCTAssertEqual(menu.load().selectedItems.first?.provider, "devin-desktop")
+        let cloud = try XCTUnwrap(QuotaProvider(rawValue: "devin"))
+        XCTAssertNotEqual(cloud, .devin)
+        tracking.save(.init(disabledProviders: [cloud]))
+        var selection = menu.load()
+        selection.selectedProvider = cloud
+        selection.selectedItems = [.init(provider: "devin", accountKey: "cloud-account")]
+        menu.save(selection)
+        XCTAssertEqual(tracking.load().disabledProviders, [cloud])
+        XCTAssertEqual(menu.load().selectedProvider, cloud)
+        XCTAssertEqual(menu.load().selectedItems.first?.provider, "devin")
+        XCTAssertEqual(defaults.stringArray(forKey: "disabledProviders"), ["devin", "github-copilot"])
+    }
+
     private var suiteName: String!
     private var defaults: UserDefaults!
 
@@ -89,7 +111,7 @@ final class UserDefaultsPreferenceRepositoriesTests: XCTestCase {
         XCTAssertEqual(defaults.string(forKey: "appLanguage"), "zh-Hans")
     }
 
-    func testRemovedMenuBarProviderIsFilteredAndMigrationIsIdempotent() throws {
+    func testLegacyMenuBarMigrationDoesNotOverwriteItsOriginalData() throws {
         let legacyItems = [
             MenuBarQuotaItem(provider: "gemini-cli", accountKey: "removed"),
             MenuBarQuotaItem(provider: "claude", accountKey: "active"),
@@ -101,12 +123,12 @@ final class UserDefaultsPreferenceRepositoriesTests: XCTestCase {
         let migratedData = try XCTUnwrap(defaults.data(forKey: "menuBarSelectedQuotaItems"))
         XCTAssertEqual(
             try JSONDecoder().decode([MenuBarQuotaItem].self, from: migratedData),
-            [MenuBarQuotaItem(provider: "claude", accountKey: "active")]
+            legacyItems
         )
         XCTAssertEqual(repository.load().selectedItems.count, 1)
     }
 
-    func testMenuBarProviderFilterUsesExistingKey() {
+    func testMenuBarProviderFilterMigratesIntoAtomicCanonicalSelection() {
         defaults.set(QuotaProvider.claude.rawValue, forKey: "menuBarSelectedProvider")
         let repository = UserDefaultsMenuBarPreferencesRepository(defaults: defaults)
 
@@ -116,7 +138,8 @@ final class UserDefaultsPreferenceRepositoriesTests: XCTestCase {
         preferences.selectedProvider = nil
         repository.save(preferences)
 
-        XCTAssertEqual(defaults.string(forKey: "menuBarSelectedProvider"), "")
+        XCTAssertEqual(defaults.string(forKey: "menuBarSelectedProvider"), "claude")
+        XCTAssertEqual(defaults.dictionary(forKey: "menuBarProviderSelectionV2")?["provider"] as? String, "")
         XCTAssertNil(repository.load().selectedProvider)
     }
 
@@ -170,8 +193,8 @@ final class UserDefaultsPreferenceRepositoriesTests: XCTestCase {
         let menuRepository = UserDefaultsMenuBarPreferencesRepository(defaults: defaults)
         menuRepository.save(menuPreferences)
         XCTAssertEqual(menuRepository.load(), menuPreferences)
-        XCTAssertNotNil(defaults.data(forKey: "menuBarSelectedQuotaItems"))
-        XCTAssertEqual(defaults.string(forKey: "menuBarSelectedProvider"), "codex")
+        XCTAssertNotNil(defaults.dictionary(forKey: "menuBarProviderSelectionV2")?["items"] as? Data)
+        XCTAssertEqual(defaults.dictionary(forKey: "menuBarProviderSelectionV2")?["provider"] as? String, "codex")
 
         let warmupPreferences = WarmupPreferences(
             enabledAccountIds: ["codex::user"],

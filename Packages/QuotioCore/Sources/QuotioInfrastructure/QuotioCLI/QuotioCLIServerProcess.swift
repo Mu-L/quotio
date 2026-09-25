@@ -150,7 +150,7 @@ public final class QuotioCLIServerProcess {
             var handshake: [String: Any] = ["token": token]
             if let (tracking, refresh) = initialPreferences() {
                 handshake["preferences"] = [
-                    "disabled_providers": tracking.disabledProviders.compactMap(QuotioCLIProviderMap.cli).sorted(),
+                    "disabled_providers": tracking.disabledProviders.map(\.rawValue).sorted(),
                     "automatically_discover_logins": tracking.automaticallyDiscoverLogins,
                     "refresh_interval": Int(refresh.cadence.intervalSeconds ?? 0),
                 ]

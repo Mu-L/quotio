@@ -21,10 +21,10 @@ public actor QuotioCLIOAuthAuthorizer: OAuthAuthorizing {
         attemptID: OAuthAttemptID,
         progress: @escaping @Sendable (OAuthPrompt) async -> Void
     ) async throws -> OAuthAuthorizationOutcome {
-        guard let provider = QuotaProvider(rawValue: request.providerID.rawValue),
-              let cliProvider = QuotioCLIProviderMap.cli(provider) else {
+        guard let provider = QuotaProvider(rawValue: request.providerID.rawValue) else {
             throw OAuthFlowFailure.unsupportedProvider
         }
+        let cliProvider = provider.rawValue
         do {
             let session = try await backend.beginOAuth(provider: cliProvider)
             sessions[attemptID] = session
@@ -62,7 +62,7 @@ public actor QuotioCLIOAuthAuthorizer: OAuthAuthorizing {
     ) async throws -> Account {
         guard let session = sessions[attemptID], session.workflow == "manual_code",
               let provider = QuotaProvider(rawValue: providerID.rawValue),
-              QuotioCLIProviderMap.cli(provider) == session.provider else {
+              provider.rawValue == session.provider else {
             throw OAuthFlowFailure.expired
         }
         do {
