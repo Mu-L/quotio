@@ -1724,6 +1724,24 @@ async fn logical_account_and_source_crud_have_distinct_atomic_scopes() {
         tx.commit().unwrap();
         (second, unrelated)
     };
+    let (_, Json(invalid)) = management::source_patch(
+        State(state.clone()),
+        Path(second.clone()),
+        key("invalid-source-key"),
+        ApiJson(json!({"api_key":"", "enabled":false})),
+    )
+    .await
+    .unwrap_or_else(|_| panic!());
+    assert_eq!(
+        done(&state, &invalid.id).await.error,
+        Some("invalid_credential")
+    );
+    assert!(
+        accounts::service::get(vault.clone(), second.clone())
+            .await
+            .unwrap()
+            .enabled()
+    );
     let (_, Json(op)) = management::source_patch(
         State(state.clone()),
         Path(second.clone()),
@@ -1776,7 +1794,10 @@ async fn logical_account_and_source_crud_have_distinct_atomic_scopes() {
     )
     .await
     .unwrap_or_else(|_| panic!());
-    assert_eq!(done(&state, &invalid.id).await.error, Some("source_disabled"));
+    assert_eq!(
+        done(&state, &invalid.id).await.error,
+        Some("source_disabled")
+    );
     let unchanged = accounts::api::resolved_get(vault.clone(), first.clone())
         .await
         .unwrap();

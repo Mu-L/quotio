@@ -242,6 +242,13 @@ impl Registry {
                             issue: None,
                             actions: ["set_source_enabled", "remove_source"]
                                 .into_iter()
+                                .chain(
+                                    matches!(
+                                        record.credential,
+                                        Credential::ApiKey { .. } | Credential::CatalogKey { .. }
+                                    )
+                                    .then_some("replace_api_key"),
+                                )
                                 .map(|kind| view::Action {
                                     kind: kind.into(),
                                     available: true,

@@ -55,6 +55,12 @@
               "available": true,
               "reason": null,
               "interaction": "host"
+            },
+            {
+              "kind": "replace_api_key",
+              "available": true,
+              "reason": null,
+              "interaction": "host"
             }
           ]
         },
@@ -77,6 +83,12 @@
             },
             {
               "kind": "remove_source",
+              "available": true,
+              "reason": null,
+              "interaction": "host"
+            },
+            {
+              "kind": "replace_api_key",
               "available": true,
               "reason": null,
               "interaction": "host"

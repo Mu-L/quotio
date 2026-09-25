@@ -2308,13 +2308,16 @@
       "V2SourcePatch": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "enabled"
-        ],
+        "anyOf": [{"required": ["enabled"]}, {"required": ["api_key"]}],
+        "dependentRequired": {
+          "settings": ["api_key"], "region": ["api_key"], "organization": ["api_key"]
+        },
         "properties": {
-          "enabled": {
-            "type": "boolean"
-          }
+          "enabled": {"type": "boolean"},
+          "api_key": {"type": "string", "minLength": 1, "maxLength": 16384},
+          "settings": {"type": ["object", "null"], "additionalProperties": {"type": "string"}},
+          "region": {"type": ["string", "null"]},
+          "organization": {"type": ["string", "null"]}
         }
       },
       "V2AccountList": {

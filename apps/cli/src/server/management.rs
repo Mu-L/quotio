@@ -160,13 +160,14 @@ pub(super) async fn source_patch(
 ) -> Result<(StatusCode, Json<Operation>), ApiError> {
     let patch: api::SourcePatch = serde_json::from_value(body.clone())
         .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "invalid_request"))?;
+    let patch = patch.into_account_patch().map_err(account_error)?;
     mutate(
         state,
         headers,
         "source_update",
         &id.clone(),
         body,
-        Mutation::SourceUpdate(id, Some(patch.enabled)),
+        Mutation::SourceUpdate(id, Some(patch)),
     )
     .await
 }
@@ -219,7 +220,7 @@ enum Mutation {
     ResolvedCreate(api::AccountCreateInput),
     ResolvedUpdate(String, api::ResolvedAccountPatch),
     ResolvedRemove(String),
-    SourceUpdate(String, Option<bool>),
+    SourceUpdate(String, Option<api::AccountPatch>),
     Create(api::AccountCreateInput),
     Migrate(api::migration::Input),
     Reference(api::SourceInput),
@@ -463,11 +464,19 @@ async fn mutate(
                         work.invalidate().await;
                         Ok(json!({"account_id":id}))
                     }
-                    Mutation::SourceUpdate(id, enabled) => {
+                    Mutation::SourceUpdate(id, patch) => {
+                        let patch = match patch {
+                            Some(patch) => Some(
+                                api::prepare_update(vault.clone(), &work.context, &id, patch)
+                                    .await
+                                    .map_err(|e| account_code(&e))?,
+                            ),
+                            None => None,
+                        };
                         let _guard = crate::accounts::service::mutation_guard(&work.commit_guard)
                             .await
                             .map_err(|e| account_code(&e))?;
-                        let id = api::source_update_once(vault, id, enabled, intent)
+                        let id = api::source_update_once(vault, id, patch, intent)
                             .await
                             .map_err(|e| account_code(&e))?;
                         work.invalidate().await;

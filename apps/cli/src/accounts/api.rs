@@ -370,6 +370,26 @@ pub struct PreparedPatch {
     active: Option<bool>,
     enabled: Option<bool>,
     replacement: Option<(Provider, String, Credential)>,
+    expected_credential: Option<Credential>,
+}
+impl PreparedPatch {
+    fn apply(self, document: &mut super::Document, id: &str) -> Result<(), AccountError> {
+        if let Some(expected) = self.expected_credential {
+            let current = document
+                .accounts
+                .iter()
+                .find(|account| account.id == id)
+                .ok_or(AccountError::NotFound)?;
+            if current.credential != expected {
+                return Err(AccountError::Busy);
+            }
+        }
+        document.patch(id, self.label.as_deref(), self.active, self.enabled)?;
+        if let Some((provider, identity, credential)) = self.replacement {
+            document.replace_api_key(id, provider, identity, credential)?;
+        }
+        Ok(())
+    }
 }
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -569,10 +589,12 @@ pub async fn prepare_update(
     id: &str,
     patch: AccountPatch,
 ) -> Result<PreparedPatch, AccountError> {
+    let mut expected_credential = None;
     let replacement = match &patch.api_key {
         Some(_) => {
             let account = service::get(vault, id.to_owned()).await?;
             let credential = credential(patch.replacement_input(&account)?, context)?;
+            expected_credential = Some(account.credential);
             let usage = tokio::time::timeout(
                 std::time::Duration::from_secs(30),
                 service::validate(context, account.provider, &credential),
@@ -594,6 +616,7 @@ pub async fn prepare_update(
         active: patch.active,
         enabled: patch.enabled,
         replacement,
+        expected_credential,
     })
 }
 
@@ -635,10 +658,7 @@ pub async fn update_once(
     intent: service::MutationIntent,
 ) -> Result<String, AccountError> {
     service::commit_once(vault, intent, move |document| {
-        document.patch(&id, patch.label.as_deref(), patch.active, patch.enabled)?;
-        if let Some((provider, identity, credential)) = patch.replacement {
-            document.replace_api_key(&id, provider, identity, credential)?;
-        }
+        patch.apply(document, &id)?;
         Ok(id)
     })
     .await
@@ -769,7 +789,37 @@ pub struct ResolvedAccountPatch {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SourcePatch {
-    pub enabled: bool,
+    #[serde(default, deserialize_with = "present_value")]
+    pub enabled: Option<bool>,
+    #[serde(default, deserialize_with = "present_value")]
+    pub api_key: Option<String>,
+    #[serde(default, deserialize_with = "present_nullable")]
+    pub settings: Option<Option<BTreeMap<String, String>>>,
+    #[serde(default, deserialize_with = "present_nullable")]
+    pub region: Option<Option<String>>,
+    #[serde(default, deserialize_with = "present_nullable")]
+    pub organization: Option<Option<String>>,
+}
+impl SourcePatch {
+    pub fn into_account_patch(self) -> Result<AccountPatch, AccountError> {
+        if self.enabled.is_none() && self.api_key.is_none() {
+            return Err(AccountError::Input);
+        }
+        if self.api_key.is_none()
+            && (self.settings.is_some() || self.region.is_some() || self.organization.is_some())
+        {
+            return Err(AccountError::Input);
+        }
+        Ok(AccountPatch {
+            enabled: self.enabled,
+            api_key: self.api_key,
+            settings: self.settings,
+            region: self.region,
+            organization: self.organization,
+            label: None,
+            active: None,
+        })
+    }
 }
 
 pub async fn resolved_update_once(
@@ -837,7 +887,7 @@ pub async fn resolved_remove_once(
 pub async fn source_update_once(
     vault: Vault,
     id: String,
-    enabled: Option<bool>,
+    patch: Option<PreparedPatch>,
     intent: service::MutationIntent,
 ) -> Result<String, AccountError> {
     service::commit_once(vault, intent, move |document| {
@@ -849,8 +899,16 @@ pub async fn source_update_once(
             .account_id_for_source(&id)
             .ok_or(AccountError::NotFound)?
             .to_owned();
-        if let Some(enabled) = enabled {
-            document.patch(&id, None, None, Some(enabled))?;
+        if let Some(patch) = patch {
+            patch.apply(document, &id)?;
+            // Credential replacement can move this source to a new logical account.
+            return Ok(document
+                .resolved
+                .as_ref()
+                .expect("initialized")
+                .account_id_for_source(&id)
+                .ok_or(AccountError::NotFound)?
+                .to_owned());
         } else {
             document.remove(&id)?;
         }
@@ -1321,6 +1379,74 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn source_replacement_is_scoped_fenced_and_returns_the_new_logical_id() {
+        use crate::accounts::vault::tests::Memory;
+        let dir = std::env::temp_dir().join(super::super::random_string().unwrap());
+        std::fs::create_dir(&dir).unwrap();
+        let vault = Vault::new(std::sync::Arc::new(Memory::default()), dir.join("lock"));
+        let key = |token: &str| Credential::ApiKey {
+            token: token.into(),
+            region: None,
+            organization: None,
+        };
+        let (first, second) = {
+            let mut tx = vault.begin().unwrap();
+            let first = tx
+                .document
+                .add(Provider::Amp, "First", "first".into(), key("old"))
+                .unwrap();
+            let second = tx
+                .document
+                .add(Provider::Amp, "Second", "second".into(), key("other"))
+                .unwrap();
+            tx.document.enable_resolved_accounts().unwrap();
+            let registry = tx.document.resolved.as_mut().unwrap();
+            let proof = crate::domain::VerifiedIdentity {
+                subject: "user".into(),
+                tenant: None,
+            };
+            registry.observe(&first, &proof).unwrap();
+            registry.observe(&second, &proof).unwrap();
+            tx.commit().unwrap();
+            (first, second)
+        };
+        let patch = || PreparedPatch {
+            label: None,
+            active: None,
+            enabled: Some(false),
+            expected_credential: Some(key("old")),
+            replacement: Some((Provider::Amp, "replacement".into(), key("new"))),
+        };
+        let intent = || service::MutationIntent::new("replace", "body".into()).unwrap();
+        let original = resolved_get(vault.clone(), first.clone()).await.unwrap().id;
+        let new_id = source_update_once(vault.clone(), first.clone(), Some(patch()), intent())
+            .await
+            .unwrap();
+        assert_ne!(new_id, original);
+        let replaced = resolved_get(vault.clone(), new_id.clone()).await.unwrap();
+        assert!(!replaced.enabled);
+        assert_eq!(replaced.sources.len(), 1);
+        assert_eq!(replaced.sources[0].id, first);
+        let survivor = resolved_get(vault.clone(), original).await.unwrap();
+        assert!(survivor.enabled);
+        assert_eq!(survivor.sources[0].id, second);
+        assert_eq!(
+            source_update_once(vault.clone(), first.clone(), Some(patch()), intent())
+                .await
+                .unwrap(),
+            new_id
+        );
+        let stale = service::MutationIntent::new("stale", "body".into()).unwrap();
+        assert!(matches!(
+            source_update_once(vault.clone(), first.clone(), Some(patch()), stale).await,
+            Err(AccountError::Busy)
+        ));
+        assert!(service::get(vault.clone(), first).await.unwrap().credential == key("new"));
+        assert!(service::get(vault, second).await.unwrap().credential == key("other"));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[tokio::test]
     async fn api_key_replacement_preserves_account_id() {
         use crate::accounts::vault::tests::Memory;
         use std::sync::Arc;
@@ -1346,6 +1472,7 @@ mod tests {
         .await
         .unwrap();
         let prepared = PreparedPatch {
+            expected_credential: None,
             label: Some("Updated Amp".into()),
             active: None,
             enabled: None,

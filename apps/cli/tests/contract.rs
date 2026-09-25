@@ -21,6 +21,35 @@ fn validator(name: &str) -> jsonschema::Validator {
 }
 
 #[test]
+fn source_patch_contract_matches_runtime_scope_and_null_rules() {
+    use quotio::accounts::api::SourcePatch;
+    let schema = validator("V2SourcePatch");
+    for (value, valid) in [
+        (json!({"enabled":false}), true),
+        (
+            json!({"api_key":"replacement", "settings":null, "region":null}),
+            true,
+        ),
+        (
+            json!({"api_key":"replacement", "organization":"team", "enabled":true}),
+            true,
+        ),
+        (json!({}), false),
+        (json!({"enabled":null}), false),
+        (json!({"api_key":null}), false),
+        (json!({"enabled":true, "settings":{}}), false),
+        (json!({"label":"group label"}), false),
+        (json!({"active":true}), false),
+    ] {
+        assert_eq!(schema.is_valid(&value), valid);
+        let runtime = serde_json::from_value::<SourcePatch>(value)
+            .ok()
+            .and_then(|patch| patch.into_account_patch().ok());
+        assert_eq!(runtime.is_some(), valid);
+    }
+}
+
+#[test]
 fn every_registered_provider_conforms_to_the_public_contract() {
     let value = serde_json::to_value(ProviderList::new(&[Provider::Mock])).unwrap();
     validator("ProviderList").validate(&value).unwrap();
