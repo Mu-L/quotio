@@ -1888,6 +1888,28 @@ async fn logical_account_and_source_crud_have_distinct_atomic_scopes() {
     assert_eq!(view.user_label, None);
     assert_eq!(view.display_name, "amp account");
     assert!(view.active);
+    let observed = "provider-name".repeat(10);
+    {
+        let mut tx = vault.begin().unwrap();
+        let source = tx
+            .document
+            .accounts
+            .iter_mut()
+            .find(|account| account.id == second)
+            .unwrap();
+        assert_eq!(
+            source.naming.as_ref().unwrap().origin,
+            accounts::LabelOrigin::Generated
+        );
+        assert!(source.observe_name(&observed).unwrap());
+        assert!(source.observe_name(&"x".repeat(513)).is_err());
+        tx.commit().unwrap();
+    }
+    let renamed = accounts::api::resolved_get(vault.clone(), first.clone())
+        .await
+        .unwrap();
+    assert_eq!(renamed.display_name, observed);
+    assert_eq!(renamed.user_label, None);
     assert!(matches!(
         management::resolved_patch(
             State(state.clone()),

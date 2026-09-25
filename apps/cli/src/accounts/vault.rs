@@ -356,7 +356,7 @@ impl Vault {
                         a.naming
                             .as_ref()
                             .and_then(|n| n.observed_name.as_ref())
-                            .is_some_and(|name| super::validate_label(name).is_err())
+                            .is_some_and(|name| super::validate_observed_name(name).is_err())
                     })
                     || (doc.version < 8
                         && (!doc.antigravity_refresh_owners.is_empty()

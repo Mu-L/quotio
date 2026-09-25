@@ -237,7 +237,7 @@ impl Account {
     }
 
     pub fn observe_name(&mut self, name: &str) -> Result<bool, AccountError> {
-        let name = validate_label(name)?;
+        let name = validate_observed_name(name)?;
         let Some(naming) = &mut self.naming else {
             return Ok(false);
         };
@@ -612,8 +612,14 @@ impl Document {
     }
 }
 pub fn validate_label(label: &str) -> Result<String, AccountError> {
+    validate_name(label, 80)
+}
+pub(crate) fn validate_observed_name(name: &str) -> Result<String, AccountError> {
+    validate_name(name, 512)
+}
+fn validate_name(label: &str, limit: usize) -> Result<String, AccountError> {
     let label = label.trim();
-    if label.is_empty() || label.chars().count() > 80 || label.chars().any(char::is_control) {
+    if label.is_empty() || label.chars().count() > limit || label.chars().any(char::is_control) {
         return Err(AccountError::Label);
     }
     Ok(label.to_owned())

@@ -931,6 +931,19 @@ pub async fn resolved_update_once(
         let sources = registry.source_ids(&canonical)?;
         if let Some(label) = patch.user_label {
             registry.set_label(&canonical, label.as_deref())?;
+            if label.is_none() {
+                for account in &mut document.accounts {
+                    if sources.contains(&account.id) {
+                        account
+                            .naming
+                            .get_or_insert(super::AccountNaming {
+                                origin: LabelOrigin::Generated,
+                                observed_name: None,
+                            })
+                            .origin = LabelOrigin::Generated;
+                    }
+                }
+            }
         }
         if let Some(enabled) = patch.enabled {
             for source in sources {
