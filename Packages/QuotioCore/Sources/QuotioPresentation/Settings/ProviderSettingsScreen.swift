@@ -41,9 +41,13 @@ struct ProviderSettingsScreen: View {
                         Toggle("settings.track".localized(), isOn: Binding(get: { tracked }, set: { enabled in
                             Task { await controller.setProviderEnabled(enabled, provider: provider) }
                         }))
+                        .disabled(controller.monitoringSettings == nil || controller.isUpdatingSettings)
                         .toggleStyle(.switch)
                         .fixedSize()
                     }
+                }
+                if let error = controller.settingsError {
+                    Section { Text(error).foregroundStyle(.red) }
                 }
                 if !tracked {
                     Section {

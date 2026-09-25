@@ -925,12 +925,12 @@ pub async fn run(args: ServeArgs) -> Result<(), ServerError> {
     let worker_state = state.clone();
     let mut worker = tokio::spawn(async move {
         loop {
+            if let Err(code) = native::scheduled(&worker_state).await {
+                tracing::warn!(code, "scheduled discovery failed");
+            }
             if worker_state.settings.read().await.values.refresh_interval == 0 {
                 wait_for_next_refresh(&worker_state).await;
                 continue;
-            }
-            if let Err(code) = native::scheduled(&worker_state).await {
-                tracing::warn!(code, "scheduled discovery failed");
             }
             if let Err(code) = refresh(&worker_state, None).await {
                 tracing::warn!(code, "scheduled refresh failed");

@@ -80,40 +80,33 @@ final class QuotioCLIBackendTests: XCTestCase {
         }
     }
 
-    func testDisabledProviderDoesNotRefreshOrDiscoverAndAccountsRemainStored() async throws {
-        let suite = "QuotioCLIBackendTests.tracking.\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let preferences = UserDefaultsProviderTrackingPreferencesRepository(defaults: defaults)
-        preferences.save(.init(disabledProviders: [.claude]))
-        let backend = QuotioCLIBackend(session: stubSession(), trackingPreferences: preferences)
-        await backend.connect(QuotioHostConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
-        _ = await backend.refresh(QuotaFetchRequest(provider: .claude, mode: .monitor))
-        _ = await backend.refreshAll(mode: .monitor, providers: [.claude])
-        await backend.rescanNativeAccounts(for: .claude)
-        XCTAssertTrue(QuotioCLIURLProtocol.requests().isEmpty)
-
+    func testMonitoringSettingsAndDefaultScopesAreOwnedByHost() async throws {
+        let backend = QuotioCLIBackend(session: stubSession())
+        await backend.connect(.init(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
+        let settings = #"{"revision":"first","enabled_providers":["codex","future-provider"],"disabled_providers":["future-provider"],"automatically_discover_logins":false,"refresh_interval":123,"overridden":[]}"#
+        QuotioCLIURLProtocol.enqueue(settings)
+        var value = try await backend.monitoringSettings()
+        XCTAssertEqual(value.refreshInterval, 123)
+        value.refreshInterval = 600
+        QuotioCLIURLProtocol.enqueue(settings.replacingOccurrences(of: "first", with: "second").replacingOccurrences(of: "123", with: "600"))
+        let updated = try await backend.updateMonitoringSettings(value)
+        XCTAssertEqual(updated.revision, "second")
+        let data = try XCTUnwrap(QuotioCLIURLProtocol.bodies(forPath: "/v1/settings").last)
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(body["revision"] as? String, "first")
+        XCTAssertEqual(body["disabled_providers"] as? [String], ["future-provider"])
+        QuotioCLIURLProtocol.enqueue(#"{"id":"refresh","status":"completed"}"#)
+        QuotioCLIURLProtocol.enqueue(try hostFixture())
+        _ = await backend.refreshAll(mode: .monitor)
+        let refreshData = try XCTUnwrap(QuotioCLIURLProtocol.body(forPath: "/v1/refresh"))
+        let refresh = try XCTUnwrap(JSONSerialization.jsonObject(with: refreshData) as? [String: Any])
+        XCTAssertEqual(refresh["providers"] as? [String], [])
         QuotioCLIURLProtocol.enqueue(#"{"id":"scan","status":"completed"}"#)
         QuotioCLIURLProtocol.enqueue(discoveryFixture())
         await backend.registerDetectedNativeAccounts()
-        let scanBody = try XCTUnwrap(QuotioCLIURLProtocol.body(forPath: "/v2/discovery"))
-        let scan = try XCTUnwrap(JSONSerialization.jsonObject(with: scanBody) as? [String: Any])
-        XCTAssertFalse((scan["providers"] as? [String])?.contains("claude") == true)
-        QuotioCLIURLProtocol.enqueue(try hostFixture { root in
-            var account = (root["accounts"] as! [[String: Any]])[0]
-            account["id"] = "owned"; account["provider_id"] = "claude"
-            var usage = (root["usage"] as! [[String: Any]])[0]
-            usage["account_id"] = "owned"
-            root["accounts"] = [account]; root["usage"] = [usage]
-        })
-        let accounts = await backend.accounts()
-        XCTAssertEqual(accounts.map(\.id), ["owned"])
-
-        preferences.save(.init())
-        QuotioCLIURLProtocol.enqueue(#"{"id":"refresh","status":"completed"}"#)
-        QuotioCLIURLProtocol.enqueue(try hostFixture())
-        _ = await backend.refresh(QuotaFetchRequest(provider: .claude, mode: .monitor))
-        XCTAssertNotNil(QuotioCLIURLProtocol.body(forPath: "/v1/refresh"))
+        let scanData = try XCTUnwrap(QuotioCLIURLProtocol.body(forPath: "/v2/discovery"))
+        let scan = try XCTUnwrap(JSONSerialization.jsonObject(with: scanData) as? [String: Any])
+        XCTAssertEqual(scan["providers"] as? [String], [])
     }
 
     override func tearDown() {

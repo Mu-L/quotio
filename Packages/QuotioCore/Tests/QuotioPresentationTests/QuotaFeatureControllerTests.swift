@@ -32,7 +32,7 @@ final class QuotaFeatureControllerTests: XCTestCase {
         await fixture.controller.shutdown()
     }
 
-    func testInitializeDiscoversNativeAccountsBeforeReloadingAccounts() async {
+    func testInitializeReadsHostStateWithoutDiscoveringNativeAccounts() async {
         let account = Account.make(
             providerID: AccountProviderID(rawValue: QuotaProvider.codex.rawValue),
             accountKey: "person@example.com",
@@ -44,22 +44,23 @@ final class QuotaFeatureControllerTests: XCTestCase {
         await fixture.controller.initialize()
 
         let events = await fixture.accountService.events()
-        XCTAssertEqual(Array(events.prefix(2)), ["discover", "accounts"])
+        XCTAssertFalse(events.contains("discover"))
+        XCTAssertTrue(events.contains("accounts"))
         await fixture.controller.shutdown()
     }
 
-    func testAutomaticRefreshProvidersPreserveOperatingModeBehavior() {
-        XCTAssertEqual(
-            QuotaFeatureController.automaticallyRefreshedProviders(for: .localProxy),
-            [.antigravity, .vertex, .codex, .copilot, .claude, .glm, .warp, .kiro, .clinePass]
-        )
-        XCTAssertEqual(
-            QuotaFeatureController.automaticallyRefreshedProviders(for: .monitor),
-            [
-                .codex, .claude, .copilot, .kiro, .glm, .clinePass, .warp,
-                .antigravity, .vertex, .factoryDroid, .devin, .grok, .openRouter, .amp,
-            ]
-        )
+    func testSettingsChangesUseHostPersistence() async {
+        let account = Account.make(providerID: .init(rawValue: "codex"), accountKey: "fixture", source: .nativeCredential)
+        let fixture = await makeFixture(account: account, provider: .codex)
+        await fixture.controller.initialize()
+        await fixture.controller.setAutomaticDiscovery(false)
+        await fixture.controller.setProviderEnabled(false, provider: .codex)
+        await fixture.controller.setRefreshInterval(123)
+        XCTAssertFalse(fixture.controller.trackingPreferences.automaticallyDiscoverLogins)
+        XCTAssertFalse(fixture.controller.trackingPreferences.isEnabled(.codex))
+        XCTAssertEqual(fixture.controller.monitoringSettings?.refreshInterval, 123)
+        XCTAssertNil(fixture.controller.settingsError)
+        await fixture.controller.shutdown()
     }
 
     func testRefreshRemovesQuotaForDisabledNativeAccount() async {
@@ -231,7 +232,7 @@ final class QuotaFeatureControllerTests: XCTestCase {
             oauth: OAuthScreenModel(controller: OAuthFlowController(authorizer: QuotaFeatureOAuthAuthorizer())),
             antigravityAccounts: AntigravityAccountScreenModel(switcher: QuotaFeatureAntigravitySwitcher()),
             modeManager: OperatingModeManager(repository: preferences),
-            refreshSettings: RefreshSettingsManager(repository: preferences),
+            monitoringSettings: QuotaFeatureMonitoringSettings(),
             menuBarSettings: menuBar,
             notifications: NotificationController(
                 repository: preferences,
@@ -381,4 +382,13 @@ private struct QuotaFeatureAuthFileState: ManagedAuthFileStateRepository {
     func disabledAuthFileNames() -> Set<String> { names }
     func saveDisabledAuthFileNames(_ names: Set<String>) {}
     func recordAuthFilesChanged(at date: Date) {}
+}
+
+private actor QuotaFeatureMonitoringSettings: MonitoringSettingsManaging {
+    var value = MonitoringSettings(revision: "fixture", enabledProviders: Set(QuotaProvider.allCases.map(\.rawValue)), disabledProviders: [], automaticallyDiscoverLogins: true, refreshInterval: 600)
+    func monitoringSettings() -> MonitoringSettings { value }
+    func updateMonitoringSettings(_ settings: MonitoringSettings) -> MonitoringSettings {
+        value = settings
+        return value
+    }
 }

@@ -86,18 +86,12 @@ enum CompositionRoot {
         let providerTrackingRepository = UserDefaultsProviderTrackingPreferencesRepository()
         let quotioBackend = QuotioCLIBackend(
             logger: OSApplicationLogger(subsystem: AppIdentity.bundleIdentifier, category: "NativeQuota"),
-            trackingPreferences: providerTrackingRepository,
             authFileState: authFileState,
             localization: { (languageManager.bundle, languageManager.locale) }
         )
         let agentInstallationProbe = AgentBinaryInstallationProbe()
         let quotioServer = QuotioCLIServerProcess(
             proxyAuthDirectory: URL(fileURLWithPath: paths.authDirectoryPath, isDirectory: true),
-            providers: [
-                "claude", "codex", "antigravity", "kiro", "copilot", "cursor",
-                "factory", "devin-desktop", "grok", "openrouter", "amp", "zai",
-                "vertexai", "warp", "clinepass",
-            ],
             initialPreferences: {
                 (providerTrackingRepository.load(), UserDefaultsRefreshPreferencesRepository().load())
             },
@@ -216,12 +210,11 @@ enum CompositionRoot {
             oauth: oauthScreenModel,
             antigravityAccounts: antigravityAccountScreenModel,
             modeManager: modeManager,
-            refreshSettings: refreshSettings,
+            monitoringSettings: quotioBackend,
             menuBarSettings: menuBarSettings,
             notifications: notificationController,
             authFiles: { [] },
-            authFileState: authFileState,
-            trackingRepository: providerTrackingRepository
+            authFileState: authFileState
         )
         antigravityAccountScreenModel.setDidSwitchHandler { [weak quotaController] in
             await quotaController?.refresh(provider: .antigravity)

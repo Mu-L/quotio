@@ -4,7 +4,7 @@ import CryptoKit
 import QuotioApplication
 import QuotioDomain
 
-public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
+public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSettingsManaging {
     private struct Empty: Decodable, Sendable {}
     private struct RefreshBody: Encodable {
         let providers: [String]
@@ -31,7 +31,6 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
     private var activeMode: QuotaOperatingMode = .monitor
     private var continuations: [UUID: AsyncStream<QuotaSnapshot>.Continuation] = [:]
     private let logger: (any ApplicationLogging)?
-    private let trackingPreferences: (any ProviderTrackingPreferencesRepository)?
     private let session: URLSession?
     private let authFileState: (any ManagedAuthFileStateRepository)?
     private let localization: @MainActor @Sendable () -> (bundle: Bundle, locale: Locale)
@@ -41,13 +40,11 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
     public init(
         session: URLSession? = nil,
         logger: (any ApplicationLogging)? = nil,
-        trackingPreferences: (any ProviderTrackingPreferencesRepository)? = nil,
         authFileState: (any ManagedAuthFileStateRepository)? = nil,
         localization: @escaping @MainActor @Sendable () -> (bundle: Bundle, locale: Locale) = { (.main, .current) }
     ) {
         self.session = session
         self.logger = logger
-        self.trackingPreferences = trackingPreferences
         self.authFileState = authFileState
         self.localization = localization
     }
@@ -86,7 +83,6 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
 
     public func refresh(_ request: QuotaFetchRequest) async -> QuotaSnapshot {
         selectMode(request.mode)
-        guard isTracked(request.provider) else { return snapshot }
         guard let provider = QuotioCLIProviderMap.cli(request.provider) else { return snapshot }
         var resolvedAccountID: String?
         if case .account(let accountKey) = request.scope {
@@ -113,7 +109,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         force: Bool = false
     ) async -> QuotaSnapshot {
         selectMode(mode)
-        let selected = (providers ?? Set(Self.supportedProviders)).filter(isTracked).compactMap(QuotioCLIProviderMap.cli)
+        let selected = providers?.compactMap(QuotioCLIProviderMap.cli) ?? []
         await performRefresh(providers: selected, accountID: nil, mode: mode, force: force)
         return snapshot
     }
@@ -141,13 +137,12 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
     }
 
     public func registerDetectedNativeAccounts() async {
-        guard trackingPreferences?.load().automaticallyDiscoverLogins != false else { return }
         await discoverNativeAccounts(providerID: nil)
     }
 
     private func discoverNativeAccounts(providerID: String?, restoreRemoved: Bool = false) async {
         guard let client else { return }
-        let providers = providerID.map { [$0] } ?? Self.supportedProviders.filter(isTracked).compactMap(QuotioCLIProviderMap.cli)
+        let providers = providerID.map { [$0] } ?? []
         do {
             let body = try JSONSerialization.data(withJSONObject: ["providers": providers, "restore_removed": restoreRemoved])
             try await mutate(client: client, path: "v2/discovery", method: "POST", body: body, timeout: .seconds(180))
@@ -169,7 +164,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
     }
 
     public func rescanNativeAccounts(for provider: QuotaProvider) async {
-        guard isTracked(provider), let id = QuotioCLIProviderMap.cli(provider) else { return }
+        guard let id = QuotioCLIProviderMap.cli(provider) else { return }
         await discoverNativeAccounts(providerID: id, restoreRemoved: true)
     }
 
@@ -445,8 +440,41 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         )
     }
 
-    private func isTracked(_ provider: QuotaProvider) -> Bool {
-        trackingPreferences?.load().isEnabled(provider) != false
+    public func monitoringSettings() async throws -> MonitoringSettings {
+        guard let client else { throw QuotioHostClientError.disconnected }
+        let epoch = connectionID
+        let value: QuotioHostSettings = try await client.request("v1/settings")
+        guard epoch == connectionID else { throw QuotioHostClientError.disconnected }
+        return Self.monitoringSettings(value)
+    }
+
+    public func updateMonitoringSettings(_ settings: MonitoringSettings) async throws -> MonitoringSettings {
+        guard let client else { throw QuotioHostClientError.disconnected }
+        let epoch = connectionID
+        func hostID(_ id: String) -> String {
+            QuotaProvider(rawValue: id).flatMap(QuotioCLIProviderMap.cli) ?? id
+        }
+        let body = try JSONSerialization.data(withJSONObject: [
+            "revision": settings.revision,
+            "enabled_providers": settings.enabledProviders.map(hostID).sorted(),
+            "disabled_providers": settings.disabledProviders.map(hostID).sorted(),
+            "automatically_discover_logins": settings.automaticallyDiscoverLogins,
+            "refresh_interval": settings.refreshInterval,
+        ])
+        let value: QuotioHostSettings = try await client.request("v1/settings", method: "PATCH", body: body)
+        guard epoch == connectionID else { throw QuotioHostClientError.disconnected }
+        return Self.monitoringSettings(value)
+    }
+
+    private static func monitoringSettings(_ value: QuotioHostSettings) -> MonitoringSettings {
+        func domainID(_ id: String) -> String { QuotioCLIProviderMap.domain(id)?.rawValue ?? id }
+        return MonitoringSettings(
+            revision: value.revision,
+            enabledProviders: Set(value.enabledProviders.map(domainID)),
+            disabledProviders: Set(value.disabledProviders.map(domainID)),
+            automaticallyDiscoverLogins: value.automaticallyDiscoverLogins,
+            refreshInterval: value.refreshInterval
+        )
     }
 
     private func performRefresh(
@@ -457,7 +485,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         importedAccounts: Set<String>? = nil
     ) async {
         removeDisabledProxyQuotas()
-        guard let client, !providers.isEmpty, activeMode == mode else { return }
+        guard let client, activeMode == mode else { return }
         let domainProviders = Set(providers.compactMap(QuotioCLIProviderMap.domain))
         snapshot.refreshingProviders.formUnion(domainProviders)
         publish()

@@ -40,7 +40,6 @@ public final class QuotioCLIServerProcess {
     private let configurationURL: URL?
     private let accountDataDirectory: URL?
     private let proxyAuthDirectory: URL?
-    private let providers: [String]
     private let initialPreferences: @MainActor () -> (ProviderTrackingPreferences, RefreshPreferences)?
     private let executableDirectories: [URL]
     private let applicationSupportDirectoryName: String
@@ -59,7 +58,6 @@ public final class QuotioCLIServerProcess {
         configurationURL: URL? = nil,
         accountDataDirectory: URL? = nil,
         proxyAuthDirectory: URL? = nil,
-        providers: [String] = [],
         initialPreferences: @escaping @MainActor () -> (ProviderTrackingPreferences, RefreshPreferences)? = { nil },
         executableDirectories: [URL] = [],
         applicationSupportDirectoryName: String = "app.bytrong.quotio",
@@ -72,7 +70,6 @@ public final class QuotioCLIServerProcess {
         self.configurationURL = configurationURL
         self.accountDataDirectory = accountDataDirectory
         self.proxyAuthDirectory = proxyAuthDirectory
-        self.providers = providers
         self.initialPreferences = initialPreferences
         self.executableDirectories = executableDirectories
         self.applicationSupportDirectoryName = applicationSupportDirectoryName
@@ -99,16 +96,12 @@ public final class QuotioCLIServerProcess {
             "--manage",
             "--parent-pipe",
             "--listen", "127.0.0.1:0",
-            "--refresh-interval", "0",
             "--config", locations.configuration.path,
             "--account-vault-namespace", accountVaultNamespace,
             "--account-data-dir", locations.accounts.path,
         ]
         if let proxyAuthDirectory {
             process.arguments?.append(contentsOf: ["--cli-proxy-auth-dir", proxyAuthDirectory.path])
-        }
-        for provider in providers {
-            process.arguments?.append(contentsOf: ["--provider", provider])
         }
         var environment = ProcessInfo.processInfo.environment
         environment.removeValue(forKey: "QUOTIO_SERVER_TOKEN")

@@ -11,8 +11,17 @@ public final class QuotaFeatureController {
         case autoOpen
     }
 
-    public private(set) var trackingPreferences: ProviderTrackingPreferences
-    @ObservationIgnored private let trackingRepository: (any ProviderTrackingPreferencesRepository)?
+    public private(set) var monitoringSettings: MonitoringSettings?
+    public private(set) var settingsError: String?
+    public private(set) var isUpdatingSettings = false
+    public var trackingPreferences: ProviderTrackingPreferences {
+        guard let settings = monitoringSettings else { return .init() }
+        return .init(disabledProviders: Set(QuotaProvider.allCases.filter {
+            !settings.enabledProviders.contains($0.rawValue) || settings.disabledProviders.contains($0.rawValue)
+        }), automaticallyDiscoverLogins: settings.automaticallyDiscoverLogins)
+    }
+    @ObservationIgnored private let settingsService: any MonitoringSettingsManaging
+    @ObservationIgnored private var settingsRequestID = UUID()
 
     let quota: QuotaScreenModel
     let accounts: AccountsScreenModel
@@ -20,7 +29,6 @@ public final class QuotaFeatureController {
     let antigravityAccounts: AntigravityAccountScreenModel
 
     @ObservationIgnored private let modeManager: OperatingModeManager
-    @ObservationIgnored private let refreshSettings: RefreshSettingsManager
     @ObservationIgnored private let menuBarSettings: MenuBarSettingsManager
     @ObservationIgnored private let notifications: any NotificationRequesting
     @ObservationIgnored private var authFiles: () -> [ManagedAuthFile]
@@ -28,50 +36,28 @@ public final class QuotaFeatureController {
     @ObservationIgnored private var refreshTask: Task<Void, Never>?
     @ObservationIgnored private var didChangeHandler: (@MainActor () -> Void)?
 
-    private static let localProxyProviders: Set<QuotaProvider> = [
-        .claude, .codex, .antigravity, .vertex, .kiro, .copilot, .glm, .warp, .clinePass,
-    ]
-
-    private static let monitorProviders: Set<QuotaProvider> = [
-        .claude, .codex, .antigravity, .vertex, .kiro, .copilot, .factoryDroid,
-        .devin, .grok, .openRouter, .amp, .glm, .warp, .clinePass,
-    ]
-
-    static func automaticallyRefreshedProviders(for mode: QuotaOperatingMode) -> Set<QuotaProvider> {
-        switch mode {
-        case .localProxy: localProxyProviders
-        case .monitor: monitorProviders
-        }
-    }
-
     public init(
         quota: QuotaScreenModel,
         accounts: AccountsScreenModel,
         oauth: OAuthScreenModel,
         antigravityAccounts: AntigravityAccountScreenModel,
         modeManager: OperatingModeManager,
-        refreshSettings: RefreshSettingsManager,
+        monitoringSettings: any MonitoringSettingsManaging,
         menuBarSettings: MenuBarSettingsManager,
         notifications: any NotificationRequesting,
         authFiles: @escaping () -> [ManagedAuthFile],
-        authFileState: (any ManagedAuthFileStateRepository)? = nil,
-        trackingRepository: (any ProviderTrackingPreferencesRepository)? = nil
+        authFileState: (any ManagedAuthFileStateRepository)? = nil
     ) {
-        self.trackingRepository = trackingRepository
-        self.trackingPreferences = trackingRepository?.load() ?? ProviderTrackingPreferences()
+        self.settingsService = monitoringSettings
         self.quota = quota
         self.accounts = accounts
         self.oauth = oauth
         self.antigravityAccounts = antigravityAccounts
         self.modeManager = modeManager
-        self.refreshSettings = refreshSettings
         self.menuBarSettings = menuBarSettings
         self.notifications = notifications
         self.authFiles = authFiles
         self.authFileState = authFileState
-        refreshSettings.addCadenceChangeHandler { [weak self] _ in
-            self?.restartAutomaticRefresh()
-        }
     }
 
     deinit {
@@ -93,46 +79,67 @@ public final class QuotaFeatureController {
     }
 
     public func initialize() async {
-        if trackingPreferences.automaticallyDiscoverLogins {
-            await accounts.registerDetectedNativeAccounts()
-        }
+        await reloadMonitoringSettings()
         await quota.bootstrap(mode: operatingMode)
         await accounts.reloadAuthFiles()
         await reloadAccounts()
-        await refreshAll()
-        restartAutomaticRefresh()
+        startObservingHost()
+    }
+
+    private func reloadMonitoringSettings() async {
+        guard !isUpdatingSettings else { return }
+        let requestID = UUID()
+        settingsRequestID = requestID
+        do {
+            let settings = try await settingsService.monitoringSettings()
+            guard settingsRequestID == requestID else { return }
+            monitoringSettings = settings
+            settingsError = nil
+        } catch {
+            guard settingsRequestID == requestID else { return }
+            settingsError = error.localizedDescription
+        }
+    }
+
+    private func updateSettings(_ change: (inout MonitoringSettings) -> Void) async {
+        guard !isUpdatingSettings, var settings = monitoringSettings else { return }
+        change(&settings)
+        settingsRequestID = UUID()
+        isUpdatingSettings = true
+        defer { isUpdatingSettings = false }
+        do {
+            monitoringSettings = try await settingsService.updateMonitoringSettings(settings)
+            settingsError = nil
+            didChangeHandler?()
+        } catch {
+            settingsError = error.localizedDescription
+        }
     }
 
     public func setAutomaticDiscovery(_ enabled: Bool) async {
-        trackingPreferences.automaticallyDiscoverLogins = enabled
-        trackingRepository?.save(trackingPreferences)
-        if enabled {
-            await accounts.scanAllNativeAccounts()
-            await refreshAll()
-        }
+        await updateSettings { $0.automaticallyDiscoverLogins = enabled }
+    }
+
+    public func setRefreshInterval(_ seconds: Int) async {
+        await updateSettings { $0.refreshInterval = seconds }
     }
 
     public func setProviderEnabled(_ enabled: Bool, provider: QuotaProvider) async {
-        if enabled {
-            trackingPreferences.disabledProviders.remove(provider)
-        } else {
-            trackingPreferences.disabledProviders.insert(provider)
-        }
-        trackingRepository?.save(trackingPreferences)
-        didChangeHandler?()
-        if enabled {
-            await accounts.rescanNativeAccounts(for: provider)
-            await refresh(provider: provider)
+        await updateSettings {
+            if enabled {
+                $0.enabledProviders.insert(provider.rawValue)
+                $0.disabledProviders.remove(provider.rawValue)
+            } else {
+                $0.disabledProviders.insert(provider.rawValue)
+            }
         }
     }
 
     public func refreshAll(force: Bool = false) async {
         await quota.refreshAll(
             mode: operatingMode,
-            providers: Set(Self.automaticallyRefreshedProviders(for: operatingMode).filter(trackingPreferences.isEnabled)),
             force: force
         )
-        await refreshImportedIDEQuotas()
         await antigravityAccounts.detectActiveAccount()
         await finishRefresh()
     }
@@ -158,11 +165,7 @@ public final class QuotaFeatureController {
     }
 
     func refreshAutoDetectedProviders() async {
-        let providers = Self.automaticallyRefreshedProviders(for: operatingMode).filter {
-            trackingPreferences.isEnabled($0) && !$0.supportsManualAuth && !$0.isImportedFromLocalIDE
-        }
-        await quota.refreshAll(mode: operatingMode, providers: Set(providers), force: true)
-        await finishRefresh()
+        await refreshAll(force: true)
     }
 
     func refreshImportedIDEQuotas() async {
@@ -383,18 +386,15 @@ public final class QuotaFeatureController {
         }
     }
 
-    private func restartAutomaticRefresh() {
+    private func startObservingHost() {
         refreshTask?.cancel()
-        guard let interval = refreshSettings.refreshCadence.intervalNanoseconds else {
-            refreshTask = nil
-            return
-        }
         refreshTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: interval)
-                guard !Task.isCancelled else { return }
-                guard let self else { return }
-                await refreshAll(force: true)
+                try? await Task.sleep(for: .seconds(3))
+                guard !Task.isCancelled, let self else { return }
+                await reloadMonitoringSettings()
+                await quota.bootstrap(mode: operatingMode)
+                await finishRefresh()
             }
         }
     }
