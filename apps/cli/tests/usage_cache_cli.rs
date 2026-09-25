@@ -100,13 +100,20 @@ fn cli_reuses_disk_cache_force_refreshes_and_switching_login_fails_closed() {
         stale.as_object().unwrap().len(),
         before.as_object().unwrap().len()
     );
-    assert_eq!(stale["providers"].as_array().unwrap().len(), 1);
+    assert_eq!(stale["usage"].as_array().unwrap().len(), 1);
+    assert_eq!(stale["usage"][0]["freshness"], "stale");
     assert!(String::from_utf8_lossy(&failed.stderr).contains("unavailable"));
     std::fs::write(f.0.join("login"), "second@example.test").unwrap();
     let switched = f.usage(false);
     assert_eq!(switched.status.code(), Some(3));
     let switched: serde_json::Value = serde_json::from_slice(&switched.stdout).unwrap();
-    assert!(switched["providers"].as_array().unwrap().is_empty());
+    assert!(
+        switched["usage"][0]["metrics"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(switched["usage"][0]["freshness"], "unavailable");
 }
 #[tokio::test]
 async fn rest_refresh_reuses_the_cli_cache() {

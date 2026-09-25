@@ -1281,6 +1281,43 @@ pub async fn adapters(
     adapters_with_vault(providers, saved, true, timeout, filter, Vault::for_usage).await
 }
 
+pub async fn resolved_adapters(
+    vault: Vault,
+    provider: Provider,
+    id: &str,
+) -> Result<Vec<Arc<dyn ProviderAdapter>>, AccountError> {
+    let mut tx = begin(vault.clone()).await?;
+    if tx.document.resolved.is_none() {
+        tx.document.enable_resolved_accounts()?;
+        commit(tx).await?;
+        tx = begin(vault.clone()).await?;
+    }
+    let sources = tx
+        .document
+        .resolved
+        .as_ref()
+        .expect("initialized")
+        .source_ids(id)?;
+    let records: Vec<_> = tx
+        .document
+        .accounts
+        .iter()
+        .filter(|account| sources.contains(&account.id) && account.provider == provider)
+        .collect();
+    if records.is_empty() {
+        return Err(AccountError::NotFound);
+    }
+    let adapters: Vec<_> = records
+        .into_iter()
+        .filter(|account| account.enabled())
+        .map(|account| managed(&vault, account))
+        .collect();
+    if adapters.is_empty() {
+        return Err(AccountError::SourceDisabled);
+    }
+    Ok(adapters)
+}
+
 pub async fn detected_adapters(
     disabled: Vec<Provider>,
     saved: bool,
@@ -1455,6 +1492,11 @@ mod tests {
             .await
             .unwrap();
         assert!(get(vault.clone(), ids[1].clone()).await.unwrap().active);
+        let selected = resolved_adapters(vault.clone(), Provider::Amp, &ids[0])
+            .await
+            .unwrap();
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].account_ref().unwrap().id, ids[1]);
         remove_resolved(vault.clone(), ids[0].clone())
             .await
             .unwrap();

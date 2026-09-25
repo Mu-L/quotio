@@ -100,24 +100,21 @@ fn json_contract_and_deduplication() {
     );
     assert_eq!(result.status.code(), Some(0));
     let value: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
-    assert_eq!(value.as_object().unwrap().len(), 4);
-    assert_eq!(value["schema_version"], 1);
-    let fixture: serde_json::Value =
-        serde_json::from_str(include_str!("fixtures/contracts/usage-v1.json")).unwrap();
-    assert_eq!(value["providers"], fixture["providers"]);
+    assert_eq!(value.as_object().unwrap().len(), 6);
+    assert_eq!(value["schema_version"], 2);
+    let document: serde_json::Value =
+        serde_json::from_str(include_str!("../docs/openapi.json")).unwrap();
+    jsonschema::draft202012::new(&serde_json::json!({"$ref":"#/components/schemas/V2Snapshot", "components":document["components"]})).unwrap().validate(&value).unwrap();
     time::OffsetDateTime::parse(
         value["generated_at"].as_str().unwrap(),
         &time::format_description::well_known::Rfc3339,
     )
     .unwrap();
-    assert_eq!(value["providers"].as_array().unwrap().len(), 1);
-    let provider = &value["providers"][0];
-    assert_eq!(provider["provider"], "mock");
-    assert_eq!(
-        provider["account"],
-        serde_json::json!({"id":"mock-account", "label":"Demo account"})
-    );
-    let windows = &provider["windows"];
+    assert_eq!(value["accounts"].as_array().unwrap().len(), 1);
+    assert_eq!(value["accounts"][0]["provider_id"], "mock");
+    assert_eq!(value["accounts"][0]["display_name"], "Demo account");
+    assert_eq!(value["usage"][0]["account_id"], value["accounts"][0]["id"]);
+    let windows = &value["usage"][0]["metrics"];
     assert_eq!(windows.as_array().unwrap().len(), 3);
     assert_eq!(
         windows[0]["quota"],
@@ -128,7 +125,7 @@ fn json_contract_and_deduplication() {
     assert!(windows[2]["resets_at"].is_null());
     assert_eq!(windows[0]["provenance"]["source"], "mock_fixture");
     assert_eq!(windows[0]["fetched_at"], "2026-01-01T00:00:00Z");
-    assert!(value["failures"].as_array().unwrap().is_empty());
+    assert!(value["usage"][0]["issue"].is_null());
     assert!(String::from_utf8_lossy(&result.stderr).contains("collecting provider usage"));
 }
 #[test]
@@ -228,9 +225,23 @@ fn real_provider_selection_and_mixed_missing_auth() {
         .unwrap();
     assert_eq!(output.status.code(), Some(1));
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(value["providers"][0]["provider"], "mock");
-    assert_eq!(value["failures"][0]["provider"], "factory");
-    assert_eq!(value["failures"][0]["code"], "authentication");
+    let accounts = value["accounts"].as_array().unwrap();
+    assert!(
+        accounts
+            .iter()
+            .any(|account| account["provider_id"] == "mock")
+    );
+    let failed = accounts
+        .iter()
+        .find(|account| account["provider_id"] == "factory")
+        .unwrap();
+    let usage = value["usage"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|usage| usage["account_id"] == failed["id"])
+        .unwrap();
+    assert_eq!(usage["issue"]["code"], "authentication");
 }
 
 #[test]

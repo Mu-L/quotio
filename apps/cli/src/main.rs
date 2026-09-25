@@ -301,7 +301,9 @@ async fn run() -> ExitCode {
             }
             let providers = tokio::select! {
                 providers=async {
-                    if automatic {
+                    if let Some(id) = args.account.as_deref().filter(|id| *id != "local") {
+                        quotio::accounts::service::resolved_adapters(quotio::accounts::vault::Vault::for_usage()?, unique[0], id).await
+                    } else if automatic {
                         quotio::accounts::service::detected_adapters(
                             disabled,
                             !args.no_saved_accounts,
@@ -349,6 +351,18 @@ async fn run() -> ExitCode {
                 },
             };
             let cancellation = Cancellation::default();
+            let scope: std::collections::HashSet<String> =
+                providers.iter().map(|provider| provider.id().0).collect();
+            let source_scope: std::collections::HashSet<String> = providers
+                .iter()
+                .filter_map(|provider| provider.account_ref().map(|reference| reference.id))
+                .collect();
+            let saved = !args.no_saved_accounts
+                && providers.iter().any(|provider| {
+                    provider
+                        .account_ref()
+                        .is_some_and(|reference| reference.id != "local")
+                });
             let request = CollectRequest {
                 providers,
                 timeout: Duration::from_secs(args.timeout),
@@ -367,12 +381,59 @@ async fn run() -> ExitCode {
                 }
             };
             let code = report.exit_code();
-            for failure in &report.failures {
-                eprintln!("{}", output::text::failure(failure));
+            let now = collector.context.clock.now();
+            let ttl = time::Duration::seconds(config.cache_ttl_seconds.min(i64::MAX as u64) as i64);
+            let snapshot = if saved {
+                match quotio::accounts::vault::Vault::for_usage() {
+                    Ok(vault) => {
+                        quotio::accounts::api::resolved_snapshot(vault, report, now, ttl).await
+                    }
+                    Err(error) => Err(error),
+                }
+            } else {
+                quotio::accounts::resolved::Registry::new(&[])
+                    .and_then(|registry| registry.account_list(&[]))
+                    .and_then(|mut accounts| {
+                        accounts.host.capabilities.insert(
+                            "account_write_v2".into(),
+                            quotio::contract::Availability {
+                                available: false,
+                                reason: Some("no_saved_accounts".into()),
+                            },
+                        );
+                        quotio::contract::snapshot::project(accounts, &report, now, ttl)
+                            .map_err(|_| quotio::accounts::AccountError::Corrupt)
+                    })
+            };
+            let mut snapshot = match snapshot {
+                Ok(snapshot) => snapshot,
+                Err(error) => {
+                    eprintln!("{error}");
+                    return ExitCode::from(3);
+                }
+            };
+            snapshot.accounts.retain(|account| {
+                scope.contains(&account.provider_id)
+                    && (args.account.is_none()
+                        || args.account.as_deref() == Some("local")
+                        || account
+                            .sources
+                            .iter()
+                            .any(|source| source_scope.contains(&source.id)))
+            });
+            snapshot.usage.retain(|usage| {
+                snapshot
+                    .accounts
+                    .iter()
+                    .any(|account| account.id == usage.account_id)
+            });
+            let failures = output::text::snapshot_failures(&snapshot);
+            if !failures.is_empty() {
+                eprint!("{failures}");
             }
             let text = match args.format {
-                Format::Text => output::text::render(&report),
-                Format::Json => match output::json::render(&report) {
+                Format::Text => output::text::render_snapshot(&snapshot),
+                Format::Json => match output::json::render(&snapshot) {
                     Ok(json) => format!("{json}\n"),
                     Err(_) => {
                         eprintln!("Could not encode usage report.");

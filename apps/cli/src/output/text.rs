@@ -141,6 +141,103 @@ pub fn failure(failure: &ProviderFailure) -> String {
     format!("{}{account}: {}", safe(&failure.provider.0), failure.code)
 }
 
+pub fn render_snapshot(snapshot: &crate::contract::Snapshot) -> String {
+    use crate::domain::{AccountIdentity, ProviderId, ProviderUsage, QuotaWindow};
+    let providers = snapshot
+        .accounts
+        .iter()
+        .filter_map(|account| {
+            let usage = snapshot
+                .usage
+                .iter()
+                .find(|usage| usage.account_id == account.id)?;
+            Some(ProviderUsage {
+                provider: ProviderId(account.provider_id.clone()),
+                account_ref: None,
+                account: AccountIdentity {
+                    verified: None,
+                    id: account.id.clone(),
+                    label: account.display_name.clone(),
+                    plan: usage.plan.clone(),
+                    subscription_status: usage.subscription_status.clone(),
+                },
+                windows: usage
+                    .metrics
+                    .iter()
+                    .map(|metric| QuotaWindow {
+                        metric_id: Some(metric.id.clone()),
+                        label: metric.display_name.clone(),
+                        note: metric.note.clone(),
+                        quota: metric.quota.clone(),
+                        amounts: metric.amounts.clone(),
+                        consumption: metric.consumption.clone(),
+                        resets_at: metric.resets_at,
+                        reset_description: metric.reset_description.clone(),
+                        fetched_at: metric.fetched_at,
+                        provenance: metric.provenance.clone(),
+                    })
+                    .collect(),
+                reset_credits: usage.reset_credits.clone(),
+                antigravity_subscription: usage.antigravity_subscription.clone(),
+                codex_profile: usage.codex_profile.clone(),
+                codex_reset_credits: usage.codex_reset_credits.clone(),
+                diagnostics: Vec::new(),
+            })
+        })
+        .collect();
+    let mut text = render(&UsageReport {
+        schema_version: 2,
+        generated_at: snapshot.generated_at,
+        providers,
+        failures: Vec::new(),
+    });
+    for account in &snapshot.accounts {
+        if let Some(usage) = snapshot
+            .usage
+            .iter()
+            .find(|usage| usage.account_id == account.id)
+        {
+            let freshness = match usage.freshness {
+                crate::contract::Freshness::Fresh => "fresh",
+                crate::contract::Freshness::Stale => "stale",
+                crate::contract::Freshness::NotLoaded => "not loaded",
+                crate::contract::Freshness::Unavailable => "unavailable",
+            };
+            let _ = writeln!(
+                text,
+                "{}: {}{}",
+                safe(&account.display_name),
+                freshness,
+                usage
+                    .plan
+                    .as_ref()
+                    .map(|plan| format!("; plan {}", safe(plan)))
+                    .unwrap_or_default()
+            );
+        }
+    }
+    text
+}
+
+pub fn snapshot_failures(snapshot: &crate::contract::Snapshot) -> String {
+    let mut text = String::new();
+    for account in &snapshot.accounts {
+        for source in &account.sources {
+            if let Some(issue) = &source.issue {
+                let _ = writeln!(
+                    text,
+                    "{} | {} [{}]: {}",
+                    safe(&account.provider_id),
+                    safe(&account.display_name),
+                    safe(&source.id),
+                    safe(&issue.code)
+                );
+            }
+        }
+    }
+    text
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -161,7 +258,7 @@ mod tests {
             };
             let text = render(&report);
             let value: serde_json::Value =
-                serde_json::from_str(&crate::output::json::render(&report).unwrap()).unwrap();
+                serde_json::from_str(&serde_json::to_string_pretty(&report).unwrap()).unwrap();
             match count {
                 Some(count) => {
                     assert!(text.contains(&format!("Banked reset credits: {count} available as of 1970-01-01T00:00:00Z; earliest expiry unknown; source codex_app_server")));

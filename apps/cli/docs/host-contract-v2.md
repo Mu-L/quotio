@@ -66,3 +66,7 @@ Data migration preserves current credentials, source IDs, names and enabled stat
 Snapshot reads use the current vault under its transaction lock. Deleted sources cannot reappear from an old report, and replacing an API-key identity discards that identity's old quota. Format 12 persists a digest of account/usage state: the revision increases when those values change, including freshness transitions, but not on an unchanged read. The response is published only after the revision commits.
 
 With `--no-saved-accounts`, snapshots do not access the protected vault. Default/environment/mock observations remain visible with no account-write actions. This mode's host ID and revision are scoped to the server session; restarting it creates a new host ID. Normal account-backed hosts retain the vault's host ID across restarts.
+
+## CLI quota output
+
+`quotio usage --format json` emits the same `Snapshot` shape as `/v2/snapshot`; text output formats its resolved names, IDs and selected metrics. Provider/account filters limit the returned accounts. `--account` resolves a logical account and collects its enabled sources, including after the original source was unlinked. The no-saved-account path performs no protected-vault read. Internal per-source cache records are not a public output format.

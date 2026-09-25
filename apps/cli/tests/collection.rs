@@ -194,7 +194,7 @@ async fn invalid_adapter_data_is_a_provider_failure() {
         }
         .is_valid()
     );
-    let json = quotio::output::json::render(&report).unwrap();
+    let json = serde_json::to_string_pretty(&report).unwrap();
     let value: serde_json::Value = serde_json::from_str(&json).unwrap();
     assert_eq!(
         value["failures"][0],
@@ -425,7 +425,7 @@ async fn account_timeout_preserves_other_accounts_and_identifies_the_failure() {
         report.failures[0].account_ref.as_ref().unwrap().id,
         "saved-slow"
     );
-    let json = quotio::output::json::render(&report).unwrap();
+    let json = serde_json::to_string_pretty(&report).unwrap();
     let value: serde_json::Value = serde_json::from_str(&json).unwrap();
     assert_eq!(value["failures"][0]["account_ref"]["id"], "saved-slow");
     assert!(quotio::output::text::render(&report).contains("saved-slow"));

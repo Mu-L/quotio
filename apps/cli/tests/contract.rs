@@ -105,7 +105,7 @@ async fn mock_serializer_matches_the_shared_frontend_fixture() {
     assert_eq!(value, fixture);
     validator("UsageReport").validate(&value).unwrap();
     assert_eq!(
-        serde_json::from_str::<Value>(&quotio::output::json::render(&report).unwrap()).unwrap(),
+        serde_json::from_str::<Value>(&serde_json::to_string_pretty(&report).unwrap()).unwrap(),
         value
     );
     let mut invalid = value;

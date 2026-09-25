@@ -117,10 +117,12 @@ refresh unselected providers or accounts. Set `cache_ttl_seconds = 0` to refresh
 every invocation while still retaining the last good snapshot for failures.
 
 A successful fetch saves only normalized `ProviderUsage` JSON. A failed refresh
-keeps the last good snapshot for the verified login and includes the new error in
-`failures` and CLI stderr. Its `fetched_at` stays unchanged. A report with retained
+keeps the last good snapshot for the verified login and includes the new error on
+the source and in CLI stderr. Its `fetched_at` stays unchanged. A report with retained
 usage and failures exits with code 1. `generated_at` is the report creation time,
-not the time every account was fetched. JSON schema version 1 is unchanged.
+not the time every account was fetched. CLI JSON now returns the resolved schema-2
+snapshot: `host`, `revision`, `accounts` and account-linked `usage`. No version flag
+is needed; text output uses the same resolved account names and source selection.
 
 The default directory is `ProjectDirs::cache_dir()/usage-v1`, typically
 `~/Library/Caches/quotio/usage-v1` on macOS or
@@ -292,10 +294,12 @@ reported identity and quota windows, balances and reset values match a saved
 result. Different scopes or balances remain separate. Failures are not hidden by
 deduplication.
 
-JSON successes and failures may include `account_ref` with the selector ID and
-label. The authenticated provider identity remains in `account`; optional `plan`
-is supplied when known. Text output shows the selector alongside each account.
-Timeout/cancellation applies to each account, and refresh locks are per account.
+JSON `accounts` contain the final display name, logical ID and distinct source IDs.
+`usage` references each logical account ID and reports freshness, plan and metrics.
+`--account` accepts the IDs returned by `accounts list`, including a logical account
+whose original source was removed. Collection checks its enabled sources; Rust
+selects one usable quota observation. Timeout/cancellation and refresh locks apply
+to each source.
 
 Use `usage --no-saved-accounts` to explicitly skip the vault. A locked/denied vault
 is reported separately; available local Codex and Amp data is preserved.
