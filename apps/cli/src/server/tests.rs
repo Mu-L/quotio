@@ -1768,6 +1768,20 @@ async fn logical_account_and_source_crud_have_distinct_atomic_scopes() {
             .iter()
             .any(|action| action.kind == "select" && !action.available)
     );
+    let (_, Json(invalid)) = management::resolved_patch(
+        State(state.clone()),
+        Path(first.clone()),
+        key("invalid-selection"),
+        ApiJson(json!({"user_label":"Must not persist", "enabled":false, "active":true})),
+    )
+    .await
+    .unwrap_or_else(|_| panic!());
+    assert_eq!(done(&state, &invalid.id).await.error, Some("source_disabled"));
+    let unchanged = accounts::api::resolved_get(vault.clone(), first.clone())
+        .await
+        .unwrap();
+    assert_eq!(unchanged.display_name, "Team account");
+    assert!(!unchanged.enabled);
     let (_, Json(retry)) = management::resolved_patch(
         State(state.clone()),
         Path(second.clone()),
