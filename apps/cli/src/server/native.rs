@@ -6,10 +6,24 @@ use crate::accounts::discovery::host::{self, Report};
 pub(super) struct Request {
     #[serde(default)]
     providers: Vec<Provider>,
+    #[serde(default)]
+    restore_removed: bool,
 }
 
-pub(super) async fn status(State(state): State<Arc<ApiState>>) -> Json<Report> {
-    Json(state.native_discovery.read().await.clone())
+pub(super) async fn status(State(state): State<Arc<ApiState>>) -> Result<Json<Report>, ApiError> {
+    let report = state.native_discovery.read().await.clone();
+    let Some(vault) = state.vault.clone() else {
+        return Ok(Json(report));
+    };
+    host::refresh(vault, report)
+        .await
+        .map(Json)
+        .map_err(|error| {
+            ApiError(
+                StatusCode::SERVICE_UNAVAILABLE,
+                management::account_code(&error),
+            )
+        })
 }
 
 pub(super) async fn start(
@@ -35,7 +49,8 @@ pub(super) async fn start(
     request.providers.sort_by_key(|provider| provider.id());
     request.providers.dedup();
     let key = format!(
-        "native-discovery:{}",
+        "native-discovery:{}:{}",
+        request.restore_removed,
         serde_json::to_string(&request.providers)
             .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "invalid_request"))?
     );
@@ -63,6 +78,7 @@ pub(super) async fn start(
             work.discovery.clone(),
             &request.providers,
             work.context.clock.now(),
+            request.restore_removed,
         )
         .await;
         let result = match result {

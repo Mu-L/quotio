@@ -330,7 +330,12 @@ impl Vault {
                 }
                 let doc: Document =
                     serde_json::from_slice(&bytes).map_err(|_| AccountError::Corrupt)?;
-                if !matches!(doc.version, 1..=12)
+                if !matches!(doc.version, 1..=13)
+                    || (doc.version < 13
+                        && doc
+                            .resolved
+                            .as_ref()
+                            .is_some_and(|state| state.has_suppressions()))
                     || (doc.version < 12
                         && doc
                             .resolved
@@ -475,7 +480,7 @@ impl Transaction {
                 .revision
                 .checked_add(1)
                 .ok_or(AccountError::Corrupt)?;
-            self.document.version = 12;
+            self.document.version = 13;
         }
         let bytes = serde_json::to_vec(&self.document).map_err(|_| AccountError::Corrupt)?;
         if bytes.len() > 1024 * 1024 {
@@ -560,7 +565,7 @@ pub(crate) mod tests {
         tx.document.enable_resolved_accounts().unwrap();
         tx.commit().unwrap();
         let mut tx = vault.begin().unwrap();
-        assert_eq!(tx.document.version, 12);
+        assert_eq!(tx.document.version, 13);
         let registry = tx.document.resolved.as_ref().unwrap();
         assert_eq!(registry.account_id_for_source(&id), Some(id.as_str()));
         assert_eq!(registry.revision, 1);
@@ -593,7 +598,7 @@ pub(crate) mod tests {
         assert!(matches!(vault.begin(), Err(AccountError::Corrupt)));
         memory.write(&bytes).unwrap();
         let tx = vault.begin().unwrap();
-        assert_eq!(tx.document.version, 12);
+        assert_eq!(tx.document.version, 13);
         assert!(tx.document.resolved.is_some());
         assert_eq!(tx.document.accounts[0].id, id);
         assert!(!tx.document.accounts[0].enabled);

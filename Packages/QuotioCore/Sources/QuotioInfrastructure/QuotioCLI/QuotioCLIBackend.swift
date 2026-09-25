@@ -145,11 +145,11 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         await discoverNativeAccounts(providerID: nil)
     }
 
-    private func discoverNativeAccounts(providerID: String?) async {
+    private func discoverNativeAccounts(providerID: String?, restoreRemoved: Bool = false) async {
         guard let client else { return }
         let providers = providerID.map { [$0] } ?? Self.supportedProviders.filter(isTracked).compactMap(QuotioCLIProviderMap.cli)
         do {
-            let body = try JSONSerialization.data(withJSONObject: ["providers": providers])
+            let body = try JSONSerialization.data(withJSONObject: ["providers": providers, "restore_removed": restoreRemoved])
             try await mutate(client: client, path: "v2/discovery", method: "POST", body: body, timeout: .seconds(180))
             _ = try await readDiscovery()
         } catch {
@@ -170,11 +170,11 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
 
     public func rescanNativeAccounts(for provider: QuotaProvider) async {
         guard isTracked(provider), let id = QuotioCLIProviderMap.cli(provider) else { return }
-        await discoverNativeAccounts(providerID: id)
+        await discoverNativeAccounts(providerID: id, restoreRemoved: true)
     }
 
     public func rescanAllNativeAccounts() async {
-        await discoverNativeAccounts(providerID: nil)
+        await discoverNativeAccounts(providerID: nil, restoreRemoved: true)
     }
 
     public func nativeDiscoverySnapshot() async -> NativeDiscoverySnapshot {

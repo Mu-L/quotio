@@ -673,9 +673,22 @@ pub(crate) async fn register_source_once(
         if let Some(existing) = document.accounts.iter().find(|account| {
             account.provider == prepared.provider && account.identity == prepared.identity
         }) {
+            if let Some(registry) = &mut document.resolved {
+                registry.restore(existing);
+            }
             return Ok(existing.id.clone());
         }
-        prepared.insert(document)
+        let id = prepared.insert(document)?;
+        if let Some(registry) = &mut document.resolved {
+            registry.restore(
+                document
+                    .accounts
+                    .iter()
+                    .find(|account| account.id == id)
+                    .expect("inserted"),
+            );
+        }
+        Ok(id)
     })
     .await
 }
@@ -687,6 +700,14 @@ pub(crate) async fn register_native(
 ) -> Result<bool, AccountError> {
     tokio::task::spawn_blocking(move || {
         let mut tx = vault.begin()?;
+        if tx
+            .document
+            .resolved
+            .as_ref()
+            .is_some_and(|registry| registry.is_suppressed(prepared.provider, &prepared.identity))
+        {
+            return Ok(false);
+        }
         if tx.document.accounts.iter().any(|account| {
             account.provider == prepared.provider && account.identity == prepared.identity
         }) {

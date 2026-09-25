@@ -485,6 +485,13 @@ impl Document {
             .ok_or(AccountError::NotFound)?;
         let account = self.accounts[index].clone();
         self.reserve_factory_refresh(&account.id, &account.credential)?;
+        if account.origin() == AccountOrigin::BorrowedNative {
+            self.enable_resolved_accounts()?;
+            self.resolved
+                .as_mut()
+                .expect("initialized")
+                .suppress(&account);
+        }
         let removed = self.accounts.remove(index);
         if removed.active
             && let Some(next) = self

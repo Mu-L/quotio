@@ -3,7 +3,7 @@
 use super::{Account, AccountError, random_string};
 use crate::{cli::Provider, domain::VerifiedIdentity};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -24,6 +24,8 @@ pub struct Registry {
     labels: BTreeMap<String, Option<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) snapshot_digest: Option<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    suppressed_sources: BTreeMap<String, BTreeSet<String>>,
 }
 
 impl Registry {
@@ -35,6 +37,7 @@ impl Registry {
             redirects: BTreeMap::new(),
             labels: BTreeMap::new(),
             snapshot_digest: None,
+            suppressed_sources: BTreeMap::new(),
         };
         state.synchronize(accounts)?;
         Ok(state)
@@ -44,6 +47,66 @@ impl Registry {
         self.bindings
             .get(source_id)
             .map(|binding| binding.account_id.as_str())
+    }
+
+    fn suppression_keys(account: &Account) -> Vec<String> {
+        let metadata = super::api::AccountDto::from(account);
+        let mut keys = vec![crate::cache::fingerprint(&["identity", &account.identity])];
+        if let Some(kind) = metadata.source_kind {
+            keys.push(crate::cache::fingerprint(&[
+                "permission",
+                kind,
+                metadata.source_location.as_deref().unwrap_or(""),
+            ]));
+        }
+        keys
+    }
+
+    pub fn suppress(&mut self, account: &Account) {
+        self.suppressed_sources
+            .entry(account.provider.id().into())
+            .or_default()
+            .extend(Self::suppression_keys(account));
+    }
+
+    pub fn restore(&mut self, account: &Account) {
+        if let Some(keys) = self.suppressed_sources.get_mut(account.provider.id()) {
+            for key in Self::suppression_keys(account) {
+                keys.remove(&key);
+            }
+        }
+        self.suppressed_sources.retain(|_, keys| !keys.is_empty());
+    }
+
+    pub fn is_suppressed(&self, provider: Provider, identity: &str) -> bool {
+        self.suppressed_sources
+            .get(provider.id())
+            .is_some_and(|keys| keys.contains(&crate::cache::fingerprint(&["identity", identity])))
+    }
+
+    pub fn permission_suppressed(
+        &self,
+        provider: Provider,
+        kind: &str,
+        location: Option<&str>,
+    ) -> bool {
+        self.suppressed_sources
+            .get(provider.id())
+            .is_some_and(|keys| {
+                keys.contains(&crate::cache::fingerprint(&[
+                    "permission",
+                    kind,
+                    location.unwrap_or(""),
+                ]))
+            })
+    }
+
+    pub fn restore_provider(&mut self, provider: Provider) -> bool {
+        self.suppressed_sources.remove(provider.id()).is_some()
+    }
+
+    pub fn has_suppressions(&self) -> bool {
+        !self.suppressed_sources.is_empty()
     }
 
     pub fn resolve_id(&self, id: &str) -> Option<&str> {
@@ -371,6 +434,15 @@ impl Registry {
     }
 
     pub fn validate(&self, accounts: &[Account]) -> Result<(), AccountError> {
+        use clap::ValueEnum;
+        if self.suppressed_sources.iter().any(|(provider, keys)| {
+            Provider::from_str(provider, false).is_err()
+                || keys
+                    .iter()
+                    .any(|key| key.len() != 64 || !key.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        }) {
+            return Err(AccountError::Corrupt);
+        }
         if self.snapshot_digest.as_ref().is_some_and(|digest| {
             digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_hexdigit())
         }) {

@@ -2103,7 +2103,9 @@ async fn native_discovery_is_a_deduplicated_host_operation_with_a_shared_report(
     assert_eq!(first.id, retry.id);
     drop(guard);
     assert_eq!(done(&state, &first.id).await.status, "completed");
-    let Json(report) = native::status(State(state.clone())).await;
+    let Json(report) = native::status(State(state.clone()))
+        .await
+        .unwrap_or_else(|_| panic!());
     assert_eq!(report.scans.len(), 1);
     assert_eq!(report.scans[0].provider, Provider::Mock);
     let value = serde_json::to_value(report).unwrap();

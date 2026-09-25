@@ -53,9 +53,29 @@ pub async fn scan(
     registry: Arc<Mutex<Registry>>,
     providers: &[Provider],
     now: OffsetDateTime,
+    restore_removed: bool,
 ) -> Result<Report, AccountError> {
     // Check the host's own store before inspecting any provider credential sources.
     service::list(vault.clone()).await?;
+    if restore_removed {
+        let store = vault.clone();
+        let providers = providers.to_vec();
+        tokio::task::spawn_blocking(move || {
+            let mut tx = store.begin()?;
+            if let Some(registry) = &mut tx.document.resolved {
+                let mut changed = false;
+                for provider in providers {
+                    changed |= registry.restore_provider(provider);
+                }
+                if changed {
+                    tx.commit()?;
+                }
+            }
+            Ok::<_, AccountError>(())
+        })
+        .await
+        .map_err(|_| AccountError::Storage)??;
+    }
     let mut report = Report::default();
     for &provider in providers {
         report.scans.push(Scan { provider, at: now });
@@ -154,8 +174,28 @@ pub async fn scan(
             }
         }
     }
-    report.apply_registered(&service::list(vault).await?, providers);
-    Ok(report)
+    refresh(vault, report).await
+}
+
+pub async fn refresh(vault: Vault, mut report: Report) -> Result<Report, AccountError> {
+    tokio::task::spawn_blocking(move || {
+        let tx = vault.begin()?;
+        let providers: Vec<_> = report.scans.iter().map(|scan| scan.provider).collect();
+        report.known_sources.clear();
+        report.apply_registered(&tx.document.accounts, &providers);
+        if let Some(registry) = &tx.document.resolved {
+            report.permissions.retain(|source| {
+                !registry.permission_suppressed(
+                    source.provider,
+                    &source.kind,
+                    source.location.as_deref(),
+                )
+            });
+        }
+        Ok(report)
+    })
+    .await
+    .map_err(|_| AccountError::Storage)?
 }
 
 impl Report {
@@ -235,6 +275,10 @@ mod tests {
         report.apply_registered(&document.accounts, &[provider]);
         assert!(report.permissions.is_empty());
         assert_eq!(report.known_sources.len(), 2);
+        document.remove(&id).unwrap();
+        let registry = document.resolved.as_ref().unwrap();
+        assert!(registry.permission_suppressed(provider, "claude_native", Some("code_keychain")));
+        assert!(!registry.permission_suppressed(provider, "claude_native", Some("code_file")));
     }
 
     #[tokio::test]
@@ -257,6 +301,7 @@ mod tests {
             registry.clone(),
             &providers,
             OffsetDateTime::UNIX_EPOCH,
+            false,
         )
         .await
         .unwrap();
@@ -275,9 +320,10 @@ mod tests {
         let before = serde_json::to_vec(&vault.begin().unwrap().document).unwrap();
         let second = scan(
             vault.clone(),
-            registry,
+            registry.clone(),
             &providers,
             OffsetDateTime::UNIX_EPOCH,
+            false,
         )
         .await
         .unwrap();
@@ -288,6 +334,33 @@ mod tests {
         assert_eq!(serde_json::to_vec(&tx.document).unwrap(), before);
         assert_eq!(std::fs::read(&file).unwrap(), original);
         drop(tx);
+        crate::accounts::api::resolved_list(vault.clone())
+            .await
+            .unwrap();
+        service::remove_resolved(vault.clone(), id).await.unwrap();
+        let suppressed = scan(
+            vault.clone(),
+            registry.clone(),
+            &providers,
+            OffsetDateTime::UNIX_EPOCH,
+            false,
+        )
+        .await
+        .unwrap();
+        assert_eq!(suppressed.registered, 0);
+        assert!(service::list(vault.clone()).await.unwrap().is_empty());
+        let restored = scan(
+            vault.clone(),
+            registry,
+            &providers,
+            OffsetDateTime::UNIX_EPOCH,
+            true,
+        )
+        .await
+        .unwrap();
+        assert_eq!(restored.registered, 1);
+        assert_eq!(service::list(vault).await.unwrap().len(), 1);
+        assert_eq!(std::fs::read(&file).unwrap(), original);
         std::fs::remove_dir_all(home).unwrap();
     }
 }

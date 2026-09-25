@@ -46,6 +46,7 @@
                 "type": "object",
                 "additionalProperties": false,
                 "properties": {
+                  "restore_removed": {"type":"boolean", "default":false, "description":"Explicitly reconnect previously removed native sources for the selected providers."},
                   "providers": {
                     "type": "array",
                     "items": {

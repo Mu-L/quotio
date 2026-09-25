@@ -97,8 +97,8 @@ final class QuotioCLIBackendTests: XCTestCase {
         QuotioCLIURLProtocol.enqueue(discoveryFixture())
         await backend.registerDetectedNativeAccounts()
         let scanBody = try XCTUnwrap(QuotioCLIURLProtocol.body(forPath: "/v2/discovery"))
-        let scan = try XCTUnwrap(JSONSerialization.jsonObject(with: scanBody) as? [String: [String]])
-        XCTAssertFalse(scan["providers"]?.contains("claude") == true)
+        let scan = try XCTUnwrap(JSONSerialization.jsonObject(with: scanBody) as? [String: Any])
+        XCTAssertFalse((scan["providers"] as? [String])?.contains("claude") == true)
         QuotioCLIURLProtocol.enqueue(try hostFixture { root in
             var account = (root["accounts"] as! [[String: Any]])[0]
             account["id"] = "owned"; account["provider_id"] = "claude"
@@ -499,9 +499,27 @@ final class QuotioCLIBackendTests: XCTestCase {
         QuotioCLIURLProtocol.enqueue(discoveryFixture())
         try await backend.authorizeNativeSource(try XCTUnwrap(pending.first))
         let data = try XCTUnwrap(QuotioCLIURLProtocol.bodies(forPath: "/v2/discovery").first)
-        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: [String]])
-        XCTAssertEqual(body["providers"], ["copilot"])
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(body["providers"] as? [String], ["copilot"])
         XCTAssertEqual(QuotioCLIURLProtocol.requests().filter { $0.url?.path == "/v1/account-sources/authorize" }.count, 1)
+    }
+
+    func testOnlyAnExplicitRescanRequestsRestorationOfRemovedSources() async throws {
+        for _ in 0..<2 {
+            QuotioCLIURLProtocol.enqueue(#"{"id":"scan","status":"completed"}"#)
+            QuotioCLIURLProtocol.enqueue(discoveryFixture())
+        }
+        let backend = QuotioCLIBackend(session: stubSession())
+        await backend.connect(.init(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
+        await backend.registerDetectedNativeAccounts()
+        await backend.rescanNativeAccounts(for: .copilot)
+        let bodies = try QuotioCLIURLProtocol.bodies(forPath: "/v2/discovery").map {
+            try XCTUnwrap(JSONSerialization.jsonObject(with: $0) as? [String: Any])
+        }
+        XCTAssertEqual(bodies.count, 2)
+        XCTAssertEqual(bodies[0]["restore_removed"] as? Bool, false)
+        XCTAssertEqual(bodies[1]["restore_removed"] as? Bool, true)
+        XCTAssertEqual(bodies[1]["providers"] as? [String], ["copilot"])
     }
 
     private func hostFixture(_ edit: (inout [String: Any]) -> Void = { _ in }) throws -> String {
