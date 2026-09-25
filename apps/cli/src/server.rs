@@ -478,6 +478,20 @@ async fn operation(State(state): State<Arc<ApiState>>, Path(id): Path<String>) -
 }
 async fn refresh(state: &ApiState, request: Option<RefreshRequest>) -> Result<Value, &'static str> {
     let _refresh = state.refresh_lock.lock().await;
+    if !state.no_saved_accounts
+        && let Some(vault) = state.vault.clone()
+    {
+        match crate::accounts::service::freeze_copilot_selectors(vault).await {
+            Ok(true) => state.invalidate().await,
+            Ok(false) => (),
+            Err(error) => {
+                if matches!(error, crate::accounts::AccountError::CommitUncertain) {
+                    state.invalidate().await;
+                }
+                return Err(management::account_code(&error));
+            }
+        }
+    }
     let generation = state.generation.load(Ordering::SeqCst);
     let config = state.settings.read().await.values.clone();
     let enabled = config.tracked_providers().map_err(|_| "invalid_settings")?;

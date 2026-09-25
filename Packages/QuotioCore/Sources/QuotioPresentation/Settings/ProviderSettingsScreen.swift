@@ -302,7 +302,7 @@ struct ProviderSettingsScreen: View {
                 $0.accountID == sourceID
             }), let kind = source.credentialReference {
                 Button("settings.authorize".localized()) {
-                    permission = NativeSourcePermission(provider: provider, kind: kind, location: source.location)
+                    permission = NativeSourcePermission(provider: provider, kind: kind, location: source.location, keychainAccount: source.keychainAccount)
                 }
             }
         case .refreshInSourceApp:
@@ -328,6 +328,9 @@ struct NativePermissionSheet: View {
             Text("settings.authorize".localized()).font(.title2)
             Text(String(format: "settings.permissionExplanation".localized(), source.keychainItemName, source.provider.displayName))
                 .fixedSize(horizontal: false, vertical: true)
+            if let account = source.keychainAccount {
+                LabeledContent("settings.keychainAccount".localized(), value: account)
+            }
             if failed { Text((accounts.nativeAuthorizationFailure ?? .unknown).message).foregroundStyle(.red) }
             if isSubmitting {
                 ProgressView("settings.authorization.pending".localized())

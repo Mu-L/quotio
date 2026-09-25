@@ -471,10 +471,10 @@ pub async fn prepare_source(input: SourceInput) -> Result<PreparedAccount, Accou
             location,
             entry_key,
         } => {
-            let entry_key = if entry_key.is_empty()
+            let entry_key = if (entry_key.is_empty() || entry_key == "github.com")
                 && location == super::sources::CopilotLocation::GhKeychain
             {
-                "github.com".into()
+                crate::providers::catalog::oauth_primary::copilot_keychain_account().await?
             } else {
                 entry_key
             };

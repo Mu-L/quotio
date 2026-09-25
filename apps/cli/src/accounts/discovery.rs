@@ -193,26 +193,31 @@ impl Registry {
         if !inspect {
             return Ok(json!({"schema_version":2,"status":"not_checked","candidates":[]}));
         }
-        let keychain_present = kind == "copilot_native"
+        let keychain_account = if kind == "copilot_native"
             && location
                 .as_deref()
                 .is_none_or(|location| location == "gh_keychain")
-            && self
-                .home
+        {
+            self.home
                 .as_ref()
                 .and_then(|home| read_native(&home.join(".config/gh/hosts.yml")).ok())
-                .is_some_and(|bytes| {
+                .and_then(|bytes| {
                     crate::providers::catalog::oauth_primary::copilot_gh_username(&bytes)
                         .ok()
                         .flatten()
-                        .is_some_and(|user| {
-                            crate::providers::catalog::common::keychain_item_exists(
-                                "gh:github.com",
-                                Some(user),
-                            )
-                            .unwrap_or(false)
-                        })
-                });
+                        .map(str::to_owned)
+                })
+                .filter(|user| {
+                    crate::providers::catalog::common::keychain_item_exists(
+                        "gh:github.com",
+                        Some(user),
+                    )
+                    .unwrap_or(false)
+                })
+        } else {
+            None
+        };
+        let keychain_present = keychain_account.is_some();
         let result = if kind == "copilot_native" && location.as_deref() == Some("gh_keychain") {
             Ok(Vec::new())
         } else if kind == "copilot_native" && location.is_none() {
@@ -249,7 +254,7 @@ impl Registry {
         self.prune();
         let mut candidates = Vec::new();
         if keychain_present && references.is_empty() {
-            candidates.push(json!({"label":"GitHub CLI Keychain","status":"permission_required","source":{"kind":"copilot_native","location":"gh_keychain"}}));
+            candidates.push(json!({"label":"GitHub CLI Keychain","status":"permission_required","source":{"kind":"copilot_native","location":"gh_keychain","entry_key":keychain_account}}));
         }
         for (index, reference) in references.into_iter().enumerate() {
             let identity = reference.identity()?;

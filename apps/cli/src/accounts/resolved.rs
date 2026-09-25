@@ -53,11 +53,15 @@ impl Registry {
         let metadata = super::api::AccountDto::from(account);
         let mut keys = vec![crate::cache::fingerprint(&["identity", &account.identity])];
         if let Some(kind) = metadata.source_kind {
-            keys.push(crate::cache::fingerprint(&[
+            let mut permission = vec![
                 "permission",
                 kind,
                 metadata.source_location.as_deref().unwrap_or(""),
-            ]));
+            ];
+            if let Some(account) = account.keychain_account() {
+                permission.push(account);
+            }
+            keys.push(crate::cache::fingerprint(&permission));
         }
         keys
     }
@@ -89,6 +93,7 @@ impl Registry {
         provider: Provider,
         kind: &str,
         location: Option<&str>,
+        account: Option<&str>,
     ) -> bool {
         self.suppressed_sources
             .get(provider.id())
@@ -97,7 +102,14 @@ impl Registry {
                     "permission",
                     kind,
                     location.unwrap_or(""),
-                ]))
+                ])) || account.is_some_and(|account| {
+                    keys.contains(&crate::cache::fingerprint(&[
+                        "permission",
+                        kind,
+                        location.unwrap_or(""),
+                        account,
+                    ]))
+                })
             })
     }
 
@@ -301,6 +313,7 @@ impl Registry {
                             origin: record.origin(),
                             kind: metadata.source_kind.unwrap_or("owned_credential").into(),
                             location: metadata.source_location,
+                            keychain_account: record.keychain_account().map(str::to_owned),
                             enabled: record.enabled(),
                             selected: false,
                             state: if record.enabled() {

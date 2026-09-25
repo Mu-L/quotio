@@ -64,6 +64,7 @@ fn include_external(accounts: &mut Vec<Account>, report: &UsageReport) {
                     .unwrap_or(AccountOrigin::BorrowedNative),
                 kind: "external_observation".into(),
                 location: None,
+                keychain_account: None,
                 enabled: true,
                 selected: false,
                 state: ConnectionState::NotChecked,

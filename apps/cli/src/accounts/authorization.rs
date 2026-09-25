@@ -4,14 +4,21 @@ use super::{
     sources::{AntigravityLocation, ClaudeLocation, CopilotLocation, FactoryLocation},
 };
 
-pub(crate) fn target(
-    input: &SourceInput,
-) -> Result<(&'static str, Option<&'static str>), AccountError> {
+pub(crate) fn target(input: &SourceInput) -> Result<(&'static str, Option<&str>), AccountError> {
     match input {
         SourceInput::CopilotNative {
             location: CopilotLocation::GhKeychain,
             entry_key,
         } if entry_key.is_empty() || entry_key == "github.com" => Ok(("gh:github.com", None)),
+        SourceInput::CopilotNative {
+            location: CopilotLocation::GhKeychain,
+            entry_key,
+        } if crate::providers::catalog::oauth_primary::valid_copilot_keychain_account(
+            entry_key,
+        ) =>
+        {
+            Ok(("gh:github.com", Some(entry_key)))
+        }
         SourceInput::ClaudeNative {
             location: ClaudeLocation::CodeKeychain,
         } => Ok(("Claude Code-credentials", None)),
@@ -26,13 +33,17 @@ pub(crate) fn target(
     }
 }
 
-pub(crate) async fn authorize(input: SourceInput) -> Result<SourceInput, AccountError> {
+pub(crate) async fn authorize(mut input: SourceInput) -> Result<SourceInput, AccountError> {
+    if let SourceInput::CopilotNative {
+        location: CopilotLocation::GhKeychain,
+        entry_key,
+    } = &mut input
+        && (entry_key.is_empty() || entry_key == "github.com")
+    {
+        *entry_key = crate::providers::catalog::oauth_primary::copilot_keychain_account().await?;
+    }
     let (service, account) = target(&input)?;
-    let mut account = if service == "gh:github.com" {
-        Some(crate::providers::catalog::oauth_primary::copilot_keychain_account().await?)
-    } else {
-        account.map(str::to_owned)
-    };
+    let mut account = account.map(str::to_owned);
     tokio::task::spawn_blocking(move || {
         use crate::providers::catalog::common;
         if service == "Factory CLI"
@@ -59,9 +70,11 @@ mod tests {
             ("factory_native", "v2_keyring"),
             ("antigravity_native", "gemini_keychain"),
         ] {
-            let source: SourceInput =
-                serde_json::from_value(serde_json::json!({"kind":kind,"location":location}))
-                    .unwrap();
+            let mut value = serde_json::json!({"kind":kind,"location":location});
+            if kind == "copilot_native" {
+                value["entry_key"] = "fixture".into();
+            }
+            let source: SourceInput = serde_json::from_value(value).unwrap();
             assert!(target(&source).is_ok());
         }
         for source in [

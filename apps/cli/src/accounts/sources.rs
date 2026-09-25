@@ -142,7 +142,14 @@ impl CopilotNativeReference {
             {
                 path.to_str().ok_or(AccountError::Input)?
             }
-            (CopilotLocation::GhKeychain, None) => "gh:github.com",
+            (CopilotLocation::GhKeychain, None)
+                if key == "github.com"
+                    || crate::providers::catalog::oauth_primary::valid_copilot_keychain_account(
+                        key,
+                    ) =>
+            {
+                "gh:github.com"
+            }
             _ => return Err(AccountError::Input),
         };
         Ok(crate::cache::fingerprint(&[
@@ -171,7 +178,7 @@ impl CopilotNativeReference {
         };
         Ok(Resolved {
             label: if self.location == CopilotLocation::GhKeychain {
-                crate::providers::catalog::oauth_primary::copilot_keychain_account().await?
+                self.entry_key.clone()
             } else {
                 format!("Copilot {}", &self.identity()?[..8])
             },

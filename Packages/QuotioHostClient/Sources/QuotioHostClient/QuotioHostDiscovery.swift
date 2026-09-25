@@ -5,6 +5,7 @@ public struct QuotioHostDiscovery: Decodable, Sendable {
         public let provider: String
         public let kind: String
         public let location: String?
+        public let keychainAccount: String?
     }
     public struct Scan: Decodable, Sendable {
         public let provider: String

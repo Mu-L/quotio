@@ -330,7 +330,19 @@ impl Vault {
                 }
                 let doc: Document =
                     serde_json::from_slice(&bytes).map_err(|_| AccountError::Corrupt)?;
-                if !matches!(doc.version, 1..=14)
+                if !matches!(doc.version, 1..=15)
+                    || (doc.version < 15
+                        && (doc
+                            .accounts
+                            .iter()
+                            .any(|account| account.keychain_account().is_some())
+                            || doc.native_discovery.as_ref().is_some_and(|report| {
+                                report
+                                    .permissions
+                                    .iter()
+                                    .chain(&report.known_sources)
+                                    .any(|source| source.keychain_account.is_some())
+                            })))
                     || (doc.version < 14 && doc.native_discovery.is_some())
                     || doc
                         .native_discovery
@@ -489,6 +501,25 @@ impl Transaction {
         }
         if self.document.native_discovery.is_some() {
             self.document.version = self.document.version.max(14);
+        }
+        if self
+            .document
+            .accounts
+            .iter()
+            .any(|account| account.keychain_account().is_some())
+            || self
+                .document
+                .native_discovery
+                .as_ref()
+                .is_some_and(|report| {
+                    report
+                        .permissions
+                        .iter()
+                        .chain(&report.known_sources)
+                        .any(|source| source.keychain_account.is_some())
+                })
+        {
+            self.document.version = self.document.version.max(15);
         }
         let bytes = serde_json::to_vec(&self.document).map_err(|_| AccountError::Corrupt)?;
         if bytes.len() > 1024 * 1024 {

@@ -697,6 +697,14 @@ fn copilot_gh_host(bytes: &[u8]) -> Result<Option<CopilotGhHost<'_>>, ProviderEr
     Ok(found.then_some(host))
 }
 
+pub(crate) fn valid_copilot_keychain_account(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 256
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+}
+
 pub(crate) fn copilot_gh_username(bytes: &[u8]) -> Result<Option<&str>, ProviderError> {
     Ok(copilot_gh_host(bytes)?.and_then(|host| host.user))
 }
@@ -742,13 +750,29 @@ pub(crate) async fn copilot_reference_token(
             token(raw)?.ok_or(ProviderError::Authentication)
         }
         None => {
-            let account = copilot_keychain_account().await?;
-            let bytes = native_keychain("gh:github.com", Some(&account))
-                .await?
-                .ok_or(ProviderError::Authentication)?;
-            copilot_keychain_token(&bytes)?.ok_or(ProviderError::Authentication)
+            copilot_fixed_keychain_token(entry, |account| async move {
+                native_keychain("gh:github.com", Some(&account)).await
+            })
+            .await
         }
     }
+}
+
+async fn copilot_fixed_keychain_token<F, Fut>(
+    account: &str,
+    keychain: F,
+) -> Result<Secret, ProviderError>
+where
+    F: FnOnce(String) -> Fut,
+    Fut: std::future::Future<Output = Result<Option<Vec<u8>>, ProviderError>>,
+{
+    if !valid_copilot_keychain_account(account) {
+        return Err(ProviderError::Authentication);
+    }
+    let bytes = keychain(account.to_owned())
+        .await?
+        .ok_or(ProviderError::Authentication)?;
+    copilot_keychain_token(&bytes)?.ok_or(ProviderError::Authentication)
 }
 
 pub(crate) async fn copilot_gh_hosts_reference_token(
@@ -823,13 +847,12 @@ async fn native_copilot_token() -> Result<Secret, ProviderError> {
         }
     }
     let account = copilot_keychain_account().await?;
-    match native_keychain("gh:github.com", Some(&account)).await {
-        Ok(Some(bytes)) => match copilot_keychain_token(&bytes) {
-            Ok(Some(value)) => return Ok(value),
-            Ok(None) => (),
-            Err(error) => retain_native_error(&mut last, error),
-        },
-        Ok(None) => (),
+    match copilot_fixed_keychain_token(&account, |account| async move {
+        native_keychain("gh:github.com", Some(&account)).await
+    })
+    .await
+    {
+        Ok(value) => return Ok(value),
         Err(error) => retain_native_error(&mut last, error),
     }
     Err(last)
@@ -1084,6 +1107,24 @@ pub(super) async fn cache_token(id: &str, context: &ProviderContext) -> Option<S
 mod tests {
     use super::*;
     use crate::domain::Quota;
+
+    #[tokio::test]
+    async fn copilot_keychain_reads_only_the_frozen_account() {
+        let value = copilot_fixed_keychain_token("selected-user", |account| async move {
+            assert_eq!(account, "selected-user");
+            Ok(Some(b"selected-fixture-token".to_vec()))
+        })
+        .await
+        .unwrap();
+        assert_eq!(value.0, "selected-fixture-token");
+        for account in ["github.com", "", "other/account", "with space"] {
+            assert!(matches!(
+                copilot_fixed_keychain_token(account, |_| async { Err(ProviderError::Internal) })
+                    .await,
+                Err(ProviderError::Authentication)
+            ));
+        }
+    }
 
     #[test]
     fn claude_source_response_maps_real_windows_without_extra_spend() {

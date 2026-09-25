@@ -82,6 +82,19 @@ final class QuotioCLIBackendTests: XCTestCase {
         XCTAssertFalse(recovered)
     }
 
+    func testKeychainAuthorizationForwardsTheHostSelectedAccount() async throws {
+        let backend = QuotioCLIBackend(session: stubSession())
+        await backend.connect(.init(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
+        QuotioCLIURLProtocol.enqueue(#"{"id":"authorize","status":"failed","error":"native_keychain_access_failed"}"#)
+        do {
+            try await backend.authorizeNativeSource(.init(provider: .copilot, kind: "copilot_native", location: "gh_keychain", keychainAccount: "selected-user"))
+            XCTFail("Expected the supplied failure")
+        } catch {}
+        let data = try XCTUnwrap(QuotioCLIURLProtocol.body(forPath: "/v2/sources/authorize"))
+        let value = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: String])
+        XCTAssertEqual(value["entry_key"], "selected-user")
+    }
+
     func testAuthorizationFailurePreservesItsVerifiedStage() async throws {
         let backend = QuotioCLIBackend(session: stubSession())
         await backend.connect(.init(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))

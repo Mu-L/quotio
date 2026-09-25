@@ -1870,6 +1870,11 @@
           "kind": {
             "type": "string"
           },
+          "keychain_account": {
+            "type": ["string", "null"],
+            "minLength": 1,
+            "maxLength": 256
+          },
           "location": {
             "type": [
               "string",
@@ -3417,7 +3422,7 @@
           {
             "type": "object",
             "additionalProperties": false,
-            "required": ["kind", "location", "entry_key"],
+            "required": ["kind", "location"],
             "properties": {
               "kind": {"const": "copilot_native"},
               "location": {
@@ -3427,9 +3432,9 @@
               },
               "entry_key": {
                 "type": "string",
-                "minLength": 1,
+                "minLength": 0,
                 "maxLength": 256,
-                "description": "Exact entry. apps and hosts accept github.com or github.com:<app-id>; gh_hosts requires github.com; gh_keychain uses the exact Keychain account."
+                "description": "Exact entry. apps and hosts accept github.com or github.com:<app-id>; gh_hosts requires github.com; gh_keychain uses the exact Keychain account; omission selects the active gh account once before authorization."
               }
             }
           },
@@ -4024,6 +4029,11 @@
             "minLength": 1,
             "maxLength": 128,
             "pattern": "^[a-z0-9_-]+$"
+          },
+          "keychain_account": {
+            "type": ["string", "null"],
+            "minLength": 1,
+            "maxLength": 256
           },
           "location": {
             "anyOf": [

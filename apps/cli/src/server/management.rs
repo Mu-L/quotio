@@ -345,6 +345,14 @@ async fn mutate(
                         .authorize_interactively()
                         .await
                         .map_err(|_| "quotio_vault_access_failed")?;
+                    if matches!(&mutation, Mutation::Authorize(_))
+                        && let Some(id) =
+                            crate::accounts::service::mutation_receipt(vault.clone(), &intent)
+                                .await
+                                .map_err(|error| account_code(&error))?
+                    {
+                        return Ok(json!({"account_id": id}));
+                    }
                 }
                 if let Some(id) = receipt {
                     return Ok(json!({"account_id":id}));
@@ -433,7 +441,12 @@ async fn mutate(
                         let input = if authorize {
                             crate::accounts::authorization::authorize(input)
                                 .await
-                                .map_err(|_| "native_keychain_access_failed")?
+                                .map_err(|error| match error {
+                                    AccountError::Provider(
+                                        crate::error::ProviderError::Authentication,
+                                    ) => "native_login_required",
+                                    _ => "native_keychain_access_failed",
+                                })?
                         } else {
                             input
                         };

@@ -226,6 +226,18 @@ pub struct AccountInfo<'a> {
     pub enabled: bool,
 }
 impl Account {
+    pub(crate) fn keychain_account(&self) -> Option<&str> {
+        match &self.credential {
+            Credential::CopilotNative { source }
+                if source.location == sources::CopilotLocation::GhKeychain
+                    && source.entry_key != "github.com" =>
+            {
+                Some(&source.entry_key)
+            }
+            _ => None,
+        }
+    }
+
     pub fn display_name(&self) -> &str {
         match &self.naming {
             Some(AccountNaming {

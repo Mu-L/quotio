@@ -92,6 +92,8 @@ pub struct Source {
     pub kind: String,
     /// Semantic location code, not a filesystem path or Keychain secret.
     pub location: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keychain_account: Option<String>,
     pub enabled: bool,
     pub selected: bool,
     pub state: ConnectionState,

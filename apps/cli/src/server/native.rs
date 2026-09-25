@@ -99,7 +99,7 @@ async fn scan(
     )
     .await
     .map_err(|error| management::account_code(&error))?;
-    let changed = report.registered > 0;
+    let changed = report.registered > 0 || report.references_updated;
     let value = serde_json::to_value(&report).map_err(|_| "invalid_snapshot");
     if changed {
         state.invalidate().await;

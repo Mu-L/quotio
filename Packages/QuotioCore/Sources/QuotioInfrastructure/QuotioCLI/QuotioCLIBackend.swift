@@ -16,6 +16,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
     private struct NativeSourceBody: Encodable {
         let kind: String
         let location: String?
+        let entryKey: String?
     }
     public private(set) var snapshot = QuotaSnapshot()
     private var client: QuotioHostHTTPClient?
@@ -181,12 +182,12 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
 
     private static func permission(_ value: QuotioHostDiscovery.Permission) -> NativeSourcePermission? {
         guard let provider = QuotioCLIProviderMap.domain(value.provider) else { return nil }
-        return .init(provider: provider, kind: value.kind, location: value.location)
+        return .init(provider: provider, kind: value.kind, location: value.location, keychainAccount: value.keychainAccount)
     }
 
     public func authorizeNativeSource(_ source: NativeSourcePermission) async throws {
         guard let client else { throw QuotioHostClientError.disconnected }
-        let body = try JSONEncoder.quotioCLI.encode(NativeSourceBody(kind: source.kind, location: source.location))
+        let body = try JSONEncoder.quotioCLI.encode(NativeSourceBody(kind: source.kind, location: source.location, entryKey: source.keychainAccount))
         do {
             try await mutate(
                 client: client,
@@ -608,7 +609,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
             status: status(value.state), enabled: value.enabled,
             sources: value.sources.map { source in
                 AccountLoginSource(accountID: source.id, source: sourceKind(source.origin), credentialReference: source.kind,
-                    status: status(source.state), location: source.location, enabled: source.enabled, actions: Set(source.actions.filter(\.available).map(\.kind)))
+                    status: status(source.state), location: source.location, enabled: source.enabled, actions: Set(source.actions.filter(\.available).map(\.kind)), keychainAccount: source.keychainAccount)
             }
         )
     }

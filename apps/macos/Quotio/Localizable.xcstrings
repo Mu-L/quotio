@@ -1,6 +1,7 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "settings.keychainAccount" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Keychain account"}}, "vi": {"stringUnit": {"state": "translated", "value": "Tài khoản trong Keychain"}}, "fr": {"stringUnit": {"state": "translated", "value": "Compte du trousseau"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "钥匙串账户"}}}},
     "settings.sources.pause" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Pause source"}}, "vi": {"stringUnit": {"state": "translated", "value": "Tạm dừng nguồn đăng nhập"}}, "fr": {"stringUnit": {"state": "translated", "value": "Suspendre la source"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "暂停来源"}}}},
     "settings.renameAccount" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Rename account"}}, "vi": {"stringUnit": {"state": "translated", "value": "Đổi tên tài khoản"}}, "fr": {"stringUnit": {"state": "translated", "value": "Renommer le compte"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "重命名账户"}}}},
     "settings.resetAccountName" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Use provider name"}}, "vi": {"stringUnit": {"state": "translated", "value": "Dùng tên từ nhà cung cấp"}}, "fr": {"stringUnit": {"state": "translated", "value": "Utiliser le nom du fournisseur"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "使用提供商名称"}}}},

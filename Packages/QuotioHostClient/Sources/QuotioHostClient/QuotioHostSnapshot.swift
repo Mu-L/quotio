@@ -33,6 +33,7 @@ public struct QuotioHostSnapshot: Decodable, Sendable {
         public let origin: String
         public let kind: String
         public let location: String?
+        public let keychainAccount: String?
         public let enabled: Bool
         public let selected: Bool
         public let state: String

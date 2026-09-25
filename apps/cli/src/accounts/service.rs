@@ -1007,11 +1007,72 @@ impl ProviderAdapter for FailedProvider {
         Box::pin(async { Err(ProviderError::CredentialStorage) })
     }
 }
+pub(crate) async fn freeze_copilot_selectors(vault: Vault) -> Result<bool, AccountError> {
+    if !list(vault.clone())
+        .await?
+        .iter()
+        .any(legacy_copilot_selector)
+    {
+        return Ok(false);
+    }
+    let Ok(account) = crate::providers::catalog::oauth_primary::copilot_keychain_account().await
+    else {
+        return Ok(false);
+    };
+    freeze_copilot_selectors_as(vault, &account).await
+}
+
+fn legacy_copilot_selector(account: &Account) -> bool {
+    matches!(&account.credential, Credential::CopilotNative { source }
+        if source.location == super::sources::CopilotLocation::GhKeychain && source.entry_key == "github.com")
+}
+
+async fn freeze_copilot_selectors_as(vault: Vault, selected: &str) -> Result<bool, AccountError> {
+    if !crate::providers::catalog::oauth_primary::valid_copilot_keychain_account(selected) {
+        return Err(AccountError::Input);
+    }
+    let mut tx = begin(vault).await?;
+    let mut changed = false;
+    for account in &mut tx.document.accounts {
+        if !legacy_copilot_selector(account) {
+            continue;
+        }
+        let Credential::CopilotNative { source } = &mut account.credential else {
+            unreachable!()
+        };
+        source.entry_key = selected.to_owned();
+        account.identity = source.identity()?;
+        if let Some(naming) = &mut account.naming {
+            naming.observed_name = None;
+        }
+        changed = true;
+    }
+    if changed {
+        if let Some(report) = &mut tx.document.native_discovery {
+            for source in report
+                .permissions
+                .iter_mut()
+                .chain(&mut report.known_sources)
+            {
+                if source.kind == "copilot_native"
+                    && source.location.as_deref() == Some("gh_keychain")
+                    && source.keychain_account.is_none()
+                {
+                    source.keychain_account = Some(selected.to_owned());
+                }
+            }
+        }
+        commit(tx).await?;
+    }
+    Ok(changed)
+}
+
 async fn discover(
     vault: Vault,
     timeout: std::time::Duration,
 ) -> Result<(Vec<Account>, std::collections::HashSet<String>), AccountError> {
     tokio::time::timeout(timeout, async {
+        freeze_copilot_selectors(vault.clone()).await?;
         let tx = begin(vault).await?;
         Ok((
             tx.document.accounts.clone(),
@@ -1522,6 +1583,81 @@ mod tests {
         sync::atomic::{AtomicUsize, Ordering},
         time::Duration,
     };
+
+    #[tokio::test]
+    async fn legacy_copilot_keychain_alias_is_frozen_once_without_changing_account_ids() {
+        let dir = std::env::temp_dir().join(random_string().unwrap());
+        let memory = Arc::new(Memory::default());
+        let vault = Vault::new(memory.clone(), dir.join("lock"));
+        let source = super::super::sources::CopilotNativeReference {
+            location: super::super::sources::CopilotLocation::GhKeychain,
+            path: None,
+            entry_key: "github.com".into(),
+        };
+        let id = add(
+            vault.clone(),
+            Provider::Catalog("copilot"),
+            "My account".into(),
+            Credential::CopilotNative {
+                source: source.clone(),
+            },
+            source.identity().unwrap(),
+        )
+        .await
+        .unwrap();
+        let before = super::super::api::resolved_list(vault.clone())
+            .await
+            .unwrap();
+        assert!(
+            freeze_copilot_selectors_as(vault.clone(), "first-user")
+                .await
+                .unwrap()
+        );
+        assert!(
+            !freeze_copilot_selectors_as(vault.clone(), "second-user")
+                .await
+                .unwrap()
+        );
+        let tx = vault.begin().unwrap();
+        assert_eq!(tx.document.version, 15);
+        assert_eq!(tx.document.accounts[0].id, id);
+        assert_eq!(
+            tx.document.accounts[0].keychain_account(),
+            Some("first-user")
+        );
+        assert_eq!(tx.document.accounts[0].label, "My account");
+        let mut registry = tx.document.resolved.as_ref().unwrap().clone();
+        registry.suppress(&tx.document.accounts[0]);
+        assert!(registry.permission_suppressed(
+            Provider::Catalog("copilot"),
+            "copilot_native",
+            Some("gh_keychain"),
+            Some("first-user")
+        ));
+        assert!(!registry.permission_suppressed(
+            Provider::Catalog("copilot"),
+            "copilot_native",
+            Some("gh_keychain"),
+            Some("second-user")
+        ));
+        drop(tx);
+        let after = super::super::api::resolved_list(vault.clone())
+            .await
+            .unwrap();
+        assert_eq!(before.accounts[0].id, after.accounts[0].id);
+        assert_eq!(
+            after.accounts[0].sources[0].keychain_account.as_deref(),
+            Some("first-user")
+        );
+        let mut downgraded: serde_json::Value =
+            serde_json::from_slice(&memory.read().unwrap().unwrap()).unwrap();
+        downgraded["version"] = 14.into();
+        memory
+            .write(&serde_json::to_vec(&downgraded).unwrap())
+            .unwrap();
+        assert!(matches!(vault.begin(), Err(AccountError::Corrupt)));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[tokio::test]
     async fn removing_native_source_blocks_default_collection_until_explicit_restore() {

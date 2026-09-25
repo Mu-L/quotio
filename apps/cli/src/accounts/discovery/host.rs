@@ -13,6 +13,8 @@ pub struct Permission {
     pub provider: Provider,
     pub kind: String,
     pub location: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keychain_account: Option<String>,
 }
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct Failure {
@@ -34,6 +36,8 @@ pub struct Report {
     pub known_sources: Vec<Permission>,
     pub failures: Vec<Failure>,
     pub registered: usize,
+    #[serde(skip)]
+    pub(crate) references_updated: bool,
 }
 impl Default for Report {
     fn default() -> Self {
@@ -44,6 +48,7 @@ impl Default for Report {
             known_sources: Vec::new(),
             failures: Vec::new(),
             registered: 0,
+            references_updated: false,
         }
     }
 }
@@ -56,6 +61,7 @@ pub async fn scan(
     restore_removed: bool,
 ) -> Result<Report, AccountError> {
     // Check the host's own store before inspecting any provider credential sources.
+    let references_updated = service::freeze_copilot_selectors(vault.clone()).await?;
     service::list(vault.clone()).await?;
     if restore_removed {
         let store = vault.clone();
@@ -76,7 +82,10 @@ pub async fn scan(
         .await
         .map_err(|_| AccountError::Storage)??;
     }
-    let mut report = Report::default();
+    let mut report = Report {
+        references_updated,
+        ..Report::default()
+    };
     for &provider in providers {
         report.scans.push(Scan { provider, at: now });
         for source in crate::providers::capabilities::capability(provider).source_references {
@@ -129,6 +138,7 @@ pub async fn scan(
                         provider,
                         kind: input["kind"].as_str().unwrap_or(source.kind).into(),
                         location: input["location"].as_str().map(str::to_owned),
+                        keychain_account: input["entry_key"].as_str().map(str::to_owned),
                     };
                     if !report.permissions.contains(&permission) {
                         report.permissions.push(permission);
@@ -213,6 +223,7 @@ impl Report {
         self.failures.extend(report.failures);
         self.scans.extend(report.scans);
         self.registered = report.registered;
+        self.references_updated = report.references_updated;
     }
 
     fn apply_document(&mut self, document: &crate::accounts::Document) {
@@ -225,6 +236,7 @@ impl Report {
                     source.provider,
                     &source.kind,
                     source.location.as_deref(),
+                    source.keychain_account.as_deref(),
                 )
             });
         }
@@ -241,6 +253,7 @@ impl Report {
                     provider: account.provider,
                     kind: kind.into(),
                     location: metadata.source_location,
+                    keychain_account: account.keychain_account().map(str::to_owned),
                 };
                 if !self.known_sources.contains(&permission) {
                     self.known_sources.push(permission);
@@ -322,6 +335,7 @@ mod tests {
             provider,
             kind: "claude_native".into(),
             location: Some("code_keychain".into()),
+            keychain_account: None,
         };
         let mut report = Report {
             permissions: vec![permission.clone()],
@@ -348,8 +362,18 @@ mod tests {
         assert_eq!(report.known_sources.len(), 2);
         document.remove(&id).unwrap();
         let registry = document.resolved.as_ref().unwrap();
-        assert!(registry.permission_suppressed(provider, "claude_native", Some("code_keychain")));
-        assert!(!registry.permission_suppressed(provider, "claude_native", Some("code_file")));
+        assert!(registry.permission_suppressed(
+            provider,
+            "claude_native",
+            Some("code_keychain"),
+            None
+        ));
+        assert!(!registry.permission_suppressed(
+            provider,
+            "claude_native",
+            Some("code_file"),
+            None
+        ));
     }
 
     #[tokio::test]

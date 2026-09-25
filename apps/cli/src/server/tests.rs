@@ -1387,6 +1387,34 @@ async fn zero_refresh_interval_waits_without_scheduling_a_deadline() {
 }
 
 #[tokio::test]
+async fn native_authorization_retry_uses_its_receipt_before_reading_another_keychain_item() {
+    let (state, dir, account_id) = fixture().await;
+    let body =
+        json!({"kind":"copilot_native","location":"gh_keychain","entry_key":"selected-user"});
+    let fingerprint =
+        crate::cache::fingerprint(&["native_source_authorize", "", &body.to_string()]);
+    let intent =
+        accounts::service::MutationIntent::new("finished-authorization", fingerprint).unwrap();
+    let original_id = account_id.clone();
+    accounts::service::commit_once(state.vault.clone().unwrap(), intent, move |_| {
+        Ok(original_id)
+    })
+    .await
+    .unwrap();
+    let (_, Json(operation)) = management::authorize(
+        State(state.clone()),
+        key("finished-authorization"),
+        ApiJson(body),
+    )
+    .await
+    .unwrap_or_else(|_| panic!());
+    let completed = done(&state, &operation.id).await;
+    assert_eq!(completed.status, "completed");
+    assert_eq!(completed.result.unwrap()["account_id"], account_id);
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[tokio::test]
 async fn account_retry_survives_loss_of_in_memory_operations() {
     let (state, dir, id) = fixture().await;
     let body = json!({"user_label":"first change"});
