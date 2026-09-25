@@ -18,10 +18,9 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         let apiKey: String
     }
     private struct EnabledBody: Encodable { let enabled: Bool }
-    private struct SourceDiscoveryBody: Encodable {
-        let provider: String
+    private struct NativeSourceBody: Encodable {
         let kind: String
-        let inspect: Bool
+        let location: String?
     }
     public private(set) var snapshot = QuotaSnapshot()
     private var client: QuotioHostHTTPClient?
@@ -34,25 +33,21 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
     private let logger: (any ApplicationLogging)?
     private let trackingPreferences: (any ProviderTrackingPreferencesRepository)?
     private let session: URLSession?
-    private let userDefaults: UserDefaults
     private let authFileState: (any ManagedAuthFileStateRepository)?
     private let localization: @MainActor @Sendable () -> (bundle: Bundle, locale: Locale)
     private var storageRequiresAuthorization = false
-    private var discoveredNativeSourceKinds: Set<String> = []
-    private static let pendingNativeSourcesKey = "quotioCLI.pendingNativeSources.v1"
+    private var discoveryState: QuotioHostDiscovery?
 
     public init(
         session: URLSession? = nil,
         logger: (any ApplicationLogging)? = nil,
         trackingPreferences: (any ProviderTrackingPreferencesRepository)? = nil,
-        userDefaults: UserDefaults = .standard,
         authFileState: (any ManagedAuthFileStateRepository)? = nil,
         localization: @escaping @MainActor @Sendable () -> (bundle: Bundle, locale: Locale) = { (.main, .current) }
     ) {
         self.session = session
         self.logger = logger
         self.trackingPreferences = trackingPreferences
-        self.userDefaults = userDefaults
         self.authFileState = authFileState
         self.localization = localization
     }
@@ -60,6 +55,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
     public func connect(_ connection: QuotioHostConnection) {
         connectionID = UUID()
         hostSnapshot = nil
+        discoveryState = nil
         reportedAccounts = []
         snapshot = QuotaSnapshot()
         client = QuotioHostHTTPClient(connection: connection, session: session)
@@ -150,94 +146,57 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
     }
 
     private func discoverNativeAccounts(providerID: String?) async {
-        guard let client,
-              let response: QuotioCLIProviderList = try? await client.request("v1/providers"),
-              response.schemaVersion == 1 else { return }
-        var known = discoveredNativeSourceKinds
-        var pending = Set(pendingNativeSources())
-        for provider in response.providers {
-            guard providerID == nil || providerID == provider.id else { continue }
-            guard let domainProvider = QuotioCLIProviderMap.domain(provider.id), isTracked(domainProvider) else { continue }
-            for source in provider.capabilities.sourceReferences
-            where source.origin == "borrowed_native" && source.platforms.contains("macos") {
-                let sourceKey = provider.id + ":" + source.kind
-                guard !known.contains(sourceKey) else { continue }
-                do {
-                    let discovered = try await discoverNativeSource(
-                        client: client, provider: provider.id, kind: source.kind, inspect: true
-                    )
-                    await logger?.write(.info, message: "Native discovery provider=\(domainProvider.rawValue) available=\(discovered.candidates.filter { $0.status == "available" }.count) permissionRequired=\(discovered.candidates.filter { $0.status == "permission_required" }.count)")
-                    pending = pending.filter { $0.kind != source.kind }
-                    if let domainProvider = QuotioCLIProviderMap.domain(provider.id) {
-                        pending.formUnion(discovered.candidates.compactMap { candidate in
-                            guard candidate.status == "permission_required" else { return nil }
-                            return NativeSourcePermission(
-                                provider: domainProvider,
-                                kind: candidate.source.kind,
-                                location: candidate.source.location
-                            )
-                        })
-                    }
-                    savePendingNativeSources(pending)
-                    var registrationError: Error?
-                    for candidate in discovered.candidates where candidate.status == "available" {
-                        do {
-                            let body = try JSONEncoder.quotioCLI.encode(candidate.source)
-                            try await mutate(
-                                client: client,
-                                path: "v1/account-sources",
-                                method: "POST",
-                                body: body,
-                                idempotencyKey: "quotio-native-v1-" + Self.sourceID([
-                                    sourceKey,
-                                    candidate.source.kind,
-                                    candidate.source.location ?? "",
-                                    candidate.source.discoveryRef ?? "",
-                                    UUID().uuidString,
-                                ])
-                            )
-                        } catch {
-                            registrationError = error
-                        }
-                    }
-                    if let registrationError { throw registrationError }
-                    known.insert(sourceKey)
-                    discoveredNativeSourceKinds = known
-                } catch {
-                    await logger?.write(.warning, message: "Native discovery provider=\(domainProvider.rawValue) failed=\(Self.failureCategory(error))")
-                    continue
-                }
-            }
+        guard let client else { return }
+        let providers = providerID.map { [$0] } ?? Self.supportedProviders.filter(isTracked).compactMap(QuotioCLIProviderMap.cli)
+        do {
+            let body = try JSONSerialization.data(withJSONObject: ["providers": providers])
+            try await mutate(client: client, path: "v2/discovery", method: "POST", body: body, timeout: .seconds(180))
+            _ = try await readDiscovery()
+        } catch {
+            if Self.failureCategory(error) == "account_storage" { storageRequiresAuthorization = true }
+            await logger?.write(.warning, message: "Native discovery failed=\(Self.failureCategory(error))")
         }
+    }
+
+    private func readDiscovery() async throws -> QuotioHostDiscovery {
+        guard let client else { throw QuotioHostClientError.disconnected }
+        let epoch = connectionID
+        let report: QuotioHostDiscovery = try await client.request("v2/discovery")
+        guard connectionID == epoch else { throw QuotioHostClientError.disconnected }
+        guard report.schemaVersion == 2 else { throw QuotioHostClientError.incompatible }
+        discoveryState = report
+        return report
     }
 
     public func rescanNativeAccounts(for provider: QuotaProvider) async {
-        guard isTracked(provider), let providerID = QuotioCLIProviderMap.cli(provider) else { return }
-        discoveredNativeSourceKinds = discoveredNativeSourceKinds.filter { !$0.hasPrefix(providerID + ":") }
-        await discoverNativeAccounts(providerID: providerID)
+        guard isTracked(provider), let id = QuotioCLIProviderMap.cli(provider) else { return }
+        await discoverNativeAccounts(providerID: id)
     }
 
-    public func nativeSourcesRequiringPermission() async -> [NativeSourcePermission] {
-        let pending = pendingNativeSources().filter { isTracked($0.provider) }
-        guard let client,
-              let response: QuotioCLIAccountList = try? await client.request("v1/accounts"),
-              response.schemaVersion == 1 else { return pending }
-        return pending.filter { source in
-            !response.accounts.contains {
-                QuotioCLIProviderMap.domain($0.provider) == source.provider
-                    && $0.sourceKind == source.kind
-                    && $0.sourceLocation == source.location
-            }
-        }
+    public func rescanAllNativeAccounts() async {
+        await discoverNativeAccounts(providerID: nil)
+    }
+
+    public func nativeDiscoverySnapshot() async -> NativeDiscoverySnapshot {
+        let report = (try? await readDiscovery()) ?? discoveryState
+        return .init(
+            permissions: (report?.permissions ?? []).compactMap(Self.permission),
+            knownSources: (report?.knownSources ?? []).compactMap(Self.permission),
+            scannedAt: Dictionary((report?.scans ?? []).compactMap { scan in
+                QuotioCLIProviderMap.domain(scan.provider).map { ($0, scan.at) }
+            }, uniquingKeysWith: { _, latest in latest }),
+            failedProviders: Set((report?.failures ?? []).compactMap { QuotioCLIProviderMap.domain($0.provider) })
+        )
+    }
+
+    private static func permission(_ value: QuotioHostDiscovery.Permission) -> NativeSourcePermission? {
+        guard let provider = QuotioCLIProviderMap.domain(value.provider) else { return nil }
+        return .init(provider: provider, kind: value.kind, location: value.location)
     }
 
     public func authorizeNativeSource(_ source: NativeSourcePermission) async throws {
         guard let client else { throw QuotioHostClientError.disconnected }
-        let body = try JSONEncoder.quotioCLI.encode(QuotioCLISourceDiscovery.Candidate.Source(
-            kind: source.kind,
-            location: source.location,
-            discoveryRef: nil
-        ))
+        let body = try JSONEncoder.quotioCLI.encode(NativeSourceBody(kind: source.kind, location: source.location))
         do {
             try await mutate(
                 client: client,
@@ -264,16 +223,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
                 throw NativeSourceAuthorizationFailure.unknown
             }
         }
-        var authorized = Set(await authorizedNativeSources())
-        authorized.insert(source)
-        userDefaults.set(try? JSONEncoder().encode(authorized.sorted { $0.id < $1.id }), forKey: "quotioCLI.authorizedNativeSources.v1")
-        savePendingNativeSources(Set(pendingNativeSources()).subtracting([source]))
-        await registerDetectedNativeAccounts()
-    }
-
-    public func authorizedNativeSources() async -> [NativeSourcePermission] {
-        guard let data = userDefaults.data(forKey: "quotioCLI.authorizedNativeSources.v1") else { return [] }
-        return (try? JSONDecoder().decode([NativeSourcePermission].self, from: data)) ?? []
+        await discoverNativeAccounts(providerID: QuotioCLIProviderMap.cli(source.provider))
     }
 
     public func accountStorageRequiresAuthorization() async -> Bool { storageRequiresAuthorization }
@@ -283,7 +233,6 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         do {
             try await mutate(client: client, path: "v1/account-vault/authorize", method: "POST", body: Data("{}".utf8), timeout: .seconds(300))
             storageRequiresAuthorization = false
-            discoveredNativeSourceKinds = []
             await registerDetectedNativeAccounts()
         } catch {
             throw NativeSourceAuthorizationFailure.quotioVault
@@ -637,35 +586,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         })
     }
 
-    private func discoverNativeSource(
-        client: QuotioHostHTTPClient,
-        provider: String,
-        kind: String,
-        inspect: Bool
-    ) async throws -> QuotioCLISourceDiscovery {
-        let body = try JSONEncoder.quotioCLI.encode(SourceDiscoveryBody(
-            provider: provider,
-            kind: kind,
-            inspect: inspect
-        ))
-        let response: QuotioCLISourceDiscovery = try await client.request(
-            "v1/account-sources/discover",
-            method: "POST",
-            body: body
-        )
-        guard response.schemaVersion == 1 else { throw QuotioHostClientError.incompatible }
-        return response
-    }
 
-    private func pendingNativeSources() -> [NativeSourcePermission] {
-        guard let data = userDefaults.data(forKey: Self.pendingNativeSourcesKey) else { return [] }
-        return (try? JSONDecoder().decode([NativeSourcePermission].self, from: data)) ?? []
-    }
-
-    private func savePendingNativeSources(_ sources: Set<NativeSourcePermission>) {
-        let ordered = sources.sorted { $0.id < $1.id }
-        userDefaults.set(try? JSONEncoder().encode(ordered), forKey: Self.pendingNativeSourcesKey)
-    }
 
     private func removeDisabledProxyQuotas() {
         let excludedIDs = disabledProxyAccountIDs()

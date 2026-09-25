@@ -55,6 +55,8 @@ pub(super) async fn fixture() -> (Arc<ApiState>, std::path::PathBuf, String) {
     (
         Arc::new(ApiState {
             discovery: Default::default(),
+            native_discovery: Default::default(),
+            native_scan_lock: Mutex::new(()),
             settings: RwLock::new(view),
             store,
             snapshot: RwLock::new(None),
@@ -2085,4 +2087,44 @@ fn group_refresh_replaces_all_selected_sources_and_preserves_other_accounts() {
         .collect();
     assert_eq!(ids, ["unrelated", "one"]);
     assert_eq!(report.failures[0].account_ref.as_ref().unwrap().id, "two");
+}
+
+#[tokio::test]
+async fn native_discovery_is_a_deduplicated_host_operation_with_a_shared_report() {
+    let (state, dir, _) = fixture().await;
+    let guard = state.native_scan_lock.lock().await;
+    let input = || ApiJson(serde_json::from_value(json!({"providers":["mock"]})).unwrap());
+    let (_, Json(first)) = native::start(State(state.clone()), input())
+        .await
+        .unwrap_or_else(|_| panic!());
+    let (_, Json(retry)) = native::start(State(state.clone()), input())
+        .await
+        .unwrap_or_else(|_| panic!());
+    assert_eq!(first.id, retry.id);
+    drop(guard);
+    assert_eq!(done(&state, &first.id).await.status, "completed");
+    let Json(report) = native::status(State(state.clone())).await;
+    assert_eq!(report.scans.len(), 1);
+    assert_eq!(report.scans[0].provider, Provider::Mock);
+    let value = serde_json::to_value(report).unwrap();
+    let document: Value = serde_json::from_str(include_str!("../../docs/openapi.json")).unwrap();
+    jsonschema::draft202012::new(
+        &json!({"$ref":"#/components/schemas/V2Discovery", "components":document["components"]}),
+    )
+    .unwrap()
+    .validate(&value)
+    .unwrap();
+    assert!(!value.to_string().contains("synthetic-vault-secret"));
+    assert!(
+        state
+            .vault
+            .as_ref()
+            .unwrap()
+            .begin()
+            .unwrap()
+            .document
+            .mutation_receipts
+            .is_empty()
+    );
+    std::fs::remove_dir_all(dir).unwrap();
 }

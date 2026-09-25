@@ -10,6 +10,67 @@
     }
   ],
   "paths": {
+    "/v2/discovery": {
+      "get": {
+        "summary": "Read host native discovery state",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Native discovery state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Discovery"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Scan and register native sources on the host",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "providers": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ProviderId"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Discovery operation; poll its operation ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v2/snapshot": {
       "get": {
         "summary": "Read resolved account, source health and usage state",
@@ -2278,6 +2339,105 @@
       }
     },
     "schemas": {
+      "V2Discovery": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version",
+          "scans",
+          "permissions",
+          "known_sources",
+          "failures",
+          "registered"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": 2
+          },
+          "scans": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "provider",
+                "at"
+              ],
+              "properties": {
+                "provider": {
+                  "$ref": "#/components/schemas/ProviderId"
+                },
+                "at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/V2NativePermission"
+            }
+          },
+          "known_sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/V2NativePermission"
+            }
+          },
+          "failures": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "provider",
+                "kind",
+                "code"
+              ],
+              "properties": {
+                "provider": {
+                  "$ref": "#/components/schemas/ProviderId"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "registered": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "V2NativePermission": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "provider",
+          "kind",
+          "location"
+        ],
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/ProviderId"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "location": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "V2AccountPatch": {
         "type": "object",
         "additionalProperties": false,

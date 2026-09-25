@@ -3,6 +3,7 @@ mod bootstrap;
 #[cfg(test)]
 mod discovery_tests;
 mod management;
+mod native;
 mod openapi;
 mod operations;
 mod security;
@@ -113,7 +114,9 @@ struct ApiState {
     wake: Notify,
     operations: Mutex<Operations>,
     jobs: std::sync::Mutex<Vec<tokio::task::AbortHandle>>,
-    discovery: std::sync::Mutex<crate::accounts::discovery::Registry>,
+    discovery: Arc<std::sync::Mutex<crate::accounts::discovery::Registry>>,
+    native_discovery: RwLock<crate::accounts::discovery::host::Report>,
+    native_scan_lock: Mutex<()>,
     status: Mutex<RefreshStatus>,
     context: ProviderContext,
     no_saved_accounts: bool,
@@ -150,6 +153,7 @@ fn router(state: Arc<ApiState>, policy: Arc<security::Policy>) -> Router {
         .route("/openapi.json", get(openapi::document))
         .route("/health", get(health))
         .route("/v2/snapshot", get(resolved_snapshot))
+        .route("/v2/discovery", get(native::status).post(native::start))
         .route("/v1/status", get(status))
         .route(
             "/v1/accounts",
@@ -880,6 +884,8 @@ pub async fn run(args: ServeArgs) -> Result<(), ServerError> {
     });
     let state = Arc::new(ApiState {
         discovery: Default::default(),
+        native_discovery: Default::default(),
+        native_scan_lock: Mutex::new(()),
         settings: RwLock::new(view),
         store,
         snapshot: RwLock::new(None),

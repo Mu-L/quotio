@@ -213,7 +213,7 @@ private actor AccountScreenModelService: AccountManaging {
 
     func registerDetectedNativeAccounts() {}
     func rescanNativeAccounts(for provider: QuotaProvider) {}
-    func nativeSourcesRequiringPermission() -> [NativeSourcePermission] { permissions }
+    func nativeDiscoverySnapshot() -> NativeDiscoverySnapshot { .init(permissions: permissions) }
     func authorizeNativeSource(_ source: NativeSourcePermission) {
         lastAuthorizedSource = source
         permissions.removeAll { $0 == source }

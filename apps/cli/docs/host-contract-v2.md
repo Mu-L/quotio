@@ -76,3 +76,9 @@ With `--no-saved-accounts`, snapshots do not access the protected vault. Default
 ## Host-owned OAuth callbacks
 
 When `callback_mode` is omitted, Rust selects it from the provider workflow. Browser-callback flows use the host's loopback listener; device and manual-code flows remain session-driven. The frontend opens the supplied HTTPS URL, displays a supplied user code or manual-code form, and polls the session. Only the host declares expiry or completion. Cancelling an attempt requests host cancellation, including when the frontend task itself was cancelled. Completed accounts are read by logical ID; the frontend never synthesizes a name or account when that read fails.
+
+## Native discovery
+
+`POST /v2/discovery` starts a host discovery operation for the requested provider IDs, or the configured providers when omitted. Rust selects supported native source kinds, inspects metadata without prompting, registers readable sources, and reports permission requests separately. `GET /v2/discovery` returns the complete current report, including per-provider scan times, known sources and failures. A scoped scan preserves other providers' discovery results.
+
+Repeated registration of an existing source is a no-op: it preserves disabled state, does not rewrite the borrowed login and does not append another mutation receipt. The frontend submits scan/authorization commands and renders one discovery snapshot; it no longer loops over source kinds or persists discovery decisions in UserDefaults. Automatic scheduling and durable scan suppression are separate host settings work.

@@ -16,6 +16,7 @@ public final class AccountsScreenModel {
     public private(set) var authorizingStorage = false
     public private(set) var nativeAuthorizationFailure: NativeSourceAuthorizationFailure?
     public private(set) var lastScannedAt: [QuotaProvider: Date] = [:]
+    public private(set) var failedDiscoveryProviders: Set<QuotaProvider> = []
     public private(set) var discoveringProvider: QuotaProvider?
     public private(set) var failure: AccountServiceFailure?
 
@@ -37,11 +38,7 @@ public final class AccountsScreenModel {
 
     public func registerDetectedNativeAccounts() async {
         await accountService.registerDetectedNativeAccounts()
-        for provider in QuotaProvider.allCases where provider.hasDiscoverableNativeLogin {
-            lastScannedAt[provider] = Date()
-        }
-        nativeSourcePermissions = await accountService.nativeSourcesRequiringPermission()
-        authorizedNativeSources = await accountService.authorizedNativeSources()
+        await reloadDiscovery()
         storageAccessRequired = await accountService.accountStorageRequiresAuthorization()
     }
 
@@ -49,9 +46,9 @@ public final class AccountsScreenModel {
         guard !isScanningAll else { return }
         isScanningAll = true
         defer { isScanningAll = false }
-        for provider in QuotaProvider.allCases where provider.hasDiscoverableNativeLogin {
-            await rescanNativeAccounts(for: provider)
-        }
+        await accountService.rescanAllNativeAccounts()
+        await reloadDiscovery()
+        await reloadAccounts()
     }
 
     public func rescanNativeAccounts(for provider: QuotaProvider) async {
@@ -59,9 +56,7 @@ public final class AccountsScreenModel {
         discoveringProvider = provider
         defer { discoveringProvider = nil }
         await accountService.rescanNativeAccounts(for: provider)
-        lastScannedAt[provider] = Date()
-        nativeSourcePermissions = await accountService.nativeSourcesRequiringPermission()
-        authorizedNativeSources = await accountService.authorizedNativeSources()
+        await reloadDiscovery()
         storageAccessRequired = await accountService.accountStorageRequiresAuthorization()
         await reloadAccounts()
     }
@@ -76,8 +71,7 @@ public final class AccountsScreenModel {
             nativeAuthorizationFailure = error as? NativeSourceAuthorizationFailure ?? .unknown
             throw error
         }
-        nativeSourcePermissions = await accountService.nativeSourcesRequiringPermission()
-        authorizedNativeSources = await accountService.authorizedNativeSources()
+        await reloadDiscovery()
         storageAccessRequired = await accountService.accountStorageRequiresAuthorization()
         await reloadAccounts()
     }
@@ -89,13 +83,20 @@ public final class AccountsScreenModel {
         do {
             try await accountService.authorizeAccountStorage()
             storageAccessRequired = await accountService.accountStorageRequiresAuthorization()
-            nativeSourcePermissions = await accountService.nativeSourcesRequiringPermission()
-            authorizedNativeSources = await accountService.authorizedNativeSources()
+            await reloadDiscovery()
             await reloadAccounts()
         } catch {
             nativeAuthorizationFailure = error as? NativeSourceAuthorizationFailure ?? .unknown
             throw error
         }
+    }
+
+    private func reloadDiscovery() async {
+        let state = await accountService.nativeDiscoverySnapshot()
+        nativeSourcePermissions = state.permissions
+        authorizedNativeSources = state.knownSources
+        lastScannedAt = state.scannedAt
+        failedDiscoveryProviders = state.failedProviders
     }
 
     public func reloadAuthFiles() async {

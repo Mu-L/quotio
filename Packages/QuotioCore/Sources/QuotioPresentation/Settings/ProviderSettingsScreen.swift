@@ -131,6 +131,9 @@ struct ProviderSettingsScreen: View {
                         }
                     }
                     if provider.hasDiscoverableNativeLogin {
+                        if accounts.failedDiscoveryProviders.contains(provider) {
+                            Text("settings.discoveryFailed".localized()).font(.caption).foregroundStyle(.orange)
+                        }
                         LabeledContent("settings.existingLogin".localized()) {
                             Button("settings.rescan".localized()) {
                                 Task {

@@ -1,4 +1,5 @@
 //! Explicit local metadata inspection. Never returns native keys, paths or credentials.
+pub mod host;
 use super::{AccountError, api::SourceInput, sources::*};
 use crate::cli::Provider;
 use serde::Deserialize;

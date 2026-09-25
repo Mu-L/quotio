@@ -1,3 +1,4 @@
+import Foundation
 import QuotioDomain
 
 public enum AccountServiceFailure: Error, Equatable, Sendable {
@@ -30,12 +31,26 @@ public struct NativeSourcePermission: Codable, Hashable, Identifiable, Sendable 
     public var id: String { provider.rawValue + ":" + kind + ":" + (location ?? "") }
 }
 
+public struct NativeDiscoverySnapshot: Sendable {
+    public let failedProviders: Set<QuotaProvider>
+    public let permissions: [NativeSourcePermission]
+    public let knownSources: [NativeSourcePermission]
+    public let scannedAt: [QuotaProvider: Date]
+
+    public init(permissions: [NativeSourcePermission] = [], knownSources: [NativeSourcePermission] = [], scannedAt: [QuotaProvider: Date] = [:], failedProviders: Set<QuotaProvider> = []) {
+        self.failedProviders = failedProviders
+        self.permissions = permissions
+        self.knownSources = knownSources
+        self.scannedAt = scannedAt
+    }
+}
+
 public protocol AccountManaging: Sendable {
     func registerDetectedNativeAccounts() async
     func rescanNativeAccounts(for provider: QuotaProvider) async
-    func nativeSourcesRequiringPermission() async -> [NativeSourcePermission]
+    func rescanAllNativeAccounts() async
+    func nativeDiscoverySnapshot() async -> NativeDiscoverySnapshot
     func authorizeNativeSource(_ source: NativeSourcePermission) async throws
-    func authorizedNativeSources() async -> [NativeSourcePermission]
     func accountStorageRequiresAuthorization() async -> Bool
     func authorizeAccountStorage() async throws
     func accounts() async -> [Account]
@@ -50,7 +65,8 @@ public protocol AccountManaging: Sendable {
 }
 
 public extension AccountManaging {
-    func authorizedNativeSources() async -> [NativeSourcePermission] { [] }
+    func rescanAllNativeAccounts() async { await registerDetectedNativeAccounts() }
+    func nativeDiscoverySnapshot() async -> NativeDiscoverySnapshot { .init() }
     func accountStorageRequiresAuthorization() async -> Bool { false }
     func authorizeAccountStorage() async throws { throw NativeSourceAuthorizationFailure.unknown }
 }

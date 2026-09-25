@@ -679,6 +679,26 @@ pub(crate) async fn register_source_once(
     })
     .await
 }
+
+/// Automatic discovery is idempotent by source identity and does not grow the retry ledger.
+pub(crate) async fn register_native(
+    vault: Vault,
+    prepared: PreparedAccount,
+) -> Result<bool, AccountError> {
+    tokio::task::spawn_blocking(move || {
+        let mut tx = vault.begin()?;
+        if tx.document.accounts.iter().any(|account| {
+            account.provider == prepared.provider && account.identity == prepared.identity
+        }) {
+            return Ok(false);
+        }
+        prepared.insert(&mut tx.document)?;
+        tx.commit()?;
+        Ok(true)
+    })
+    .await
+    .map_err(|_| AccountError::Storage)?
+}
 pub async fn remove_once(
     vault: Vault,
     id: String,
