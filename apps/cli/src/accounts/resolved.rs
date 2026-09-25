@@ -105,6 +105,10 @@ impl Registry {
         self.suppressed_sources.remove(provider.id()).is_some()
     }
 
+    pub(crate) fn suppressed_providers(&self) -> std::collections::HashSet<String> {
+        self.suppressed_sources.keys().cloned().collect()
+    }
+
     pub fn has_suppressions(&self) -> bool {
         !self.suppressed_sources.is_empty()
     }

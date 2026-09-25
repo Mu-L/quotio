@@ -1010,10 +1010,56 @@ impl ProviderAdapter for FailedProvider {
 async fn discover(
     vault: Vault,
     timeout: std::time::Duration,
-) -> Result<Vec<Account>, AccountError> {
-    tokio::time::timeout(timeout, list(vault))
-        .await
-        .unwrap_or(Err(AccountError::Busy))
+) -> Result<(Vec<Account>, std::collections::HashSet<String>), AccountError> {
+    tokio::time::timeout(timeout, async {
+        let tx = begin(vault).await?;
+        Ok((
+            tx.document.accounts.clone(),
+            tx.document
+                .resolved
+                .as_ref()
+                .map(|registry| registry.suppressed_providers())
+                .unwrap_or_default(),
+        ))
+    })
+    .await
+    .unwrap_or(Err(AccountError::Busy))
+}
+fn native_default_suppressed(
+    provider: Provider,
+    suppressed: &std::collections::HashSet<String>,
+) -> bool {
+    if !suppressed.contains(provider.id()) {
+        return false;
+    }
+    let environment_key = provider
+        .catalog()
+        .map(|definition| definition.key_env)
+        .or_else(|| provider.api_key_name());
+    if environment_key.is_some_and(|key| std::env::var_os(key).is_some()) {
+        return false;
+    }
+    match provider {
+        Provider::Amp => uses_native_amp_source(),
+        Provider::Antigravity => {
+            std::env::var_os("ANTIGRAVITY_ACCESS_TOKEN").is_none()
+                && std::env::var_os("ANTIGRAVITY_AUTH_FILE").is_none()
+        }
+        _ => true,
+    }
+}
+fn retain_unsuppressed_defaults(
+    adapters: &mut Vec<Arc<dyn ProviderAdapter>>,
+    suppressed: &std::collections::HashSet<String>,
+) {
+    adapters.retain(|adapter| {
+        let local = adapter
+            .account_ref()
+            .is_none_or(|reference| reference.id == "local");
+        !local
+            || Provider::from_str(&adapter.id().0, false)
+                .is_ok_and(|provider| !native_default_suppressed(provider, suppressed))
+    });
 }
 fn executable_available(name: &str) -> bool {
     std::env::var_os("PATH").is_some_and(|path| {
@@ -1334,20 +1380,22 @@ pub async fn detected_adapters(
         discover(vault.clone(), timeout),
         local_sources(&candidates, timeout)
     );
-    let accounts = accounts?;
+    let (accounts, suppressed) = accounts?;
     let providers =
         automatically_detected_providers(&candidates, &disabled, &accounts, &local_sources);
     let enabled_accounts = accounts
         .into_iter()
         .filter(Account::enabled)
         .collect::<Vec<_>>();
-    choose(
+    let mut selected = choose(
         providers,
         None,
         Ok(enabled_accounts),
         &vault,
         &local_sources,
-    )
+    )?;
+    retain_unsuppressed_defaults(&mut selected, &suppressed);
+    Ok(selected)
 }
 
 pub(crate) async fn adapters_in_vault(
@@ -1389,7 +1437,13 @@ async fn adapters_with_vault(
                 )
             })
         {
-            let accounts = discover(vault()?, timeout).await?;
+            let (accounts, suppressed) = discover(vault()?, timeout).await?;
+            if providers
+                .iter()
+                .any(|provider| native_default_suppressed(*provider, &suppressed))
+            {
+                return Err(AccountError::SourceDisabled);
+            }
             if accounts.iter().any(|a| {
                 providers.contains(&a.provider)
                     && native_reference_replaces_local(a.provider, &a.credential)
@@ -1419,7 +1473,16 @@ async fn adapters_with_vault(
             Vec::new()
         }
     });
-    let accounts = accounts.map(|mut accounts| {
+    let suppressed = accounts
+        .as_ref()
+        .map(|(_, suppressed)| suppressed.clone())
+        .unwrap_or_else(|_| {
+            providers
+                .iter()
+                .map(|provider| provider.id().to_owned())
+                .collect()
+        });
+    let accounts = accounts.map(|(mut accounts, _)| {
         if !include_owned {
             accounts.retain(|account| {
                 account.origin() != super::AccountOrigin::Owned
@@ -1429,7 +1492,9 @@ async fn adapters_with_vault(
         }
         accounts
     });
-    choose(providers, filter, accounts, &vault, &local_sources)
+    let mut selected = choose(providers, filter, accounts, &vault, &local_sources)?;
+    retain_unsuppressed_defaults(&mut selected, &suppressed);
+    Ok(selected)
 }
 
 #[cfg(test)]
@@ -1447,6 +1512,96 @@ mod tests {
         sync::atomic::{AtomicUsize, Ordering},
         time::Duration,
     };
+
+    #[tokio::test]
+    async fn removing_native_source_blocks_default_collection_until_explicit_restore() {
+        let dir = std::env::temp_dir().join(random_string().unwrap());
+        let vault = Vault::new(Arc::new(Memory::default()), dir.join("lock"));
+        let source = super::super::sources::CodexNativeReference {
+            path: dir.join("auth.json"),
+        };
+        let id = add(
+            vault.clone(),
+            Provider::Codex,
+            "Native".into(),
+            Credential::CodexNative {
+                source: source.clone(),
+            },
+            source.identity().unwrap(),
+        )
+        .await
+        .unwrap();
+        remove(vault.clone(), id).await.unwrap();
+        let providers = adapters_in_vault(
+            vec![Provider::Codex],
+            true,
+            Duration::from_secs(1),
+            None,
+            vault.clone(),
+        )
+        .await
+        .unwrap();
+        assert!(providers.is_empty());
+        assert!(matches!(
+            adapters_in_vault(
+                vec![Provider::Codex],
+                true,
+                Duration::from_secs(1),
+                Some("local"),
+                vault.clone()
+            )
+            .await,
+            Err(AccountError::SourceDisabled)
+        ));
+        let other = super::super::sources::CodexNativeReference {
+            path: dir.join("other/auth.json"),
+        };
+        let other_id = add(
+            vault.clone(),
+            Provider::Codex,
+            "Other native".into(),
+            Credential::CodexNative {
+                source: other.clone(),
+            },
+            other.identity().unwrap(),
+        )
+        .await
+        .unwrap();
+        let providers = adapters_in_vault(
+            vec![Provider::Codex],
+            true,
+            Duration::from_secs(1),
+            None,
+            vault.clone(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(providers.len(), 1);
+        assert_eq!(providers[0].account_ref().unwrap().id, other_id);
+        {
+            let mut tx = vault.begin().unwrap();
+            assert!(
+                tx.document
+                    .resolved
+                    .as_mut()
+                    .unwrap()
+                    .restore_provider(Provider::Codex)
+            );
+            tx.commit().unwrap();
+        }
+        assert!(
+            adapters_in_vault(
+                vec![Provider::Codex],
+                true,
+                Duration::from_secs(1),
+                Some("local"),
+                vault
+            )
+            .await
+            .is_ok()
+        );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[tokio::test]
     async fn cli_mutations_accept_logical_ids_after_the_original_source_is_removed() {
