@@ -38,6 +38,8 @@ pub struct Config {
     pub enabled_providers: Vec<String>,
     #[serde(default)]
     pub disabled_providers: Vec<String>,
+    #[serde(default = "default_automatic_discovery")]
+    pub automatically_discover_logins: bool,
     /// Maximum cache age in seconds; zero refreshes every time.
     #[serde(default = "default_cache_ttl")]
     pub cache_ttl_seconds: u64,
@@ -46,6 +48,9 @@ pub struct Config {
     pub refresh_interval: u64,
     #[serde(default = "default_provider_timeout")]
     pub provider_timeout: u64,
+}
+fn default_automatic_discovery() -> bool {
+    true
 }
 fn default_refresh_interval() -> u64 {
     60
@@ -62,6 +67,7 @@ impl Default for Config {
             notifications: None,
             enabled_providers: vec![],
             disabled_providers: vec![],
+            automatically_discover_logins: default_automatic_discovery(),
             cache_ttl_seconds: default_cache_ttl(),
             refresh_interval: default_refresh_interval(),
             provider_timeout: default_provider_timeout(),
@@ -98,6 +104,14 @@ impl Config {
     }
     pub fn providers(&self) -> Result<Vec<Provider>, ConfigError> {
         parse_providers(&self.enabled_providers)
+    }
+    pub fn tracked_providers(&self) -> Result<Vec<Provider>, ConfigError> {
+        let disabled = self.disabled_providers()?;
+        Ok(self
+            .providers()?
+            .into_iter()
+            .filter(|provider| !disabled.contains(provider))
+            .collect())
     }
     pub fn disabled_providers(&self) -> Result<Vec<Provider>, ConfigError> {
         parse_providers(&self.disabled_providers)

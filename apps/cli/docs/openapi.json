@@ -3684,6 +3684,9 @@
               "$ref": "#/components/schemas/ProviderId"
             }
           },
+          "automatically_discover_logins": {
+            "type": "boolean"
+          },
           "cache_ttl_seconds": {
             "type": "integer",
             "minimum": 0
@@ -3715,6 +3718,7 @@
           "revision",
           "enabled_providers",
           "disabled_providers",
+          "automatically_discover_logins",
           "cache_ttl_seconds",
           "refresh_interval",
           "provider_timeout",
@@ -3744,6 +3748,9 @@
             "items": {
               "$ref": "#/components/schemas/ProviderId"
             }
+          },
+          "automatically_discover_logins": {
+            "type": ["boolean", "null"]
           },
           "cache_ttl_seconds": {
             "type": [

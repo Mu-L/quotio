@@ -2090,6 +2090,44 @@ fn group_refresh_replaces_all_selected_sources_and_preserves_other_accounts() {
 }
 
 #[tokio::test]
+async fn scheduled_discovery_and_refresh_obey_host_tracking() {
+    let (state, dir, _) = fixture().await;
+    {
+        let mut settings = state.settings.write().await;
+        settings.values.enabled_providers = vec!["mock".into(), "amp".into()];
+        settings.values.disabled_providers = vec!["amp".into()];
+        settings.values.automatically_discover_logins = false;
+    }
+    native::scheduled(&state).await.unwrap();
+    assert!(state.native_discovery.read().await.scans.is_empty());
+    state
+        .settings
+        .write()
+        .await
+        .values
+        .automatically_discover_logins = true;
+    native::scheduled(&state).await.unwrap();
+    let report = state.native_discovery.read().await;
+    assert_eq!(report.scans.len(), 1);
+    assert_eq!(report.scans[0].provider, Provider::Mock);
+    drop(report);
+    refresh(&state, None).await.unwrap();
+    assert!(
+        state
+            .snapshot
+            .read()
+            .await
+            .as_ref()
+            .unwrap()
+            .1
+            .providers
+            .iter()
+            .all(|usage| usage.provider.0 == "mock")
+    );
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[tokio::test]
 async fn native_discovery_is_a_deduplicated_host_operation_with_a_shared_report() {
     let (state, dir, _) = fixture().await;
     let guard = state.native_scan_lock.lock().await;

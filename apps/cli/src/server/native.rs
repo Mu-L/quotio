@@ -43,7 +43,7 @@ pub(super) async fn start(
             .read()
             .await
             .values
-            .providers()
+            .tracked_providers()
             .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "invalid_settings"))?;
     }
     request.providers.sort_by_key(|provider| provider.id());
@@ -72,45 +72,7 @@ pub(super) async fn start(
     let id = operation.id.clone();
     let pending_key = key.clone();
     if let Err(error) = state.spawn(async move {
-        let _scan = work.native_scan_lock.lock().await;
-        let result = host::scan(
-            vault,
-            work.discovery.clone(),
-            &request.providers,
-            work.context.clock.now(),
-            request.restore_removed,
-        )
-        .await;
-        let result = match result {
-            Ok(report) => {
-                let changed = report.registered > 0;
-                let mut current = work.native_discovery.write().await;
-                current
-                    .permissions
-                    .retain(|source| !request.providers.contains(&source.provider));
-                current
-                    .known_sources
-                    .retain(|source| !request.providers.contains(&source.provider));
-                current
-                    .failures
-                    .retain(|failure| !request.providers.contains(&failure.provider));
-                current
-                    .scans
-                    .retain(|scan| !request.providers.contains(&scan.provider));
-                current.permissions.extend(report.permissions);
-                current.known_sources.extend(report.known_sources);
-                current.failures.extend(report.failures);
-                current.scans.extend(report.scans);
-                current.registered = report.registered;
-                let value = serde_json::to_value(&*current).map_err(|_| "invalid_snapshot");
-                drop(current);
-                if changed {
-                    work.invalidate().await;
-                }
-                value
-            }
-            Err(error) => Err(management::account_code(&error)),
-        };
+        let result = scan(&work, vault, &request.providers, request.restore_removed).await;
         work.operations.lock().await.finish(&id, result);
         work.pending.lock().await.remove(&key);
     }) {
@@ -123,4 +85,62 @@ pub(super) async fn start(
         return Err(error);
     }
     Ok((StatusCode::ACCEPTED, Json(operation)))
+}
+
+async fn scan(
+    state: &ApiState,
+    vault: crate::accounts::vault::Vault,
+    providers: &[Provider],
+    restore_removed: bool,
+) -> Result<Value, &'static str> {
+    let _scan = state.native_scan_lock.lock().await;
+    let report = host::scan(
+        vault,
+        state.discovery.clone(),
+        providers,
+        state.context.clock.now(),
+        restore_removed,
+    )
+    .await
+    .map_err(|error| management::account_code(&error))?;
+    let changed = report.registered > 0;
+    let mut current = state.native_discovery.write().await;
+    current
+        .permissions
+        .retain(|source| !providers.contains(&source.provider));
+    current
+        .known_sources
+        .retain(|source| !providers.contains(&source.provider));
+    current
+        .failures
+        .retain(|failure| !providers.contains(&failure.provider));
+    current
+        .scans
+        .retain(|scan| !providers.contains(&scan.provider));
+    current.permissions.extend(report.permissions);
+    current.known_sources.extend(report.known_sources);
+    current.failures.extend(report.failures);
+    current.scans.extend(report.scans);
+    current.registered = report.registered;
+    let value = serde_json::to_value(&*current).map_err(|_| "invalid_snapshot");
+    drop(current);
+    if changed {
+        state.invalidate().await;
+    }
+    value
+}
+
+pub(super) async fn scheduled(state: &ApiState) -> Result<(), &'static str> {
+    let config = state.settings.read().await.values.clone();
+    if !config.automatically_discover_logins {
+        return Ok(());
+    }
+    let Some(vault) = state.vault.clone() else {
+        return Ok(());
+    };
+    let providers = config.tracked_providers().map_err(|_| "invalid_settings")?;
+    if !providers.is_empty() {
+        scan(state, vault, &providers, false).await?;
+    }
+    Ok(())
 }

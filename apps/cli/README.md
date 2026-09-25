@@ -162,7 +162,8 @@ verified stale snapshot. Cancellation interrupts identity checks and provider wo
 
 ```toml
 # config.toml
-disabled_providers = ["amp"] # optional; excluded from automatic CLI discovery
+disabled_providers = ["amp"] # excluded from automatic CLI discovery and host tracking
+automatically_discover_logins = true # host scans tracked providers before scheduled refreshes
 enabled_providers = ["mock"] # server selection; mock always requires explicit CLI selection
 cache_ttl_seconds = 300 # optional; default is 5 minutes
 ```

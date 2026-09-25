@@ -26,6 +26,7 @@ pub struct SettingsPatch {
     pub revision: String,
     pub enabled_providers: Option<Vec<Provider>>,
     pub disabled_providers: Option<Vec<Provider>>,
+    pub automatically_discover_logins: Option<bool>,
     pub cache_ttl_seconds: Option<u64>,
     pub refresh_interval: Option<u64>,
     pub provider_timeout: Option<u64>,
@@ -157,6 +158,9 @@ impl SettingsStore {
         if let Some(providers) = patch.disabled_providers {
             config.disabled_providers = providers.iter().map(|p| p.id().into()).collect();
         }
+        if let Some(value) = patch.automatically_discover_logins {
+            config.automatically_discover_logins = value;
+        }
         if let Some(value) = patch.cache_ttl_seconds {
             config.cache_ttl_seconds = value;
         }
@@ -218,12 +222,14 @@ mod tests {
             revision,
             enabled_providers: Some(vec![Provider::Mock]),
             disabled_providers: Some(vec![Provider::Amp]),
+            automatically_discover_logins: Some(false),
             cache_ttl_seconds: Some(25),
             refresh_interval: Some(30),
             provider_timeout: None,
         };
         let view = store.patch(patch(initial.revision.clone())).unwrap();
         assert_eq!(view.values.cache_ttl_seconds, 25);
+        assert!(!store.load().unwrap().values.automatically_discover_logins);
         assert_eq!(view.values.disabled_providers, vec!["amp"]);
         assert_eq!(store.load().unwrap().revision, view.revision);
         assert!(matches!(

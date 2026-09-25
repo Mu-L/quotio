@@ -236,7 +236,7 @@ async fn providers(
         .read()
         .await
         .values
-        .providers()
+        .tracked_providers()
         .unwrap_or_default();
     Json(crate::providers::capabilities::ProviderList::new(&enabled))
 }
@@ -251,7 +251,7 @@ async fn provider(State(state): State<Arc<ApiState>>, Path(id): Path<String>) ->
             .read()
             .await
             .values
-            .providers()
+            .tracked_providers()
             .unwrap_or_default(),
     ))
     .into_response()
@@ -486,7 +486,7 @@ async fn manual_refresh(
         .read()
         .await
         .values
-        .providers()
+        .tracked_providers()
         .unwrap_or_default();
     if request.account_id.is_some() && request.providers.len() != 1 {
         return Err(ApiError(StatusCode::BAD_REQUEST, "invalid_refresh_scope"));
@@ -556,7 +556,7 @@ async fn refresh(state: &ApiState, request: Option<RefreshRequest>) -> Result<Va
     let _refresh = state.refresh_lock.lock().await;
     let generation = state.generation.load(Ordering::SeqCst);
     let config = state.settings.read().await.values.clone();
-    let enabled = config.providers().map_err(|_| "invalid_settings")?;
+    let enabled = config.tracked_providers().map_err(|_| "invalid_settings")?;
     let (selected, account, force, include_owned, disabled_proxy_auth_files) = match request {
         Some(r) => (
             r.providers,
@@ -921,6 +921,9 @@ pub async fn run(args: ServeArgs) -> Result<(), ServerError> {
             if worker_state.settings.read().await.values.refresh_interval == 0 {
                 wait_for_next_refresh(&worker_state).await;
                 continue;
+            }
+            if let Err(code) = native::scheduled(&worker_state).await {
+                tracing::warn!(code, "scheduled discovery failed");
             }
             if let Err(code) = refresh(&worker_state, None).await {
                 tracing::warn!(code, "scheduled refresh failed");
