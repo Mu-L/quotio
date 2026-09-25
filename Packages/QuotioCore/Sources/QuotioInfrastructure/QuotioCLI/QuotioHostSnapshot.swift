@@ -94,3 +94,16 @@ struct QuotioHostAccountList: Decodable, Sendable {
     let revision: UInt64
     let accounts: [QuotioHostSnapshot.Account]
 }
+
+/// Mutation scope comes from the resource the user selected, not a provider-specific rule.
+enum QuotioHostAccountTarget: Sendable {
+    case account(String)
+    case source(String)
+
+    var path: String {
+        switch self {
+        case .account(let id): "v2/accounts/\(id)"
+        case .source(let id): "v2/sources/\(id)"
+        }
+    }
+}

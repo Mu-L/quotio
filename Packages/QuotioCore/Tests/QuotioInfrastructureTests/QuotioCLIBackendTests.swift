@@ -5,6 +5,24 @@ import XCTest
 @testable import QuotioInfrastructure
 
 final class QuotioCLIBackendTests: XCTestCase {
+    func testResolvedMutationsPreserveAccountAndSourceScopesAndExplicitNameReset() async throws {
+        let backend = QuotioCLIBackend(session: stubSession())
+        await backend.connect(.init(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
+        for _ in 0..<4 { QuotioCLIURLProtocol.enqueue(#"{"id":"operation","status":"completed"}"#) }
+        try await backend.renameResolvedAccount(id: "logical", userLabel: nil)
+        let body = try XCTUnwrap(QuotioCLIURLProtocol.body(forPath: "/v2/accounts/logical"))
+        let reset = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertTrue(reset["user_label"] is NSNull)
+        XCTAssertEqual(reset.count, 1)
+        try await backend.setResolvedEnabled(false, target: .account("logical"))
+        try await backend.setResolvedEnabled(false, target: .source("source"))
+        try await backend.removeResolved(.source("source"))
+        let requests = QuotioCLIURLProtocol.requests()
+        XCTAssertEqual(requests.map { $0.url?.path }, ["/v2/accounts/logical", "/v2/accounts/logical", "/v2/sources/source", "/v2/sources/source"])
+        XCTAssertEqual(requests.map(\.httpMethod), ["PATCH", "PATCH", "PATCH", "DELETE"])
+        XCTAssertTrue(requests.allSatisfy { $0.value(forHTTPHeaderField: "Idempotency-Key") != nil })
+    }
+
     func testResolvedAccountReadUsesRustNamesGroupsAndActionsUnchanged() async throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .appendingPathComponent("../../../../").standardizedFileURL
@@ -17,7 +35,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         XCTAssertEqual(result.accounts[0].id, "source-a")
         XCTAssertEqual(result.accounts[0].displayName, "Work")
         XCTAssertEqual(result.accounts[0].sources.count, 2)
-        XCTAssertTrue(result.accounts[0].actions.isEmpty)
+        XCTAssertEqual(result.accounts[0].actions.map(\.kind), ["rename", "set_enabled", "select", "remove"])
         XCTAssertEqual(result.accounts[0].state, "not_checked")
         XCTAssertEqual(QuotioCLIURLProtocol.requests().last?.url?.path, "/v2/accounts")
         var incompatible = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])

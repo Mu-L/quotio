@@ -86,6 +86,106 @@ pub(super) async fn resolved_accounts(
     ))
 }
 
+pub(super) async fn resolved_create(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    ApiJson(body): ApiJson<Value>,
+) -> Result<(StatusCode, Json<Operation>), ApiError> {
+    let input = serde_json::from_value(body.clone())
+        .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "invalid_request"))?;
+    mutate(
+        state,
+        headers,
+        "resolved_account_create",
+        "",
+        body,
+        Mutation::ResolvedCreate(input),
+    )
+    .await
+}
+
+pub(super) async fn resolved_account(
+    State(state): State<Arc<ApiState>>,
+    Path(id): Path<String>,
+) -> Result<Json<crate::contract::Account>, ApiError> {
+    Ok(Json(
+        tokio::time::timeout(
+            Duration::from_secs(10),
+            api::resolved_get(vault(&state)?, id),
+        )
+        .await
+        .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "account_busy"))?
+        .map_err(account_error)?,
+    ))
+}
+
+pub(super) async fn resolved_patch(
+    State(state): State<Arc<ApiState>>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    ApiJson(body): ApiJson<Value>,
+) -> Result<(StatusCode, Json<Operation>), ApiError> {
+    let patch = serde_json::from_value(body.clone())
+        .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "invalid_request"))?;
+    mutate(
+        state,
+        headers,
+        "resolved_account_update",
+        &id.clone(),
+        body,
+        Mutation::ResolvedUpdate(id, patch),
+    )
+    .await
+}
+pub(super) async fn resolved_remove(
+    State(state): State<Arc<ApiState>>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Result<(StatusCode, Json<Operation>), ApiError> {
+    mutate(
+        state,
+        headers,
+        "resolved_account_remove",
+        &id.clone(),
+        json!({}),
+        Mutation::ResolvedRemove(id),
+    )
+    .await
+}
+pub(super) async fn source_patch(
+    State(state): State<Arc<ApiState>>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    ApiJson(body): ApiJson<Value>,
+) -> Result<(StatusCode, Json<Operation>), ApiError> {
+    let patch: api::SourcePatch = serde_json::from_value(body.clone())
+        .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "invalid_request"))?;
+    mutate(
+        state,
+        headers,
+        "source_update",
+        &id.clone(),
+        body,
+        Mutation::SourceUpdate(id, Some(patch.enabled)),
+    )
+    .await
+}
+pub(super) async fn source_remove(
+    State(state): State<Arc<ApiState>>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Result<(StatusCode, Json<Operation>), ApiError> {
+    mutate(
+        state,
+        headers,
+        "source_remove",
+        &id.clone(),
+        json!({}),
+        Mutation::SourceUpdate(id, None),
+    )
+    .await
+}
+
 pub(super) async fn get_account(
     State(state): State<Arc<ApiState>>,
     Path(id): Path<String>,
@@ -116,6 +216,10 @@ pub(super) async fn usage(State(state): State<Arc<ApiState>>, Path(id): Path<Str
     super::usage_response(&state, Some(account.provider.id()), Some(&id)).await
 }
 enum Mutation {
+    ResolvedCreate(api::AccountCreateInput),
+    ResolvedUpdate(String, api::ResolvedAccountPatch),
+    ResolvedRemove(String),
+    SourceUpdate(String, Option<bool>),
     Create(api::AccountCreateInput),
     Migrate(api::migration::Input),
     Reference(api::SourceInput),
@@ -309,6 +413,7 @@ async fn mutate(
         .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "invalid_idempotency_key"))?;
     // Durable receipts survive both discovery expiry and server restart. Validate
     // the body fingerprint before attempting to read a live native source.
+    let resolved_create = matches!(&mutation, Mutation::ResolvedCreate(_));
     let authorize = matches!(&mutation, Mutation::Authorize(_) | Mutation::AuthorizeVault);
     let receipt = if authorize {
         None
@@ -338,6 +443,36 @@ async fn mutate(
                     return Ok(json!({"account_id":id}));
                 }
                 match mutation {
+                    Mutation::ResolvedUpdate(id, patch) => {
+                        let _guard = crate::accounts::service::mutation_guard(&work.commit_guard)
+                            .await
+                            .map_err(|e| account_code(&e))?;
+                        let id = api::resolved_update_once(vault, id, patch, intent)
+                            .await
+                            .map_err(|e| account_code(&e))?;
+                        work.invalidate().await;
+                        Ok(json!({"account_id":id}))
+                    }
+                    Mutation::ResolvedRemove(id) => {
+                        let _guard = crate::accounts::service::mutation_guard(&work.commit_guard)
+                            .await
+                            .map_err(|e| account_code(&e))?;
+                        let id = api::resolved_remove_once(vault, id, intent)
+                            .await
+                            .map_err(|e| account_code(&e))?;
+                        work.invalidate().await;
+                        Ok(json!({"account_id":id}))
+                    }
+                    Mutation::SourceUpdate(id, enabled) => {
+                        let _guard = crate::accounts::service::mutation_guard(&work.commit_guard)
+                            .await
+                            .map_err(|e| account_code(&e))?;
+                        let id = api::source_update_once(vault, id, enabled, intent)
+                            .await
+                            .map_err(|e| account_code(&e))?;
+                        work.invalidate().await;
+                        Ok(json!({"account_id":id}))
+                    }
                     Mutation::AuthorizeVault => Ok(json!({})),
                     Mutation::Migrate(input) => {
                         let (prepared, enabled) = api::migration::prepare(input, &work.context)
@@ -351,7 +486,7 @@ async fn mutate(
                         work.invalidate().await;
                         Ok(json!({"account_id":id}))
                     }
-                    Mutation::Create(input) => {
+                    Mutation::Create(input) | Mutation::ResolvedCreate(input) => {
                         let prepared = match input {
                             api::AccountCreateInput::ApiKey(input) => {
                                 api::prepare(&work.context, input).await
@@ -373,9 +508,12 @@ async fn mutate(
                         let _guard = crate::accounts::service::mutation_guard(&work.commit_guard)
                             .await
                             .map_err(|e| account_code(&e))?;
-                        let account_id = api::save_once(vault, prepared, intent)
-                            .await
-                            .map_err(|e| account_code(&e))?;
+                        let account_id = if resolved_create {
+                            api::resolved_save_once(vault, prepared, intent).await
+                        } else {
+                            api::save_once(vault, prepared, intent).await
+                        }
+                        .map_err(|e| account_code(&e))?;
                         work.invalidate().await;
                         Ok(json!({"account_id":account_id}))
                     }

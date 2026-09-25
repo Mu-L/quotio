@@ -87,6 +87,14 @@ pub struct AccountPatch {
     #[serde(default, deserialize_with = "present_nullable")]
     pub organization: Option<Option<String>>,
 }
+fn present_value<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    T::deserialize(deserializer).map(Some)
+}
+
 // A missing PATCH field preserves the value; explicit null resets it.
 fn present_nullable<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
 where
@@ -608,6 +616,18 @@ pub async fn save_once(
 ) -> Result<String, AccountError> {
     service::commit_once(vault, intent, move |document| prepared.insert(document)).await
 }
+pub async fn resolved_save_once(
+    vault: Vault,
+    prepared: PreparedAccount,
+    intent: service::MutationIntent,
+) -> Result<String, AccountError> {
+    service::commit_once(vault, intent, move |document| {
+        document.enable_resolved_accounts()?;
+        prepared.insert(document)
+    })
+    .await
+}
+
 pub async fn update_once(
     vault: Vault,
     id: String,
@@ -658,7 +678,10 @@ pub async fn create(
 ) -> Result<AccountDto, AccountError> {
     save(vault, prepare(context, input).await?).await
 }
-pub async fn resolved_list(vault: Vault) -> Result<crate::contract::AccountList, AccountError> {
+async fn resolved_view(
+    vault: Vault,
+    id: Option<String>,
+) -> Result<crate::contract::AccountList, AccountError> {
     tokio::task::spawn_blocking(move || {
         let mut tx = vault.begin()?;
         if tx.document.resolved.is_none() {
@@ -666,14 +689,40 @@ pub async fn resolved_list(vault: Vault) -> Result<crate::contract::AccountList,
             tx.commit()?;
             tx = vault.begin()?;
         }
-        tx.document
-            .resolved
-            .as_ref()
-            .expect("initialized")
-            .account_list(&tx.document.accounts)
+        let registry = tx.document.resolved.as_ref().expect("initialized");
+        let canonical = id
+            .as_deref()
+            .map(|id| {
+                registry
+                    .resolve_id(id)
+                    .map(str::to_owned)
+                    .ok_or(AccountError::NotFound)
+            })
+            .transpose()?;
+        let mut result = registry.account_list(&tx.document.accounts)?;
+        if let Some(id) = canonical {
+            result.accounts.retain(|account| account.id == id);
+        }
+        Ok(result)
     })
     .await
     .map_err(|_| AccountError::Storage)?
+}
+
+pub async fn resolved_list(vault: Vault) -> Result<crate::contract::AccountList, AccountError> {
+    resolved_view(vault, None).await
+}
+
+pub async fn resolved_get(
+    vault: Vault,
+    id: String,
+) -> Result<crate::contract::Account, AccountError> {
+    resolved_view(vault, Some(id))
+        .await?
+        .accounts
+        .into_iter()
+        .next()
+        .ok_or(AccountError::NotFound)
 }
 
 pub async fn list(vault: Vault) -> Result<Vec<AccountDto>, AccountError> {
@@ -704,6 +753,110 @@ pub async fn update(
 }
 pub async fn remove(vault: Vault, id: String) -> Result<(), AccountError> {
     service::remove(vault, id).await
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResolvedAccountPatch {
+    #[serde(default, deserialize_with = "present_nullable")]
+    pub user_label: Option<Option<String>>,
+    #[serde(default, deserialize_with = "present_value")]
+    pub enabled: Option<bool>,
+    #[serde(default, deserialize_with = "present_value")]
+    pub active: Option<bool>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SourcePatch {
+    pub enabled: bool,
+}
+
+pub async fn resolved_update_once(
+    vault: Vault,
+    id: String,
+    patch: ResolvedAccountPatch,
+    intent: service::MutationIntent,
+) -> Result<String, AccountError> {
+    if patch.user_label.is_none() && patch.enabled.is_none() && patch.active.is_none() {
+        return Err(AccountError::Input);
+    }
+    if patch.active == Some(false) {
+        return Err(AccountError::Unsupported);
+    }
+    service::commit_once(vault, intent, move |document| {
+        document.enable_resolved_accounts()?;
+        let registry = document.resolved.as_mut().expect("initialized");
+        let canonical = registry
+            .resolve_id(&id)
+            .ok_or(AccountError::NotFound)?
+            .to_owned();
+        let sources = registry.source_ids(&canonical)?;
+        if let Some(label) = patch.user_label {
+            registry.set_label(&canonical, label.as_deref())?;
+        }
+        if let Some(enabled) = patch.enabled {
+            for source in sources {
+                document.patch(&source, None, None, Some(enabled))?;
+            }
+        }
+        if patch.active == Some(true) {
+            let source = document
+                .resolved
+                .as_ref()
+                .expect("initialized")
+                .preferred_source(&document.accounts, &canonical)?;
+            document.select(&source)?;
+        }
+        Ok(canonical)
+    })
+    .await
+}
+
+pub async fn resolved_remove_once(
+    vault: Vault,
+    id: String,
+    intent: service::MutationIntent,
+) -> Result<String, AccountError> {
+    service::commit_once(vault, intent, move |document| {
+        document.enable_resolved_accounts()?;
+        let registry = document.resolved.as_ref().expect("initialized");
+        let canonical = registry
+            .resolve_id(&id)
+            .ok_or(AccountError::NotFound)?
+            .to_owned();
+        let sources = registry.source_ids(&canonical)?;
+        for source in sources {
+            document.remove(&source)?;
+        }
+        Ok(canonical)
+    })
+    .await
+}
+
+pub async fn source_update_once(
+    vault: Vault,
+    id: String,
+    enabled: Option<bool>,
+    intent: service::MutationIntent,
+) -> Result<String, AccountError> {
+    service::commit_once(vault, intent, move |document| {
+        document.enable_resolved_accounts()?;
+        let canonical = document
+            .resolved
+            .as_ref()
+            .expect("initialized")
+            .account_id_for_source(&id)
+            .ok_or(AccountError::NotFound)?
+            .to_owned();
+        if let Some(enabled) = enabled {
+            document.patch(&id, None, None, Some(enabled))?;
+        } else {
+            document.remove(&id)?;
+        }
+        Ok(canonical)
+    })
+    .await
 }
 
 #[cfg(test)]

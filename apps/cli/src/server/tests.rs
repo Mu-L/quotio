@@ -1610,6 +1610,233 @@ async fn resolved_account_read_contract_is_automatic_shared_and_durable() {
         .unwrap();
     assert_eq!(after.revision, expected.revision);
     assert_eq!(after.host.id, expected.host.id);
+    let create_body = json!({"kind":"kiro_owned","label":"Created through v2","access_token":"synthetic-kiro-access","refresh_token":"synthetic-kiro-refresh","expires_at":0,"authMethod":"Social","region":"us-east-1"});
+    let created = client
+        .post(format!("{base}/v2/accounts"))
+        .bearer_auth(token)
+        .header("Idempotency-Key", "create-v2")
+        .json(&create_body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(created.status(), 202);
+    let created: Value = created.json().await.unwrap();
+    let created = done(&state, created["id"].as_str().unwrap()).await;
+    assert_eq!(created.status, "completed");
+    let id = created.result.unwrap()["account_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let response: Value = client
+        .get(format!("{base}/v2/accounts/{id}"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(response["display_name"], "Created through v2");
+    assert!(!response.to_string().contains("synthetic-kiro"));
+    let rename = client
+        .patch(format!("{base}/v2/accounts/{id}"))
+        .bearer_auth(token)
+        .header("Idempotency-Key", "rename-v2")
+        .json(&json!({"user_label":"Renamed"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(rename.status(), 202);
+    let op: Value = rename.json().await.unwrap();
+    assert_eq!(
+        done(&state, op["id"].as_str().unwrap()).await.status,
+        "completed"
+    );
+    let response: Value = client
+        .get(format!("{base}/v2/accounts/{id}"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(response["display_name"], "Renamed");
+    let deleted = client
+        .delete(format!("{base}/v2/accounts/{id}"))
+        .bearer_auth(token)
+        .header("Idempotency-Key", "delete-v2")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(deleted.status(), 202);
+    let op: Value = deleted.json().await.unwrap();
+    assert_eq!(
+        done(&state, op["id"].as_str().unwrap()).await.status,
+        "completed"
+    );
+    assert_eq!(
+        client
+            .get(format!("{base}/v2/accounts/{id}"))
+            .bearer_auth(token)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
     server.abort();
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[tokio::test]
+async fn logical_account_and_source_crud_have_distinct_atomic_scopes() {
+    let (state, dir, first) = fixture().await;
+    let vault = state.vault.clone().unwrap();
+    let (second, unrelated) = {
+        let mut tx = vault.begin().unwrap();
+        let credential = || accounts::Credential::ApiKey {
+            token: "fixture-extra-key".into(),
+            region: None,
+            organization: None,
+        };
+        let second = tx
+            .document
+            .add(
+                Provider::Amp,
+                "Second source",
+                "second".into(),
+                credential(),
+            )
+            .unwrap();
+        let unrelated = tx
+            .document
+            .add(Provider::Amp, "Unrelated", "unrelated".into(), credential())
+            .unwrap();
+        tx.document.enable_resolved_accounts().unwrap();
+        let registry = tx.document.resolved.as_mut().unwrap();
+        let proof = crate::domain::VerifiedIdentity {
+            subject: "one-user".into(),
+            tenant: Some("team".into()),
+        };
+        registry.observe(&first, &proof).unwrap();
+        registry.observe(&second, &proof).unwrap();
+        tx.commit().unwrap();
+        (second, unrelated)
+    };
+    let (_, Json(op)) = management::source_patch(
+        State(state.clone()),
+        Path(second.clone()),
+        key("disable-source"),
+        ApiJson(json!({"enabled":false})),
+    )
+    .await
+    .unwrap_or_else(|_| panic!());
+    assert_eq!(done(&state, &op.id).await.status, "completed");
+    let view = accounts::api::resolved_get(vault.clone(), first.clone())
+        .await
+        .unwrap();
+    assert!(view.enabled);
+    assert_eq!(
+        view.sources.iter().filter(|source| source.enabled).count(),
+        1
+    );
+    let patch = json!({"user_label":"Team account", "enabled":false});
+    let (_, Json(op)) = management::resolved_patch(
+        State(state.clone()),
+        Path(second.clone()),
+        key("edit-group"),
+        ApiJson(patch.clone()),
+    )
+    .await
+    .unwrap_or_else(|_| panic!());
+    assert_eq!(done(&state, &op.id).await.status, "completed");
+    let view = accounts::api::resolved_get(vault.clone(), first.clone())
+        .await
+        .unwrap();
+    assert_eq!(view.display_name, "Team account");
+    assert!(!view.enabled);
+    assert!(view.sources.iter().all(|source| !source.enabled));
+    assert!(
+        accounts::api::resolved_get(vault.clone(), unrelated.clone())
+            .await
+            .unwrap()
+            .enabled
+    );
+    assert!(
+        view.actions
+            .iter()
+            .any(|action| action.kind == "select" && !action.available)
+    );
+    let (_, Json(retry)) = management::resolved_patch(
+        State(state.clone()),
+        Path(second.clone()),
+        key("edit-group"),
+        ApiJson(patch),
+    )
+    .await
+    .unwrap_or_else(|_| panic!());
+    assert_eq!(retry.id, op.id);
+    assert!(matches!(
+        management::resolved_patch(
+            State(state.clone()),
+            Path(second.clone()),
+            key("edit-group"),
+            ApiJson(json!({"enabled":true}))
+        )
+        .await,
+        Err(ApiError(StatusCode::CONFLICT, _))
+    ));
+    let (_, Json(op)) = management::source_remove(
+        State(state.clone()),
+        Path(first.clone()),
+        key("unlink-source"),
+    )
+    .await
+    .unwrap_or_else(|_| panic!());
+    assert_eq!(done(&state, &op.id).await.status, "completed");
+    assert_eq!(
+        accounts::api::resolved_get(vault.clone(), first.clone())
+            .await
+            .unwrap()
+            .display_name,
+        "Team account"
+    );
+    let (_, Json(op)) = management::resolved_patch(
+        State(state.clone()),
+        Path(first.clone()),
+        key("reset-name"),
+        ApiJson(json!({"user_label":null, "enabled":true, "active":true})),
+    )
+    .await
+    .unwrap_or_else(|_| panic!());
+    assert_eq!(done(&state, &op.id).await.status, "completed");
+    let view = accounts::api::resolved_get(vault.clone(), first.clone())
+        .await
+        .unwrap();
+    assert_eq!(view.user_label, None);
+    assert_eq!(view.display_name, "amp account");
+    assert!(view.active);
+    assert!(matches!(
+        management::resolved_patch(
+            State(state.clone()),
+            Path(first.clone()),
+            key("invalid-null"),
+            ApiJson(json!({"enabled":null}))
+        )
+        .await,
+        Err(ApiError(StatusCode::BAD_REQUEST, _))
+    ));
+    let (_, Json(op)) = management::resolved_remove(
+        State(state.clone()),
+        Path(first.clone()),
+        key("remove-group"),
+    )
+    .await
+    .unwrap_or_else(|_| panic!());
+    assert_eq!(done(&state, &op.id).await.status, "completed");
+    let remaining = accounts::api::resolved_list(vault).await.unwrap();
+    assert_eq!(remaining.accounts.len(), 1);
+    assert_eq!(remaining.accounts[0].id, unrelated);
     std::fs::remove_dir_all(dir).unwrap();
 }

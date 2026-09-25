@@ -13,8 +13,8 @@
         "reason": null
       },
       "account_write_v2": {
-        "available": false,
-        "reason": "not_implemented"
+        "available": true,
+        "reason": null
       }
     }
   },
@@ -43,7 +43,20 @@
           "state": "not_checked",
           "refresh_owner": "none",
           "issue": null,
-          "actions": []
+          "actions": [
+            {
+              "kind": "set_source_enabled",
+              "available": true,
+              "reason": null,
+              "interaction": "host"
+            },
+            {
+              "kind": "remove_source",
+              "available": true,
+              "reason": null,
+              "interaction": "host"
+            }
+          ]
         },
         {
           "id": "source-b",
@@ -55,10 +68,48 @@
           "state": "not_checked",
           "refresh_owner": "none",
           "issue": null,
-          "actions": []
+          "actions": [
+            {
+              "kind": "set_source_enabled",
+              "available": true,
+              "reason": null,
+              "interaction": "host"
+            },
+            {
+              "kind": "remove_source",
+              "available": true,
+              "reason": null,
+              "interaction": "host"
+            }
+          ]
         }
       ],
-      "actions": [],
+      "actions": [
+        {
+          "kind": "rename",
+          "available": true,
+          "reason": null,
+          "interaction": "host"
+        },
+        {
+          "kind": "set_enabled",
+          "available": true,
+          "reason": null,
+          "interaction": "host"
+        },
+        {
+          "kind": "select",
+          "available": true,
+          "reason": null,
+          "interaction": "host"
+        },
+        {
+          "kind": "remove",
+          "available": true,
+          "reason": null,
+          "interaction": "host"
+        }
+      ],
       "active": true
     }
   ]

@@ -417,6 +417,23 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         return result
     }
 
+    func renameResolvedAccount(id: String, userLabel: String?) async throws {
+        guard let client else { throw QuotioCLIBackendError.disconnected }
+        let body = try JSONSerialization.data(withJSONObject: ["user_label": userLabel.map { $0 as Any } ?? NSNull()])
+        try await mutate(client: client, path: QuotioHostAccountTarget.account(id).path, method: "PATCH", body: body)
+    }
+
+    func setResolvedEnabled(_ enabled: Bool, target: QuotioHostAccountTarget) async throws {
+        guard let client else { throw QuotioCLIBackendError.disconnected }
+        let body = try JSONEncoder.quotioCLI.encode(EnabledBody(enabled: enabled))
+        try await mutate(client: client, path: target.path, method: "PATCH", body: body)
+    }
+
+    func removeResolved(_ target: QuotioHostAccountTarget) async throws {
+        guard let client else { throw QuotioCLIBackendError.disconnected }
+        try await mutate(client: client, path: target.path, method: "DELETE", body: nil)
+    }
+
     public func importLegacyAccount(_ account: Account, credential: StoredCredential, disabled: Bool) async throws {
         guard let client else { throw QuotioCLIBackendError.disconnected }
         struct Import: Encodable {

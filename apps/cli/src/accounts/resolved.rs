@@ -20,6 +20,8 @@ pub struct Registry {
     pub revision: u64,
     bindings: BTreeMap<String, Binding>,
     redirects: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    labels: BTreeMap<String, Option<String>>,
 }
 
 impl Registry {
@@ -29,6 +31,7 @@ impl Registry {
             revision: 0,
             bindings: BTreeMap::new(),
             redirects: BTreeMap::new(),
+            labels: BTreeMap::new(),
         };
         state.synchronize(accounts)?;
         Ok(state)
@@ -56,6 +59,39 @@ impl Registry {
             .filter(|(_, binding)| binding.account_id == canonical)
             .map(|(id, _)| id.clone())
             .collect())
+    }
+
+    pub fn set_label(&mut self, id: &str, label: Option<&str>) -> Result<(), AccountError> {
+        let id = self
+            .resolve_id(id)
+            .ok_or(AccountError::NotFound)?
+            .to_owned();
+        let label = label.map(super::validate_label).transpose()?;
+        self.labels.insert(id, label);
+        Ok(())
+    }
+
+    pub fn has_labels(&self) -> bool {
+        !self.labels.is_empty()
+    }
+
+    pub fn preferred_source(&self, accounts: &[Account], id: &str) -> Result<String, AccountError> {
+        let ids = self.source_ids(id)?;
+        accounts
+            .iter()
+            .filter(|account| ids.contains(&account.id) && account.enabled())
+            .min_by_key(|account| {
+                (
+                    if account.origin() == crate::domain::AccountOrigin::Owned {
+                        0
+                    } else {
+                        1
+                    },
+                    account.id.clone(),
+                )
+            })
+            .map(|account| account.id.clone())
+            .ok_or(AccountError::SourceDisabled)
     }
 
     /// A live failed fetch must not erase the last confirmed identity.
@@ -108,6 +144,9 @@ impl Registry {
                     .filter(|target| **target == previous.account_id)
                 {
                     *target = account_id.clone();
+                }
+                if let Some(label) = self.labels.get(&previous.account_id).cloned() {
+                    self.labels.entry(account_id.clone()).or_insert(label);
                 }
                 self.redirects.insert(previous.account_id, account_id);
             } else {
@@ -201,19 +240,40 @@ impl Registry {
                             },
                             refresh_owner: owner,
                             issue: None,
-                            actions: vec![],
+                            actions: ["set_source_enabled", "remove_source"]
+                                .into_iter()
+                                .map(|kind| view::Action {
+                                    kind: kind.into(),
+                                    available: true,
+                                    reason: None,
+                                    interaction: view::InteractionLocation::Host,
+                                })
+                                .collect(),
                         }
                     })
                     .collect();
+                let inherited_label = named
+                    .naming
+                    .as_ref()
+                    .is_some_and(|name| name.origin == LabelOrigin::User)
+                    .then(|| named.label.clone());
+                let (display_name, user_label) = match self.labels.get(id) {
+                    Some(Some(label)) => (label.clone(), Some(label.clone())),
+                    Some(None) => (
+                        named
+                            .naming
+                            .as_ref()
+                            .and_then(|name| name.observed_name.clone())
+                            .unwrap_or_else(|| format!("{} account", named.provider.id())),
+                        None,
+                    ),
+                    None => (named.display_name().into(), inherited_label),
+                };
                 view::Account {
                     id: id.to_owned(),
                     provider_id: named.provider.id().into(),
-                    display_name: named.display_name().into(),
-                    user_label: (named
-                        .naming
-                        .as_ref()
-                        .is_some_and(|name| name.origin == LabelOrigin::User))
-                    .then(|| named.label.clone()),
+                    display_name,
+                    user_label,
                     identity: view::Identity {
                         evidence: if verified {
                             view::IdentityEvidence::Verified
@@ -231,7 +291,16 @@ impl Registry {
                         view::ConnectionState::Disabled
                     },
                     sources,
-                    actions: vec![],
+                    actions: ["rename", "set_enabled", "select", "remove"]
+                        .into_iter()
+                        .map(|kind| view::Action {
+                            kind: kind.into(),
+                            available: kind != "select" || enabled,
+                            reason: (kind == "select" && !enabled)
+                                .then(|| "account_disabled".into()),
+                            interaction: view::InteractionLocation::Host,
+                        })
+                        .collect(),
                 }
             })
             .collect();
@@ -253,8 +322,8 @@ impl Registry {
                     (
                         "account_write_v2".into(),
                         view::Availability {
-                            available: false,
-                            reason: Some("not_implemented".into()),
+                            available: true,
+                            reason: None,
                         },
                     ),
                 ]),
@@ -285,6 +354,8 @@ impl Registry {
             .collect();
         self.redirects
             .retain(|_, target| active.contains(target.as_str()));
+        self.labels
+            .retain(|id, _| active.contains(id.as_str()) || self.redirects.contains_key(id));
         self.validate(accounts)
     }
 
@@ -326,6 +397,14 @@ impl Registry {
             {
                 return Err(AccountError::Corrupt);
             }
+        }
+        if self.labels.iter().any(|(id, label)| {
+            (!groups.contains_key(id.as_str()) && !self.redirects.contains_key(id))
+                || label
+                    .as_deref()
+                    .is_some_and(|label| super::validate_label(label).is_err())
+        }) {
+            return Err(AccountError::Corrupt);
         }
         if self.redirects.iter().any(|(old, target)| {
             !valid_id(old)
@@ -431,7 +510,12 @@ mod tests {
         assert_eq!(grouped.sources.len(), 2);
         assert_eq!(grouped.display_name, "User chosen name");
         assert_eq!(grouped.user_label.as_deref(), Some("User chosen name"));
-        assert!(grouped.actions.is_empty()); // v2 mutation capabilities are not exposed yet.
+        assert!(
+            grouped
+                .actions
+                .iter()
+                .any(|action| action.kind == "rename" && action.available)
+        );
         doc.remove(&first).unwrap();
         registry.synchronize(&doc.accounts).unwrap();
         assert_eq!(

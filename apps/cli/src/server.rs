@@ -177,7 +177,20 @@ fn router(state: Arc<ApiState>, policy: Arc<security::Policy>) -> Router {
             "/v1/auth/sessions/{id}/callback",
             post(management::callback),
         )
-        .route("/v2/accounts", get(management::resolved_accounts))
+        .route(
+            "/v2/accounts",
+            get(management::resolved_accounts).post(management::resolved_create),
+        )
+        .route(
+            "/v2/accounts/{id}",
+            get(management::resolved_account)
+                .patch(management::resolved_patch)
+                .delete(management::resolved_remove),
+        )
+        .route(
+            "/v2/sources/{id}",
+            axum::routing::patch(management::source_patch).delete(management::source_remove),
+        )
         .route("/v1/providers", get(providers))
         .route("/v1/providers/{id}", get(provider))
         .route("/v1/usage", get(usage))

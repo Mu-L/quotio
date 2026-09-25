@@ -488,30 +488,12 @@ pub async fn list(vault: Vault) -> Result<Vec<Account>, AccountError> {
 pub async fn select_resolved(vault: Vault, id: String) -> Result<(), AccountError> {
     let mut tx = begin(vault).await?;
     tx.document.enable_resolved_accounts()?;
-    let ids = tx
+    let selected = tx
         .document
         .resolved
         .as_ref()
         .expect("initialized")
-        .source_ids(&id)?;
-    let selected = tx
-        .document
-        .accounts
-        .iter()
-        .filter(|account| ids.contains(&account.id) && account.enabled())
-        .min_by_key(|account| {
-            (
-                if account.origin() == super::AccountOrigin::Owned {
-                    0
-                } else {
-                    1
-                },
-                account.id.clone(),
-            )
-        })
-        .ok_or(AccountError::SourceDisabled)?
-        .id
-        .clone();
+        .preferred_source(&tx.document.accounts, &id)?;
     tx.document.select(&selected)?;
     commit(tx).await
 }
