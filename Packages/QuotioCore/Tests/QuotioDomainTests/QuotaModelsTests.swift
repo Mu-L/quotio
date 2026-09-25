@@ -3,6 +3,17 @@ import XCTest
 @testable import QuotioDomain
 
 final class QuotaModelsTests: XCTestCase {
+    func testProviderIDsPreserveUnknownHostProvidersAndStringEncoding() throws {
+        for id in ["codex", "github-copilot", "future-provider"] {
+            let provider = try JSONDecoder().decode(QuotaProvider.self, from: Data("\"\(id)\"".utf8))
+            XCTAssertEqual(provider.rawValue, id)
+            XCTAssertEqual(try JSONEncoder().encode(provider), Data("\"\(id)\"".utf8))
+        }
+        for id in ["", "../provider", "provider\n", String(repeating: "x", count: 129)] {
+            XCTAssertNil(QuotaProvider(rawValue: id))
+        }
+    }
+
     func testLegacyQuotaMetricDecodesWithoutTypedPresentation() throws {
         let data = Data(
             #"{"name":"legacy","percentage":42,"resetTime":"","used":3,"limit":10}"#.utf8

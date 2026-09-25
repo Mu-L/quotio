@@ -1,24 +1,46 @@
 import Foundation
 
-public enum QuotaProvider: String, CaseIterable, Codable, Identifiable, Sendable {
-    case claude
-    case codex
-    case qwen
-    case iflow
-    case antigravity
-    case vertex
-    case kiro
-    case copilot = "github-copilot"
-    case cursor
-    case factoryDroid = "factory-droid"
-    case devin
-    case grok
-    case openRouter = "openrouter"
-    case amp
-    case trae
-    case glm
-    case warp
-    case clinePass = "clinepass"
+public struct QuotaProvider: RawRepresentable, CaseIterable, Codable, Hashable, Identifiable, Sendable {
+    public let rawValue: String
+    public static let claude = Self(rawValue: "claude")!
+    public static let codex = Self(rawValue: "codex")!
+    public static let qwen = Self(rawValue: "qwen")!
+    public static let iflow = Self(rawValue: "iflow")!
+    public static let antigravity = Self(rawValue: "antigravity")!
+    public static let vertex = Self(rawValue: "vertex")!
+    public static let kiro = Self(rawValue: "kiro")!
+    public static let copilot = Self(rawValue: "github-copilot")!
+    public static let cursor = Self(rawValue: "cursor")!
+    public static let factoryDroid = Self(rawValue: "factory-droid")!
+    public static let devin = Self(rawValue: "devin")!
+    public static let grok = Self(rawValue: "grok")!
+    public static let openRouter = Self(rawValue: "openrouter")!
+    public static let amp = Self(rawValue: "amp")!
+    public static let trae = Self(rawValue: "trae")!
+    public static let glm = Self(rawValue: "glm")!
+    public static let warp = Self(rawValue: "warp")!
+    public static let clinePass = Self(rawValue: "clinepass")!
+    public static let allCases: [Self] = [.claude, .codex, .qwen, .iflow, .antigravity, .vertex, .kiro, .copilot, .cursor, .factoryDroid, .devin, .grok, .openRouter, .amp, .trae, .glm, .warp, .clinePass]
+
+    public init?(rawValue: String) {
+        guard !rawValue.isEmpty, rawValue.utf8.count <= 128,
+              rawValue.utf8.allSatisfy({ (97...122).contains($0) || (48...57).contains($0) || $0 == 45 || $0 == 95 }) else { return nil }
+        self.rawValue = rawValue
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let value = try container.decode(String.self)
+        guard let provider = Self(rawValue: value) else {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid provider ID")
+        }
+        self = provider
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 
     public var id: String { rawValue }
 
