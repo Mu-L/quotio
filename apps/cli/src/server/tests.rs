@@ -653,7 +653,7 @@ async fn codex_source_rest_child() {
         json!({"kind":"claude_native","location":"code_file","refresh_token":"fixture"}),
     ] {
         let response = client
-            .post(format!("{base}/v1/account-sources"))
+            .post(format!("{base}/v2/sources"))
             .bearer_auth(token)
             .header("Idempotency-Key", "invalid-claude-source")
             .json(&input)
@@ -669,7 +669,7 @@ async fn codex_source_rest_child() {
         let kind = input["kind"].as_str().unwrap();
         let request = || {
             client
-                .post(format!("{base}/v1/account-sources"))
+                .post(format!("{base}/v2/sources"))
                 .bearer_auth(token)
                 .header("Idempotency-Key", kind)
                 .json(&input)
@@ -689,14 +689,14 @@ async fn codex_source_rest_child() {
     }
     let input = json!({"kind":"codex_native"});
     let unauth = client
-        .post(format!("{base}/v1/account-sources"))
+        .post(format!("{base}/v2/sources"))
         .json(&input)
         .send()
         .await
         .unwrap();
     assert_eq!(unauth.status(), 401);
     let invalid = client
-        .post(format!("{base}/v1/account-sources"))
+        .post(format!("{base}/v2/sources"))
         .bearer_auth(token)
         .header("Idempotency-Key", "bad-source")
         .json(&json!({"kind":"codex_native","path":"/tmp/untrusted"}))
@@ -706,7 +706,7 @@ async fn codex_source_rest_child() {
     assert_eq!(invalid.status(), 400);
     let request = || {
         client
-            .post(format!("{base}/v1/account-sources"))
+            .post(format!("{base}/v2/sources"))
             .bearer_auth(token)
             .header("Idempotency-Key", "codex-source")
             .json(&input)
@@ -745,7 +745,7 @@ async fn codex_source_rest_child() {
             .await
             .unwrap();
         let alias = client
-            .post(format!("{base}/v1/refresh"))
+            .post(format!("{base}/v2/refresh"))
             .bearer_auth(token)
             .json(&json!({"providers":["codex"],"account_id":"local","force":true}))
             .send()

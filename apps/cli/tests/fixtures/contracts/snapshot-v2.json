@@ -4,7 +4,6 @@
     "id": "host-fixture",
     "platform": "macos",
     "api_versions": [
-      1,
       2
     ],
     "capabilities": {

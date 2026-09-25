@@ -1,6 +1,6 @@
 # Native source picker
 
-Use `POST /v1/account-sources/discover` with a management bearer token. Clients may invoke this for a user-requested scan or enabled automatic discovery; inspection itself never grants secret access. Select a `provider` and one `kind` from that provider's `source_references` capability.
+Use `POST /v2/sources/discover` with a management bearer token. Clients may invoke this for a user-requested scan or enabled automatic discovery; inspection itself never grants secret access. Select a `provider` and one `kind` from that provider's `source_references` capability.
 
 ```json
 {"provider":"copilot","kind":"copilot_native","location":"apps","inspect":true}
@@ -16,7 +16,7 @@ Opt-in inspection supports:
 
 Exact-entry candidates have generic numbered labels and opaque `source` references. Native entry keys, record UUIDs, names, paths, tokens and credential JSON are not returned. This also protects against a token planted in an entry key or display name. The backend retains only native references, not copied credentials.
 
-Pass a candidate's complete `source` object to the existing `POST /v1/account-sources`, with an `Idempotency-Key`. Poll the returned operation for `result.account_id`. Registration re-reads and validates the source; discovery does not prove credentials are usable. Existing caller-supplied registration inputs remain supported.
+Pass a candidate's complete `source` object to the existing `POST /v2/sources`, with an `Idempotency-Key`. Poll the returned operation for `result.account_id`. Registration re-reads and validates the source; discovery does not prove credentials are usable. Existing caller-supplied registration inputs remain supported.
 
 Opaque references last 600 seconds, are local to one running server, and are not persisted. Inspect again after expiry or restart. At most 256 live references can be held; further inspection returns `account_busy` until older references expire. Use account and operation IDs for subsequent work, rather than retaining discovery references.
 

@@ -160,7 +160,7 @@ public final class QuotioCLIServerProcess {
             try input.fileHandleForWriting.write(contentsOf: payload)
             let bootstrap = try await bootstrap(from: stream)
             guard bootstrap.bootstrapVersion == 2,
-                  bootstrap.apiVersion == 1,
+                  bootstrap.apiVersion == 2,
                   bootstrap.pid == process.processIdentifier,
                   bootstrap.host == "127.0.0.1",
                   (1...65_535).contains(bootstrap.port),

@@ -11,7 +11,7 @@ For a fixture-only run with no account discovery or provider requests:
 ```sh
 cargo run -- serve --provider mock --no-saved-accounts
 curl http://127.0.0.1:6767/health
-curl http://127.0.0.1:6767/v1/providers
+curl http://127.0.0.1:6767/v2/providers
 curl http://127.0.0.1:6767/v1/usage
 curl http://127.0.0.1:6767/v1/usage/mock
 ```
@@ -35,7 +35,7 @@ port, or `--listen '[::1]:6767'` for IPv6 loopback.
 | `--public-url` | None | External HTTPS origin supplied by a reverse proxy or tunnel; requires the server token |
 | `--allow-origin` | None | Exact browser origin allowed for CORS preflight and responses; repeat for multiple origins |
 
-Without `--provider`, the server uses `enabled_providers` from the existing CLI configuration. An empty selection is allowed and serves an empty report until providers are enabled. Startup loads the configuration, while `GET /v1/settings` rechecks the file and applies external changes safely; effective changes invalidate the usage snapshot. Saved accounts are discovered again each cycle.
+Without `--provider`, the server uses `enabled_providers` from the existing CLI configuration. An empty selection is allowed and serves an empty report until providers are enabled. Startup loads the configuration, while `GET /v2/settings` rechecks the file and applies external changes safely; effective changes invalidate the usage snapshot. Saved accounts are discovered again each cycle.
 
 The same adapters and collector used by `quotio usage` fetch data. Existing provider
 credential refresh behavior still applies, including managed OAuth token rotation.
@@ -46,18 +46,18 @@ The read-only default has no account or settings write routes. `--manage` adds t
 | Request | Response |
 | --- | --- |
 | `GET /health` | `{"status":"ok","ready":true}`; `ready` means the first refresh has completed, even if providers failed |
-| `GET /v1/providers` | `schema_version: 1` and a `providers` array with `id`, `description`, `enabled`, and `capabilities` |
+| `GET /v2/providers` | `schema_version: 1` and a `providers` array with `id`, `description`, `enabled`, and `capabilities` |
 | `GET /v1/usage` | Latest report for all enabled providers and their accounts |
 | `GET /v1/usage/{provider}` | The same report shape filtered to one enabled, canonical provider ID |
 | `GET /openapi.json` | OpenAPI 3.1 contract for all routes |
-| `GET /v1/status` | Refresh state and current settings revision |
+| `GET /v2/status` | Refresh state and current settings revision |
 | `GET /v1/accounts` and `/v1/accounts/{id}` | Managed account metadata; available in read-only mode when account storage is enabled |
 | `POST/PATCH/DELETE /v1/accounts...` | Asynchronous managed account mutations; require `Idempotency-Key` (1–128 visible ASCII characters) |
-| `POST /v1/auth/sessions` and callback routes | Managed Codex, Claude and Copilot sessions (requires `--manage`) |
-| `GET /v1/settings` | Current settings and revision; available in read-only mode |
-| `PATCH /v1/settings` | Optimistic revision patch; requires `--manage` |
-| `POST /v1/refresh` | Asynchronous refresh request (requires `--manage`); `include_owned: false` limits collection to borrowed sources and native-parent Warp mirrors; `disabled_proxy_auth_files` excludes the named CLIProxyAPI files from that request |
-| `GET /v1/operations/{id}` | Operation status; recent refresh results expire after 15 minutes; account write results persist until restart |
+| `POST /v2/auth/sessions` and callback routes | Managed Codex, Claude and Copilot sessions (requires `--manage`) |
+| `GET /v2/settings` | Current settings and revision; available in read-only mode |
+| `PATCH /v2/settings` | Optimistic revision patch; requires `--manage` |
+| `POST /v2/refresh` | Asynchronous refresh request (requires `--manage`); `include_owned: false` limits collection to borrowed sources and native-parent Warp mirrors; `disabled_proxy_auth_files` excludes the named CLIProxyAPI files from that request |
+| `GET /v2/operations/{id}` | Operation status; recent refresh results expire after 15 minutes; account write results persist until restart |
 
 Usage responses use Quotio's existing `schema_version: 1` JSON contract, matching
 `quotio usage --format json`: `generated_at`, `providers`, and `failures`. Each usage
@@ -77,7 +77,7 @@ is unchanged under the additive-field policy.
 
 A provider route returns all accounts for that provider, including local and saved
 accounts after the collector's normal deduplication. Disabled and unknown providers
-return 404. Route IDs are canonical IDs from `/v1/providers`; CLI aliases are not
+return 404. Route IDs are canonical IDs from `/v2/providers`; CLI aliases are not
 accepted in HTTP paths. Query parameters are not supported.
 
 `HEAD` is supported with no response body. `OPTIONS` returns 204 for an allowed CORS preflight when `--allow-origin` matches; unsupported methods return 405. Read routes remain available without `--manage`; write routes are rejected as read-only unless management mode is enabled.
@@ -91,11 +91,11 @@ curl -X POST http://127.0.0.1:6767/v1/accounts \
   -H "Authorization: Bearer $QUOTIO_SERVER_TOKEN" \
   -H "Idempotency-Key: demo-account-1" -H 'Content-Type: application/json' \
   -d '{"provider":"synthetic","api_key":"synthetic-example-key","settings":{},"region":null,"organization":null}'
-curl -H "Authorization: Bearer $QUOTIO_SERVER_TOKEN" http://127.0.0.1:6767/v1/operations/OPERATION_ID
+curl -H "Authorization: Bearer $QUOTIO_SERVER_TOKEN" http://127.0.0.1:6767/v2/operations/OPERATION_ID
 ```
 
 Settings patches include the current `revision`; a stale revision returns 409
-`revision_conflict`, so read `GET /v1/settings` and retry. `POST /v1/refresh` returns
+`revision_conflict`, so read `GET /v2/settings` and retry. `POST /v2/refresh` returns
 202 with an operation ID. A request with `account_id` may refresh that enabled
 account even when its provider is not enabled for scheduled collection. The
 provider must match the account, and account-scoped requests must name exactly
@@ -103,14 +103,14 @@ one provider. Requests without `account_id` remain limited to enabled providers.
 
 ### Managed OAuth sessions
 
-Start with `POST /v1/auth/sessions`, supplying `provider` and an optional `label`.
+Start with `POST /v2/auth/sessions`, supplying `provider` and an optional `label`.
 The response adds `provider`, `workflow`, and optional `user_code` to the existing
 `id`, `url`, `expires_at`, `status`, `account_id`, and `error_code` fields.
 Provider capabilities also expose `oauth_workflow` and `start_oauth`.
 
 | Provider | Workflow | User action |
 | --- | --- | --- |
-| `codex` | `browser_callback` | Open `url`. For `callback_mode: relay`, send `{"callback_url":"..."}` to `POST /v1/auth/sessions/{id}/callback`. `loopback` remains supported. |
+| `codex` | `browser_callback` | Open `url`. For `callback_mode: relay`, send `{"callback_url":"..."}` to `POST /v2/auth/sessions/{id}/callback`. `loopback` remains supported. |
 | `claude` | `manual_code` | Open `url`, then send `{"code":"..."}` to the callback route. A code with `#state` must match the backend's state. |
 | `copilot` | `device_code` | Open `url` and enter `user_code`. Do not call the callback route. The backend polls GitHub. |
 
@@ -120,7 +120,7 @@ codes in a URL query or log them. The backend owns proof-key generation, state,
 exchange, provider polling and credential storage. Swift only retains the session
 ID, renders the user action, submits the Claude code, and polls the local session.
 
-Poll `GET /v1/auth/sessions/{id}`. `waiting` permits cancellation with `DELETE` on
+Poll `GET /v2/auth/sessions/{id}`. `waiting` permits cancellation with `DELETE` on
 the same route. `processing` means exchange or persistence has been claimed;
 cancellation then returns `account_busy`, and the client must keep polling.
 Terminal states are `completed`, `failed`, `cancelled`, and `expired`. A completed
@@ -222,7 +222,7 @@ API errors use `{"error":"code"}`. Provider failures remain inside a usage repor
 | 503 | `not_ready`, `server_busy` |
 | 500 | `encoding_failed` |
 
-Managed routes also use `idempotency_key_required`, `invalid_idempotency_key`, `idempotency_conflict`, `operations_full`, `account_storage_disabled`, and account or OAuth-specific errors. A settings patch with a stale `revision` returns 409 `revision_conflict`; read `GET /v1/settings` and retry against the returned revision.
+Managed routes also use `idempotency_key_required`, `invalid_idempotency_key`, `idempotency_conflict`, `operations_full`, `account_storage_disabled`, and account or OAuth-specific errors. A settings patch with a stale `revision` returns 409 `revision_conflict`; read `GET /v2/settings` and retry against the returned revision.
 
 Malformed HTTP is rejected by the HTTP stack before these API handlers. Startup
 argument/config errors exit with code 2; initialization or bind errors use code 3.
@@ -282,11 +282,11 @@ preserve all persisted host choices. Do not also set `QUOTIO_SERVER_TOKEN`.
 The process emits one JSON line on stdout after binding and initialization:
 
 ```json
-{"bootstrap_version":2,"api_version":1,"server_version":"0.1.1","pid":123,"host":"127.0.0.1","port":49152}
+{"bootstrap_version":2,"api_version":2,"server_version":"0.1.1","pid":123,"host":"127.0.0.1","port":49152}
 ```
 
 The example port and PID are illustrative. Use the actual record, then authenticate
-`GET /v1/status` and verify version/access mode and readiness. The record means the
+`GET /v2/status` and verify version/access mode and readiness. The record means the
 listener is bound, not that the initial provider refresh is complete. Logs stay on
 stderr. Tokens never appear in the record. Keep stdin open for the process lifetime;
 EOF, input failure or extra bytes terminate the session using normal graceful
@@ -341,7 +341,7 @@ claim a provider operation completed, and backend shutdown cancels tracked jobs.
 
 ## Borrowed ClinePass source references
 
-On macOS, `POST /v1/account-sources` registers one existing ClinePass group from
+On macOS, `POST /v2/sources` registers one existing ClinePass group from
 Quotio's custom-provider preferences. It requires management authentication and an
 `Idempotency-Key`, and returns an operation whose result contains the new account
 ID. The request contains references only:
@@ -427,7 +427,7 @@ acceptance.
 ## Amp native account reference
 
 Register the current node's standard Amp source with authenticated management
-`POST /v1/account-sources`, an `Idempotency-Key`, and `{"kind":"amp_native"}`.
+`POST /v2/sources`, an `Idempotency-Key`, and `{"kind":"amp_native"}`.
 The backend resolves `~/.local/share/amp/secrets.json` on macOS/Linux. The request
 cannot supply a path, token or ownership override. The vault stores a reference,
 not a second copy of the native key. Registration confirms that the source is
@@ -527,7 +527,7 @@ time to return partial results within the collector budget.
 
 ### Cursor native source
 
-Managed servers accept `POST /v1/account-sources` with
+Managed servers accept `POST /v2/sources` with
 `{"kind":"cursor_native"}` and an `Idempotency-Key`. On macOS, the backend resolves
 Cursor's standard state database and saves an opaque borrowed-native reference.
 The request cannot supply a path, token or ownership flag. Registration reads the

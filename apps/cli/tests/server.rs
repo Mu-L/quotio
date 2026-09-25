@@ -184,7 +184,7 @@ async fn http_snapshots_security_and_process_shutdown() {
         .await
         .unwrap();
     assert_eq!(snapshot, filtered);
-    let catalog: serde_json::Value = get("/v1/providers")
+    let catalog: serde_json::Value = get("/v2/providers")
         .send()
         .await
         .unwrap()
@@ -328,7 +328,7 @@ async fn parent_pipe_bootstrap_authentication_and_eof_shutdown() {
     assert!(!migrated.automatically_discover_logins);
     assert_eq!(migrated.disabled_providers, vec!["amp"]);
     assert!(migrated.enabled_providers.is_empty());
-    assert_eq!(record["api_version"], 1);
+    assert_eq!(record["api_version"], 2);
     assert_eq!(record["server_version"], env!("CARGO_PKG_VERSION"));
     assert_eq!(record["pid"], pid);
     assert_eq!(record["host"], "127.0.0.1");
@@ -338,7 +338,7 @@ async fn parent_pipe_bootstrap_authentication_and_eof_shutdown() {
         .timeout(Duration::from_secs(2))
         .build()
         .unwrap();
-    let url = format!("http://127.0.0.1:{port}/v1/status");
+    let url = format!("http://127.0.0.1:{port}/v2/status");
     assert_eq!(client.get(&url).send().await.unwrap().status(), 401);
     let status: serde_json::Value = client
         .get(&url)

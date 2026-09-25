@@ -190,7 +190,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
         do {
             try await mutate(
                 client: client,
-                path: "v1/account-sources/authorize",
+                path: "v2/sources/authorize",
                 method: "POST",
                 body: body,
                 idempotencyKey: "quotio-native-permission-" + UUID().uuidString,
@@ -221,7 +221,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
     public func authorizeAccountStorage() async throws {
         guard let client else { throw NativeSourceAuthorizationFailure.unknown }
         do {
-            try await mutate(client: client, path: "v1/account-vault/authorize", method: "POST", body: Data("{}".utf8), timeout: .seconds(300))
+            try await mutate(client: client, path: "v2/account-vault/authorize", method: "POST", body: Data("{}".utf8), timeout: .seconds(300))
             storageRequiresAuthorization = false
             await registerDetectedNativeAccounts()
         } catch {
@@ -309,7 +309,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
             legacyId: account.id, provider: provider, label: account.accountKey,
             enabled: !disabled, credential: credential
         ))
-        try await mutate(client: client, path: "v1/accounts/migrate", method: "POST", body: body,
+        try await mutate(client: client, path: "v2/migrations/accounts", method: "POST", body: body,
                          idempotencyKey: "quotio-monitor-v1-" + SHA256.hash(data: Data(account.id.utf8)).map { String(format: "%02x", $0) }.joined())
     }
 
@@ -398,7 +398,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
             "provider": provider,
         ])
         return try await client.request(
-            "v1/auth/sessions",
+            "v2/auth/sessions",
             method: "POST",
             body: body,
             idempotencyKey: UUID().uuidString
@@ -407,7 +407,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
 
     func oauthSession(id: String) async throws -> QuotioCLIOAuthSession {
         guard let client else { throw QuotioHostClientError.disconnected }
-        return try await client.request("v1/auth/sessions/\(id)")
+        return try await client.request("v2/auth/sessions/\(id)")
     }
 
     func completeOAuth(id: String, callbackURL: String? = nil, code: String? = nil) async throws -> QuotioCLIOAuthSession {
@@ -417,7 +417,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
         if let code { value["code"] = code }
         let body = try JSONSerialization.data(withJSONObject: value)
         return try await client.request(
-            "v1/auth/sessions/\(id)/callback",
+            "v2/auth/sessions/\(id)/callback",
             method: "POST",
             body: body,
             timeout: 60
@@ -427,7 +427,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
     func cancelOAuth(id: String) async {
         guard let client else { return }
         let _: QuotioCLIOAuthSession? = try? await client.request(
-            "v1/auth/sessions/\(id)",
+            "v2/auth/sessions/\(id)",
             method: "DELETE"
         )
     }
@@ -435,9 +435,9 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
     public func monitoringProviders() async throws -> [MonitoringProvider] {
         guard let client else { throw QuotioHostClientError.disconnected }
         let epoch = connectionID
-        let catalog: QuotioHostProviders = try await client.request("v1/providers")
+        let catalog: QuotioHostProviders = try await client.request("v2/providers")
         guard epoch == connectionID else { throw QuotioHostClientError.disconnected }
-        guard catalog.schemaVersion == 1 else { throw QuotioHostClientError.incompatible }
+        guard catalog.schemaVersion == 2 else { throw QuotioHostClientError.incompatible }
         return try catalog.providers.map { value in
             guard let id = QuotioCLIProviderMap.domain(value.id) else { throw QuotioHostClientError.incompatible }
             return MonitoringProvider(id: id, displayName: value.displayName,
@@ -449,7 +449,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
     public func monitoringSettings() async throws -> MonitoringSettings {
         guard let client else { throw QuotioHostClientError.disconnected }
         let epoch = connectionID
-        let value: QuotioHostSettings = try await client.request("v1/settings")
+        let value: QuotioHostSettings = try await client.request("v2/settings")
         guard epoch == connectionID else { throw QuotioHostClientError.disconnected }
         return Self.monitoringSettings(value)
     }
@@ -467,7 +467,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
             "automatically_discover_logins": settings.automaticallyDiscoverLogins,
             "refresh_interval": settings.refreshInterval,
         ])
-        let value: QuotioHostSettings = try await client.request("v1/settings", method: "PATCH", body: body)
+        let value: QuotioHostSettings = try await client.request("v2/settings", method: "PATCH", body: body)
         guard epoch == connectionID else { throw QuotioHostClientError.disconnected }
         return Self.monitoringSettings(value)
     }
@@ -503,7 +503,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
                 disabledProxyAuthFiles: (authFileState?.disabledAuthFileNames() ?? []).sorted()
             ))
             var operation: QuotioCLIOperation = try await client.request(
-                "v1/refresh",
+                "v2/refresh",
                 method: "POST",
                 body: body
             )
@@ -511,7 +511,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
             while operation.status == "running" {
                 guard ContinuousClock.now < deadline else { throw QuotioHostClientError.timeout }
                 try await Task.sleep(for: .milliseconds(300))
-                operation = try await client.request("v1/operations/\(operation.id)")
+                operation = try await client.request("v2/operations/\(operation.id)")
             }
             guard operation.status == "completed" else {
                 throw QuotioHostClientError.response(500, operation.error ?? operation.status)
@@ -662,7 +662,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
         while operation.status == "running" {
             guard ContinuousClock.now < deadline else { throw QuotioHostClientError.timeout }
             try await Task.sleep(for: .milliseconds(100))
-            operation = try await client.request("v1/operations/\(operation.id)")
+            operation = try await client.request("v2/operations/\(operation.id)")
         }
         guard operation.status == "completed" else {
             throw QuotioHostClientError.response(500, operation.error ?? operation.status)

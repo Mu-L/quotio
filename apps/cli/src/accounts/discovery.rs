@@ -184,14 +184,14 @@ impl Registry {
                 } else {
                     "unavailable"
                 };
-                return Ok(json!({"schema_version":1,"status":status,"candidates":candidates}));
+                return Ok(json!({"schema_version":2,"status":status,"candidates":candidates}));
             }
             return Ok(
-                json!({"schema_version":1,"status":"not_checked","candidates":choices.into_iter().map(|source| json!({"label":"Native source","status":"not_checked","source":source})).collect::<Vec<_>>() }),
+                json!({"schema_version":2,"status":"not_checked","candidates":choices.into_iter().map(|source| json!({"label":"Native source","status":"not_checked","source":source})).collect::<Vec<_>>() }),
             );
         }
         if !inspect {
-            return Ok(json!({"schema_version":1,"status":"not_checked","candidates":[]}));
+            return Ok(json!({"schema_version":2,"status":"not_checked","candidates":[]}));
         }
         let keychain_present = kind == "copilot_native"
             && location
@@ -242,7 +242,7 @@ impl Registry {
             Ok(r) => r,
             Err(e) => {
                 return Ok(
-                    json!({"schema_version":1,"status":match e { AccountError::NotFound => "unavailable", AccountError::Unsupported => "unsupported", _ => "unreadable" },"candidates":[]}),
+                    json!({"schema_version":2,"status":match e { AccountError::NotFound => "unavailable", AccountError::Unsupported => "unsupported", _ => "unreadable" },"candidates":[]}),
                 );
             }
         };
@@ -265,7 +265,7 @@ impl Registry {
             candidates.push(json!({"label":format!("Native entry {}", index + 1),"status":"available","source":{"kind":"discovered","discovery_ref":id}}));
         }
         Ok(
-            json!({"schema_version":1,"status":"checked","expires_in_seconds":600,"candidates":candidates}),
+            json!({"schema_version":2,"status":"checked","expires_in_seconds":600,"candidates":candidates}),
         )
     }
     fn probe(&self, kind: &str, location: Option<&str>) -> Option<&'static str> {

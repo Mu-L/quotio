@@ -25,7 +25,7 @@ final class QuotioCLIServerProcessTests: XCTestCase {
         IFS= read -r token
         [ -n "$token" ] || exit 2
         printf '%s' "$token" > "\(handshake.path)"
-        printf '{"bootstrap_version":2,"api_version":1,"pid":%s,"host":"127.0.0.1","port":43210}\n' "$$"
+        printf '{"bootstrap_version":2,"api_version":2,"pid":%s,"host":"127.0.0.1","port":43210}\n' "$$"
         cat >/dev/null
         """
         try Data(script.utf8).write(to: helper)
@@ -104,7 +104,7 @@ final class QuotioCLIServerProcessTests: XCTestCase {
         let script = """
         #!/bin/sh
         IFS= read -r token
-        printf '{"bootstrap_version":2,"api_version":1,"pid":1,"host":"127.0.0.1","port":43210}\n'
+        printf '{"bootstrap_version":2,"api_version":2,"pid":1,"host":"127.0.0.1","port":43210}\n'
         """
         try Data(script.utf8).write(to: helper)
         try FileManager.default.setAttributes(

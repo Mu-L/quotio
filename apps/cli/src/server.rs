@@ -154,7 +154,7 @@ fn router(state: Arc<ApiState>, policy: Arc<security::Policy>) -> Router {
         .route("/health", get(health))
         .route("/v2/snapshot", get(resolved_snapshot))
         .route("/v2/discovery", get(native::status).post(native::start))
-        .route("/v1/status", get(status))
+        .route("/v2/status", get(status))
         .route(
             "/v1/accounts",
             get(management::list).post(management::create),
@@ -165,22 +165,22 @@ fn router(state: Arc<ApiState>, policy: Arc<security::Policy>) -> Router {
                 .patch(management::patch)
                 .delete(management::remove),
         )
-        .route("/v1/accounts/migrate", post(management::migrate))
-        .route("/v1/account-sources", post(management::reference))
-        .route("/v1/account-sources/discover", post(management::discover))
-        .route("/v1/account-sources/authorize", post(management::authorize))
+        .route("/v2/migrations/accounts", post(management::migrate))
+        .route("/v2/sources", post(management::reference))
+        .route("/v2/sources/discover", post(management::discover))
+        .route("/v2/sources/authorize", post(management::authorize))
         .route(
-            "/v1/account-vault/authorize",
+            "/v2/account-vault/authorize",
             post(management::authorize_vault),
         )
         .route("/v1/accounts/{id}/usage", get(management::usage))
-        .route("/v1/auth/sessions", post(management::begin))
+        .route("/v2/auth/sessions", post(management::begin))
         .route(
-            "/v1/auth/sessions/{id}",
+            "/v2/auth/sessions/{id}",
             get(management::session).delete(management::cancel),
         )
         .route(
-            "/v1/auth/sessions/{id}/callback",
+            "/v2/auth/sessions/{id}/callback",
             post(management::callback),
         )
         .route(
@@ -197,14 +197,14 @@ fn router(state: Arc<ApiState>, policy: Arc<security::Policy>) -> Router {
             "/v2/sources/{id}",
             axum::routing::patch(management::source_patch).delete(management::source_remove),
         )
-        .route("/v1/providers", get(providers))
-        .route("/v1/providers/{id}", get(provider))
+        .route("/v2/providers", get(providers))
+        .route("/v2/providers/{id}", get(provider))
         .route("/v1/usage", get(usage))
         .route("/v1/usage/queries", post(usage_queries::start))
         .route("/v1/usage/{id}", get(provider_usage))
-        .route("/v1/settings", get(settings).patch(patch_settings))
-        .route("/v1/refresh", post(manual_refresh))
-        .route("/v1/operations/{id}", get(operation))
+        .route("/v2/settings", get(settings).patch(patch_settings))
+        .route("/v2/refresh", post(manual_refresh))
+        .route("/v2/operations/{id}", get(operation))
         .fallback(|| async { error(StatusCode::NOT_FOUND, "not_found") })
         .layer(axum::extract::DefaultBodyLimit::max(65536))
         .layer(middleware::from_fn_with_state(policy, security::guard))
@@ -219,7 +219,7 @@ async fn status(State(state): State<Arc<ApiState>>) -> Json<Value> {
     let settings = state.settings.read().await;
     let status = state.status.lock().await;
     Json(
-        json!({"schema_version":1,"ready":state.snapshot.read().await.as_ref().is_some_and(|(g,_)|*g==state.generation.load(Ordering::SeqCst)),"refreshing":status.refreshing,"last_completed_at":status.last_completed_at,"next_refresh_at":status.next_refresh_at,"settings_revision":settings.revision,"access_mode":if state.manage {"manage"} else {"read_only"},"account_storage_enabled":state.vault.is_some(),"api_version":1,"server_version":env!("CARGO_PKG_VERSION")}),
+        json!({"schema_version":2,"ready":state.snapshot.read().await.as_ref().is_some_and(|(g,_)|*g==state.generation.load(Ordering::SeqCst)),"refreshing":status.refreshing,"last_completed_at":status.last_completed_at,"next_refresh_at":status.next_refresh_at,"settings_revision":settings.revision,"access_mode":if state.manage {"manage"} else {"read_only"},"account_storage_enabled":state.vault.is_some(),"api_version":2,"server_version":env!("CARGO_PKG_VERSION")}),
     )
 }
 fn provider_value(

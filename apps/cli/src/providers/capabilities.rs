@@ -85,7 +85,7 @@ impl ProviderList {
     pub fn new(enabled: &[Provider]) -> Self {
         use clap::ValueEnum;
         Self {
-            schema_version: 1,
+            schema_version: 2,
             providers: Provider::value_variants()
                 .iter()
                 .map(|provider| ProviderDescriptor::new(*provider, enabled))
@@ -371,7 +371,7 @@ pub fn capability(provider: Provider) -> ProviderCapability {
         } else {
             vec![]
         },
-        source_discovery_endpoint: "/v1/account-sources/discover",
+        source_discovery_endpoint: "/v2/sources/discover",
         source_references,
         native_instructions: native,
         operations,

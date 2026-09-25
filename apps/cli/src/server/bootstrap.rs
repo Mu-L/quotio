@@ -82,7 +82,7 @@ async fn read_handshake(input: &mut (impl AsyncRead + Unpin)) -> Result<Handshak
 pub fn announce(address: SocketAddr) -> Result<(), ServerError> {
     let record = serde_json::json!({
         "bootstrap_version": 2,
-        "api_version": 1,
+        "api_version": 2,
         "server_version": env!("CARGO_PKG_VERSION"),
         "pid": std::process::id(),
         "host": address.ip().to_string(),

@@ -57,20 +57,20 @@ mod tests {
         for path in [
             "/openapi.json",
             "/health",
-            "/v1/status",
-            "/v1/providers",
-            "/v1/providers/{id}",
+            "/v2/status",
+            "/v2/providers",
+            "/v2/providers/{id}",
             "/v1/usage",
             "/v1/usage/{id}",
             "/v1/accounts",
             "/v1/accounts/{id}",
             "/v1/accounts/{id}/usage",
-            "/v1/auth/sessions",
-            "/v1/auth/sessions/{id}",
-            "/v1/auth/sessions/{id}/callback",
-            "/v1/settings",
-            "/v1/refresh",
-            "/v1/operations/{id}",
+            "/v2/auth/sessions",
+            "/v2/auth/sessions/{id}",
+            "/v2/auth/sessions/{id}/callback",
+            "/v2/settings",
+            "/v2/refresh",
+            "/v2/operations/{id}",
         ] {
             assert!(paths.contains_key(path), "missing path {path}");
         }
@@ -159,12 +159,12 @@ mod tests {
         .unwrap();
         validate(
             &d["components"]["schemas"]["ProviderList"],
-            &serde_json::json!({"schema_version":1,"providers":[provider.clone()]}),
+            &serde_json::json!({"schema_version":2,"providers":[provider.clone()]}),
             &d,
             "providers",
         );
         validate(
-            &d["paths"]["/v1/providers/{id}"]["get"]["responses"]["200"]["content"]["application/json"]
+            &d["paths"]["/v2/providers/{id}"]["get"]["responses"]["200"]["content"]["application/json"]
                 ["schema"],
             &provider,
             &d,

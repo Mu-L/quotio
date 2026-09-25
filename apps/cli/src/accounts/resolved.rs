@@ -388,7 +388,7 @@ impl Registry {
             host: view::Host {
                 id: self.host_id.clone(),
                 platform: std::env::consts::OS.into(),
-                api_versions: vec![1, 2],
+                api_versions: vec![2],
                 capabilities: BTreeMap::from([
                     (
                         "account_read".into(),

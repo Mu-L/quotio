@@ -104,7 +104,7 @@ final class QuotioCLIBackendTests: XCTestCase {
     func testProviderCatalogKeepsUnknownProvidersAndUsesHostActions() async throws {
         let backend = QuotioCLIBackend(session: stubSession())
         await backend.connect(.init(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
-        QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"providers":[{"id":"future-provider","display_name":"Future Provider","actions":[{"kind":"add_api_key","available":true,"reason":null,"interaction":"client"},{"kind":"start_oauth","available":false,"reason":"unsupported_platform","interaction":"host_user"}],"capabilities":{"operations":["usage"],"settings":[{"name":"organization","field_path":"settings.organization","required":true}]}}]}"#)
+        QuotioCLIURLProtocol.enqueue(#"{"schema_version":2,"providers":[{"id":"future-provider","display_name":"Future Provider","actions":[{"kind":"add_api_key","available":true,"reason":null,"interaction":"client"},{"kind":"start_oauth","available":false,"reason":"unsupported_platform","interaction":"host_user"}],"capabilities":{"operations":["usage"],"settings":[{"name":"organization","field_path":"settings.organization","required":true}]}}]}"#)
         let providers = try await backend.monitoringProviders()
         XCTAssertEqual(providers.count, 1)
         XCTAssertEqual(providers[0].id.rawValue, "future-provider")
@@ -125,14 +125,14 @@ final class QuotioCLIBackendTests: XCTestCase {
         QuotioCLIURLProtocol.enqueue(settings.replacingOccurrences(of: "first", with: "second").replacingOccurrences(of: "123", with: "600"))
         let updated = try await backend.updateMonitoringSettings(value)
         XCTAssertEqual(updated.revision, "second")
-        let data = try XCTUnwrap(QuotioCLIURLProtocol.bodies(forPath: "/v1/settings").last)
+        let data = try XCTUnwrap(QuotioCLIURLProtocol.bodies(forPath: "/v2/settings").last)
         let body = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         XCTAssertEqual(body["revision"] as? String, "first")
         XCTAssertEqual(body["disabled_providers"] as? [String], ["future-provider"])
         QuotioCLIURLProtocol.enqueue(#"{"id":"refresh","status":"completed"}"#)
         QuotioCLIURLProtocol.enqueue(try hostFixture())
         _ = await backend.refreshAll(mode: .monitor)
-        let refreshData = try XCTUnwrap(QuotioCLIURLProtocol.body(forPath: "/v1/refresh"))
+        let refreshData = try XCTUnwrap(QuotioCLIURLProtocol.body(forPath: "/v2/refresh"))
         let refresh = try XCTUnwrap(JSONSerialization.jsonObject(with: refreshData) as? [String: Any])
         XCTAssertEqual(refresh["providers"] as? [String], [])
         QuotioCLIURLProtocol.enqueue(#"{"id":"scan","status":"completed"}"#)
@@ -390,7 +390,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         let requests = QuotioCLIURLProtocol.requests()
         XCTAssertEqual(requests.count, 2)
         XCTAssertEqual(requests[0].value(forHTTPHeaderField: "Idempotency-Key"), requests[1].value(forHTTPHeaderField: "Idempotency-Key"))
-        let body = try XCTUnwrap(QuotioCLIURLProtocol.body(forPath: "/v1/accounts/migrate"))
+        let body = try XCTUnwrap(QuotioCLIURLProtocol.body(forPath: "/v2/migrations/accounts"))
         let value = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
         XCTAssertEqual(value["enabled"] as? Bool, false)
         XCTAssertEqual(value["provider"] as? String, "kiro")
@@ -473,8 +473,8 @@ final class QuotioCLIBackendTests: XCTestCase {
         XCTAssertEqual(result.id, "source-a")
         XCTAssertEqual(result.displayName, "Backend account name")
         let requests = QuotioCLIURLProtocol.requests()
-        XCTAssertEqual(requests.map { $0.url?.path }, ["/v1/auth/sessions", "/v1/auth/sessions/session", "/v2/accounts/source-a"])
-        let body = try XCTUnwrap(QuotioCLIURLProtocol.body(forPath: "/v1/auth/sessions"))
+        XCTAssertEqual(requests.map { $0.url?.path }, ["/v2/auth/sessions", "/v2/auth/sessions/session", "/v2/accounts/source-a"])
+        let body = try XCTUnwrap(QuotioCLIURLProtocol.body(forPath: "/v2/auth/sessions"))
         let input = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: String])
         XCTAssertEqual(input, ["provider":"codex"])
     }
@@ -513,7 +513,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         try await backend.authorizeAccountStorage()
         let recovered = await backend.accountStorageRequiresAuthorization()
         XCTAssertFalse(recovered)
-        XCTAssertEqual(QuotioCLIURLProtocol.requests().map { $0.url?.path }, ["/v2/discovery", "/v1/account-vault/authorize", "/v2/discovery", "/v2/discovery"])
+        XCTAssertEqual(QuotioCLIURLProtocol.requests().map { $0.url?.path }, ["/v2/discovery", "/v2/account-vault/authorize", "/v2/discovery", "/v2/discovery"])
     }
 
     func testExplicitAuthorizationRefreshesOnlyTheRequestedProviderDiscovery() async throws {
@@ -529,7 +529,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         let data = try XCTUnwrap(QuotioCLIURLProtocol.bodies(forPath: "/v2/discovery").first)
         let body = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         XCTAssertEqual(body["providers"] as? [String], ["copilot"])
-        XCTAssertEqual(QuotioCLIURLProtocol.requests().filter { $0.url?.path == "/v1/account-sources/authorize" }.count, 1)
+        XCTAssertEqual(QuotioCLIURLProtocol.requests().filter { $0.url?.path == "/v2/sources/authorize" }.count, 1)
     }
 
     func testOnlyAnExplicitRescanRequestsRestorationOfRemovedSources() async throws {
@@ -625,7 +625,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         await backend.connect(.init(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
         _ = await backend.bootstrap(mode: .monitor)
         let result = await backend.refresh(.init(provider: .devin, scope: .account("devin-desktop-account"), mode: .monitor))
-        let body = try XCTUnwrap(QuotioCLIURLProtocol.body(forPath: "/v1/refresh"))
+        let body = try XCTUnwrap(QuotioCLIURLProtocol.body(forPath: "/v2/refresh"))
         let request = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
         XCTAssertEqual(request["account_id"] as? String, "devin-desktop-account")
         XCTAssertNotNil(result.quotas[.copilot]?["copilot-account"])

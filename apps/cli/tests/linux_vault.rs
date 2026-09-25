@@ -304,7 +304,7 @@ async fn native_reference_lifecycle(
             }
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
             op = client
-                .get(format!("{base}/v1/operations/{id}"))
+                .get(format!("{base}/v2/operations/{id}"))
                 .bearer_auth(token)
                 .send()
                 .await
@@ -318,7 +318,7 @@ async fn native_reference_lifecycle(
         op
     }
     let response = client
-        .post(format!("{base}/v1/account-sources"))
+        .post(format!("{base}/v2/sources"))
         .bearer_auth(token)
         .header("Idempotency-Key", "native-register")
         .json(&input)
@@ -348,7 +348,7 @@ async fn native_reference_lifecycle(
     assert_eq!(account["origin"], "borrowed_native");
     assert_eq!(account["enabled"], false);
     let settings: serde_json::Value = client
-        .get(format!("{base}/v1/settings"))
+        .get(format!("{base}/v2/settings"))
         .bearer_auth(token)
         .send()
         .await
@@ -357,7 +357,7 @@ async fn native_reference_lifecycle(
         .await
         .unwrap();
     let response = client
-        .patch(format!("{base}/v1/settings"))
+        .patch(format!("{base}/v2/settings"))
         .bearer_auth(token)
         .json(&serde_json::json!({"revision":settings["revision"],"enabled_providers":[provider]}))
         .send()
@@ -366,7 +366,7 @@ async fn native_reference_lifecycle(
     assert!(response.status().is_success());
     let settings: serde_json::Value = response.json().await.unwrap();
     let response = client
-        .post(format!("{base}/v1/refresh"))
+        .post(format!("{base}/v2/refresh"))
         .bearer_auth(token)
         .json(&serde_json::json!({"providers":[provider],"account_id":id,"force":true}))
         .send()
@@ -374,7 +374,7 @@ async fn native_reference_lifecycle(
         .unwrap();
     let refreshed = finish(&client, base, token, response).await;
     let alias = client
-        .post(format!("{base}/v1/refresh"))
+        .post(format!("{base}/v2/refresh"))
         .bearer_auth(token)
         .json(&serde_json::json!({"providers":[provider],"account_id":"local","force":true}))
         .send()
@@ -391,7 +391,7 @@ async fn native_reference_lifecycle(
         "source_disabled"
     );
     let response = client
-        .patch(format!("{base}/v1/settings"))
+        .patch(format!("{base}/v2/settings"))
         .bearer_auth(token)
         .json(&serde_json::json!({"revision":settings["revision"],"enabled_providers":[]}))
         .send()
