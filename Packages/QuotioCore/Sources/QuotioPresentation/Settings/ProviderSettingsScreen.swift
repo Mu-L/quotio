@@ -13,7 +13,9 @@ struct ProviderSettingsScreen: View {
     @State private var apiKeyPresented = false
     @State private var editingAccount: Account?
     @State private var removingAccount: Account?
-    @State private var switchingAccount: Account?
+    @State private var renamingAccount: Account?
+    @State private var newName = ""
+    @State private var removingSource: AccountLoginSource?
     @State private var permission: NativeSourcePermission?
     @State private var actionFailed = false
 
@@ -98,6 +100,7 @@ struct ProviderSettingsScreen: View {
                                     } else {
                                         Text("settings.sources.unchecked".localized()).font(.caption).foregroundStyle(.secondary)
                                     }
+                                    sourceMenu(source)
                                 }
                             }
                         } label: {
@@ -171,8 +174,35 @@ struct ProviderSettingsScreen: View {
             }
         }
         .sheet(item: $permission) { source in NativePermissionSheet(source: source) }
-        .sheet(item: $switchingAccount) { account in
-            SwitchAccountSheet(accountEmail: account.displayName) { switchingAccount = nil }
+        .alert("settings.renameAccount".localized(), isPresented: Binding(
+            get: { renamingAccount != nil }, set: { if !$0 { renamingAccount = nil } }
+        )) {
+            TextField("settings.accountLabel".localized(), text: $newName)
+            Button("action.cancel".localized(), role: .cancel) { renamingAccount = nil }
+            Button("action.save".localized()) {
+                guard let account = renamingAccount else { return }
+                Task {
+                    do { try await accounts.renameAccount(id: account.id, userLabel: newName) }
+                    catch { actionFailed = true }
+                    renamingAccount = nil
+                }
+            }
+            .disabled(newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        .alert("settings.sources.remove".localized(), isPresented: Binding(
+            get: { removingSource != nil }, set: { if !$0 { removingSource = nil } }
+        )) {
+            Button("action.cancel".localized(), role: .cancel) { removingSource = nil }
+            Button("action.remove".localized(), role: .destructive) {
+                guard let source = removingSource else { return }
+                Task {
+                    do {
+                        try await accounts.unlinkSource(sourceID: source.accountID)
+                        await controller.refresh(provider: provider)
+                    } catch { actionFailed = true }
+                    removingSource = nil
+                }
+            }
         }
         .alert("settings.removeAccount".localized(), isPresented: Binding(
             get: { removingAccount != nil }, set: { if !$0 { removingAccount = nil } }
@@ -194,6 +224,33 @@ struct ProviderSettingsScreen: View {
         }
     }
 
+    @ViewBuilder
+    private func sourceMenu(_ source: AccountLoginSource) -> some View {
+        if source.actions?.isEmpty == false {
+            Menu {
+                if source.actions?.contains("set_source_enabled") == true {
+                    Toggle("settings.sources.pause".localized(), isOn: Binding(
+                        get: { source.enabled == false },
+                        set: { paused in
+                            Task {
+                                do {
+                                    try await accounts.setSourceEnabled(!paused, sourceID: source.accountID)
+                                    await controller.refresh(provider: provider)
+                                } catch { actionFailed = true }
+                            }
+                        }
+                    ))
+                }
+                if source.actions?.contains("remove_source") == true {
+                    Button("action.remove".localized(), role: .destructive) { removingSource = source }
+                }
+            } label: { Image(systemName: "ellipsis") }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .accessibilityLabel("settings.sources.actions".localized())
+        }
+    }
+
     private func accountMenu(_ account: Account) -> some View {
         let item = MenuBarQuotaItem(provider: provider.rawValue, accountKey: account.accountKey)
         return Menu {
@@ -207,8 +264,17 @@ struct ProviderSettingsScreen: View {
             if account.capabilities.contains(.edit), descriptor?.actions.contains("add_api_key") == true {
                 Button("action.edit".localized()) { editingAccount = account; apiKeyPresented = true }
             }
-            if provider == .antigravity {
-                Button("antigravity.useInIDE".localized()) { switchingAccount = account }
+            if account.capabilities.contains(.rename) {
+                Button("settings.renameAccount".localized()) {
+                    newName = account.displayName
+                    renamingAccount = account
+                }
+                Button("settings.resetAccountName".localized()) {
+                    Task {
+                        do { try await accounts.renameAccount(id: account.id, userLabel: nil) }
+                        catch { actionFailed = true }
+                    }
+                }
             }
             if account.canDelete {
                 Button("action.remove".localized(), role: .destructive) { removingAccount = account }

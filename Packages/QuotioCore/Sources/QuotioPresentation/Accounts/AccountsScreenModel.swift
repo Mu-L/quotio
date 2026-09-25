@@ -123,6 +123,22 @@ public final class AccountsScreenModel {
         }
     }
 
+    public func renameAccount(id: String, userLabel: String?) async throws {
+        try await accountService.renameResolvedAccount(id: id, userLabel: userLabel)
+        await reloadAccounts()
+    }
+
+    public func setSourceEnabled(_ enabled: Bool, sourceID: String) async throws {
+        try await accountService.setSourceEnabled(enabled, sourceID: sourceID)
+        await reloadAccounts()
+    }
+
+    public func unlinkSource(sourceID: String) async throws {
+        try await accountService.unlinkSource(sourceID: sourceID)
+        await reloadAccounts()
+        await reloadDiscovery()
+    }
+
     public func saveAPIKey(
         providerID: AccountProviderID,
         label: String,

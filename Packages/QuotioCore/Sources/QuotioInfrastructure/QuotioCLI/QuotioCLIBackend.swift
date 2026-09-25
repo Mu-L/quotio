@@ -255,10 +255,18 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
         return account
     }
 
-    func renameResolvedAccount(id: String, userLabel: String?) async throws {
+    public func renameResolvedAccount(id: String, userLabel: String?) async throws {
         guard let client else { throw QuotioHostClientError.disconnected }
         let body = try JSONSerialization.data(withJSONObject: ["user_label": userLabel.map { $0 as Any } ?? NSNull()])
         try await mutate(client: client, path: QuotioHostAccountTarget.account(id).path, method: "PATCH", body: body)
+    }
+
+    public func setSourceEnabled(_ enabled: Bool, sourceID: String) async throws {
+        try await setResolvedEnabled(enabled, target: .source(sourceID))
+    }
+
+    public func unlinkSource(sourceID: String) async throws {
+        try await removeResolved(.source(sourceID))
     }
 
     func setResolvedEnabled(_ enabled: Bool, target: QuotioHostAccountTarget) async throws {
@@ -626,6 +634,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
             }
         }
         var capabilities: Set<AccountCapability> = []
+        if value.actions.contains(where: { $0.kind == "rename" && $0.available }) { capabilities.insert(.rename) }
         if value.actions.contains(where: { $0.kind == "remove" && $0.available }) { capabilities.insert(.delete) }
         if value.actions.contains(where: { $0.kind == "set_enabled" && $0.available }) { capabilities.insert(.disable) }
         let editable = value.sources.filter { $0.actions.contains { $0.kind == "replace_api_key" && $0.available } }
@@ -638,7 +647,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
             status: status(value.state), enabled: value.enabled,
             sources: value.sources.map { source in
                 AccountLoginSource(accountID: source.id, source: sourceKind(source.origin), credentialReference: source.kind,
-                    status: status(source.state), location: source.location)
+                    status: status(source.state), location: source.location, enabled: source.enabled, actions: Set(source.actions.filter(\.available).map(\.kind)))
             }
         )
     }

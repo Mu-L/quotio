@@ -304,6 +304,10 @@ private actor QuotaFeatureAccountService: AccountManaging {
         storedAccounts.removeAll { $0.id == accountID }
     }
 
+    func renameResolvedAccount(id: String, userLabel: String?) async throws {}
+    func setSourceEnabled(_ enabled: Bool, sourceID: String) async throws {}
+    func unlinkSource(sourceID: String) async throws {}
+
     func saveAPIKey(
         providerID: AccountProviderID,
         label: String,

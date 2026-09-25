@@ -138,6 +138,10 @@ private actor EmptyAccountManager: AccountManaging {
     func nativeDiscoverySnapshot() -> NativeDiscoverySnapshot { .init() }
     func authorizeNativeSource(_ source: NativeSourcePermission) {}
     func accounts() -> [Account] { [] }
+    func renameResolvedAccount(id: String, userLabel: String?) async throws {}
+    func setSourceEnabled(_ enabled: Bool, sourceID: String) async throws {}
+    func unlinkSource(sourceID: String) async throws {}
+
     func saveAPIKey(
         providerID: AccountProviderID,
         label: String,

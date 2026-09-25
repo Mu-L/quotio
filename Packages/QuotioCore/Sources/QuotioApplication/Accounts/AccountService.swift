@@ -56,6 +56,9 @@ public protocol AccountManaging: Sendable {
     func accounts() async -> [Account]
     func setDisabled(_ disabled: Bool, accountID: String) async
     func delete(accountID: String) async throws
+    func renameResolvedAccount(id: String, userLabel: String?) async throws
+    func setSourceEnabled(_ enabled: Bool, sourceID: String) async throws
+    func unlinkSource(sourceID: String) async throws
     func saveAPIKey(
         providerID: AccountProviderID,
         label: String,

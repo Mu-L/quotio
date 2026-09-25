@@ -24,6 +24,7 @@ public enum AccountSource: String, Codable, CaseIterable, Sendable {
 }
 
 public enum AccountCapability: String, Codable, Hashable, Sendable {
+    case rename
     case delete
     case disable
     case edit

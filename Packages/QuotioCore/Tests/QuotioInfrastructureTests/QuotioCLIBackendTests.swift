@@ -16,12 +16,33 @@ final class QuotioCLIBackendTests: XCTestCase {
         XCTAssertTrue(reset["user_label"] is NSNull)
         XCTAssertEqual(reset.count, 1)
         try await backend.setResolvedEnabled(false, target: .account("logical"))
-        try await backend.setResolvedEnabled(false, target: .source("source"))
-        try await backend.removeResolved(.source("source"))
+        try await backend.setSourceEnabled(false, sourceID: "source")
+        try await backend.unlinkSource(sourceID: "source")
         let requests = QuotioCLIURLProtocol.requests()
         XCTAssertEqual(requests.map { $0.url?.path }, ["/v2/accounts/logical", "/v2/accounts/logical", "/v2/sources/source", "/v2/sources/source"])
         XCTAssertEqual(requests.map(\.httpMethod), ["PATCH", "PATCH", "PATCH", "DELETE"])
         XCTAssertTrue(requests.allSatisfy { $0.value(forHTTPHeaderField: "Idempotency-Key") != nil })
+    }
+
+    func testAccountAndSourceActionsAreForwardedForFrontendCRUD() async throws {
+        QuotioCLIURLProtocol.enqueue(try hostFixture { root in
+            var accounts = root["accounts"] as! [[String: Any]]
+            accounts[0]["actions"] = [["kind":"rename", "available":true, "reason":NSNull(), "interaction":"client"]]
+            var sources = accounts[0]["sources"] as! [[String: Any]]
+            sources[0]["enabled"] = false
+            sources[0]["selected"] = false
+            sources[0]["actions"] = [["kind":"set_source_enabled", "available":true, "reason":NSNull(), "interaction":"host"], ["kind":"remove_source", "available":false, "reason":"read_only", "interaction":"host"]]
+            accounts[0]["sources"] = sources
+            root["accounts"] = accounts
+            root["usage"] = []
+        })
+        let backend = QuotioCLIBackend(session: stubSession())
+        await backend.connect(.init(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
+        let accounts = await backend.accounts()
+        XCTAssertTrue(try XCTUnwrap(accounts.first).capabilities.contains(.rename))
+        let source = try XCTUnwrap(accounts.first?.sources.first)
+        XCTAssertEqual(source.enabled, false)
+        XCTAssertEqual(source.actions, ["set_source_enabled"])
     }
 
     func testResolvedAccountReadUsesRustNamesGroupsAndActionsUnchanged() async throws {
