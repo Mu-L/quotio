@@ -29,6 +29,16 @@ pub enum Reference {
     Custom(CustomProviderReference, PreferencesReader, Provider),
 }
 impl Reference {
+    fn identity(&self) -> Result<String, AccountError> {
+        match self {
+            Self::Grok(source) => source.identity(),
+            Self::Copilot(source) => source.identity(),
+            Self::Custom(source, _, provider) => Ok(crate::cache::fingerprint(&[
+                &source.identity()?,
+                provider.id(),
+            ])),
+        }
+    }
     pub async fn resolve(self) -> Result<super::api::PreparedAccount, AccountError> {
         let (identity, credential, provider) = match self {
             Self::Grok(source) => {
@@ -237,15 +247,20 @@ impl Registry {
             }
         };
         self.prune();
-        if self.entries.len() + references.len() > 256 {
-            return Err(AccountError::Busy);
-        }
         let mut candidates = Vec::new();
         if keychain_present && references.is_empty() {
             candidates.push(json!({"label":"GitHub CLI Keychain","status":"permission_required","source":{"kind":"copilot_native","location":"gh_keychain"}}));
         }
         for (index, reference) in references.into_iter().enumerate() {
-            let id = super::random_string()?;
+            let identity = reference.identity()?;
+            let existing = self.entries.iter().find_map(|(id, (_, existing))| {
+                (existing.identity().ok().as_ref() == Some(&identity)).then(|| id.clone())
+            });
+            let id = match existing {
+                Some(id) => id,
+                None if self.entries.len() < 256 => super::random_string()?,
+                None => return Err(AccountError::Busy),
+            };
             self.entries.insert(id.clone(), (Instant::now(), reference));
             candidates.push(json!({"label":format!("Native entry {}", index + 1),"status":"available","source":{"kind":"discovered","discovery_ref":id}}));
         }
@@ -797,6 +812,35 @@ mod tests {
             Reference::Custom(source, rotated, provider).resolve().await,
             Err(AccountError::Input)
         ));
+    }
+    #[test]
+    fn repeated_scans_reuse_live_references() {
+        let mut registry = Registry {
+            preferences: |_| {
+                Ok(
+                    br#"[{"id":"11111111-1111-1111-1111-111111111111","type":"clinepass"}]"#
+                        .to_vec(),
+                )
+            },
+            ..Default::default()
+        };
+        let mut previous = None;
+        for _ in 0..300 {
+            let request = serde_json::from_value(json!({"provider":"clinepass","kind":"quotio_custom_provider","domain":"production","inspect":true})).unwrap();
+            let report = registry.inspect(request).unwrap();
+            let id = report["candidates"][0]["source"]["discovery_ref"]
+                .as_str()
+                .unwrap()
+                .to_owned();
+            if let Some(previous) = &previous {
+                assert_eq!(&id, previous);
+            }
+            assert!(registry.get(&id).is_ok());
+            previous = Some(id);
+        }
+        assert_eq!(registry.entries.len(), 1);
+        registry.expire_all();
+        assert!(registry.get(previous.as_deref().unwrap()).is_err());
     }
     #[test]
     fn discovery_references_expire_and_are_bounded() {
