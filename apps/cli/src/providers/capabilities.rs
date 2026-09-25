@@ -5,6 +5,7 @@ use serde::Serialize;
 #[derive(Serialize)]
 pub struct ProviderDescriptor {
     pub id: Provider,
+    pub display_name: &'static str,
     pub description: &'static str,
     pub enabled: bool,
     pub capabilities: ProviderCapability,
@@ -14,6 +15,18 @@ impl ProviderDescriptor {
     pub fn new(provider: Provider, enabled: &[Provider]) -> Self {
         Self {
             id: provider,
+            display_name: match provider {
+                Provider::Mock => "Mock",
+                Provider::Codex => "Codex",
+                Provider::Amp => "Amp",
+                Provider::Antigravity => "Antigravity",
+                Provider::Synthetic => "Synthetic",
+                Provider::OpenRouter => "OpenRouter",
+                Provider::Zai => "Z.ai",
+                Provider::MiniMax => "MiniMax",
+                Provider::Factory => "Factory Droid",
+                Provider::Catalog(_) => provider.catalog().expect("registered provider").name,
+            },
             description: provider.description(),
             enabled: enabled.contains(&provider),
             capabilities: capability(provider),
