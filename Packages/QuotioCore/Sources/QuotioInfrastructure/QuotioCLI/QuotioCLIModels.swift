@@ -607,20 +607,3 @@ struct QuotioCLIUsageMapper {
 private extension String {
     var nilIfEmpty: String? { isEmpty ? nil : self }
 }
-
-func makeQuotioCLIDecoder() -> JSONDecoder {
-    let decoder = JSONDecoder()
-    decoder.keyDecodingStrategy = .convertFromSnakeCase
-    decoder.dateDecodingStrategy = .custom { decoder in
-        let value = try decoder.singleValueContainer().decode(String.self)
-        let fractional = ISO8601DateFormatter()
-        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        guard let date = fractional.date(from: value) ?? ISO8601DateFormatter().date(from: value) else {
-            throw DecodingError.dataCorrupted(
-                .init(codingPath: decoder.codingPath, debugDescription: "Invalid RFC3339 timestamp")
-            )
-        }
-        return date
-    }
-    return decoder
-}

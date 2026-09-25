@@ -1,3 +1,4 @@
+import QuotioHostClient
 import Foundation
 import QuotioApplication
 import QuotioDomain
@@ -44,14 +45,14 @@ final class QuotioCLIBackendTests: XCTestCase {
         do {
             _ = try await backend.resolvedAccounts()
             XCTFail("Unsupported contract must not reach the frontend")
-        } catch QuotioCLIBackendError.incompatible {}
+        } catch QuotioHostClientError.incompatible {}
     }
 
     func testSharedRustUsageContractFixtureDecodesWithoutProviderPolicy() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .appendingPathComponent("../../../../").standardizedFileURL
         let data = try Data(contentsOf: root.appendingPathComponent("apps/cli/tests/fixtures/contracts/usage-v1.json"))
-        let report = try makeQuotioCLIDecoder().decode(QuotioCLIUsageReport.self, from: data)
+        let report = try makeQuotioHostDecoder().decode(QuotioCLIUsageReport.self, from: data)
         XCTAssertEqual(report.schemaVersion, 1)
         XCTAssertEqual(report.providers.first?.account.label, "Demo account")
         XCTAssertEqual(report.providers.first?.windows.count, 3)
@@ -72,13 +73,13 @@ final class QuotioCLIBackendTests: XCTestCase {
 
     func testGrokNativeEmailReplacesGeneratedSourceLabel() throws {
         let data = Data(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[{"provider":"grok","account_ref":{"origin":"borrowed_native","id":"native","label":"grok native random"},"account":{"id":"user","label":"grok@example.test"},"windows":[]}],"failures":[]}"#.utf8)
-        let report = try makeQuotioCLIDecoder().decode(QuotioCLIUsageReport.self, from: data)
+        let report = try makeQuotioHostDecoder().decode(QuotioCLIUsageReport.self, from: data)
         XCTAssertEqual(QuotioCLIUsageMapper.snapshot(report).accountAliases[.grok]?["native"], "grok@example.test")
     }
 
     func testDevinNativeSourcesUseVerifiedIdentityAndEmail() throws {
         let data = Data(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[{"provider":"devin-desktop","account_ref":{"origin":"borrowed_native","id":"cli","label":"Devin Desktop credentials.toml"},"account":{"id":"user-team","label":"person@example.test"},"windows":[]},{"provider":"devin-desktop","account_ref":{"origin":"borrowed_native","id":"desktop","label":"Devin Desktop state.vscdb"},"account":{"id":"user-team","label":"person@example.test"},"windows":[]}],"failures":[]}"#.utf8)
-        let report = try makeQuotioCLIDecoder().decode(QuotioCLIUsageReport.self, from: data)
+        let report = try makeQuotioHostDecoder().decode(QuotioCLIUsageReport.self, from: data)
         let snapshot = QuotioCLIUsageMapper.snapshot(report)
         XCTAssertEqual(snapshot.quotas[.devin]?.count, 1)
         XCTAssertEqual(snapshot.accountAliases[.devin]?["cli"], "person@example.test")
@@ -100,7 +101,7 @@ final class QuotioCLIBackendTests: XCTestCase {
 
     func testFailedSecondarySourceDoesNotSplitOrInvalidateItsVerifiedAccount() throws {
         let data = Data(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[{"provider":"codex","account_ref":{"origin":"owned","id":"owned","label":"Work"},"account":{"id":"workspace-1","label":"fixture"},"windows":[]}],"failures":[{"provider":"codex","account_ref":{"origin":"borrowed_native","id":"native","label":"Native login"},"code":"authentication"}]}"#.utf8)
-        let report = try makeQuotioCLIDecoder().decode(QuotioCLIUsageReport.self, from: data)
+        let report = try makeQuotioHostDecoder().decode(QuotioCLIUsageReport.self, from: data)
         let snapshot = QuotioCLIUsageMapper.snapshot(report, previousAliases: [.codex: ["native": "Work"]])
         XCTAssertEqual(snapshot.accountAliases[.codex]?["native"], "Work")
         XCTAssertEqual(snapshot.accountIDs[.codex]?["Work"], "owned")
@@ -174,7 +175,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         let preferences = UserDefaultsProviderTrackingPreferencesRepository(defaults: defaults)
         preferences.save(.init(disabledProviders: [.claude]))
         let backend = QuotioCLIBackend(session: stubSession(), trackingPreferences: preferences, userDefaults: UserDefaults(suiteName: suite)!)
-        await backend.connect(QuotioCLIConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
+        await backend.connect(QuotioHostConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
         _ = await backend.refresh(QuotaFetchRequest(provider: .claude, mode: .monitor))
         _ = await backend.refreshAll(mode: .monitor, providers: [.claude])
         await backend.rescanNativeAccounts(for: .claude)
@@ -196,7 +197,7 @@ final class QuotioCLIBackendTests: XCTestCase {
 
     func testVerifiedIdentityMergesDifferentSourceLabelsButNotDifferentAccounts() throws {
         let data = Data(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[{"provider":"codex","account_ref":{"origin":"owned","id":"owned","label":"Work"},"account":{"id":"workspace-1","label":"person@example.com"},"windows":[]},{"provider":"codex","account_ref":{"origin":"borrowed_native","id":"native","label":"person@example.com"},"account":{"id":"workspace-1","label":"person@example.com"},"windows":[]},{"provider":"codex","account_ref":{"origin":"owned","id":"second","label":"Work"},"account":{"id":"workspace-2","label":"person@example.com"},"windows":[]}],"failures":[]}"#.utf8)
-        let report = try makeQuotioCLIDecoder().decode(QuotioCLIUsageReport.self, from: data)
+        let report = try makeQuotioHostDecoder().decode(QuotioCLIUsageReport.self, from: data)
         let snapshot = QuotioCLIUsageMapper.snapshot(report)
         XCTAssertEqual(snapshot.quotas[.codex]?.count, 2)
         XCTAssertEqual(snapshot.accountAliases[.codex]?["owned"], "Work")
@@ -207,7 +208,7 @@ final class QuotioCLIBackendTests: XCTestCase {
     func testPartialRefreshDropsReportedAccountsAbsentFromTheLatestReport() async throws {
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[{"provider":"claude","account_ref":{"id":"local","label":"Work"},"account":{"id":"user","label":"Work"},"windows":[]}],"failures":[]}"#)
         let backend = QuotioCLIBackend(session: stubSession())
-        await backend.connect(QuotioCLIConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
+        await backend.connect(QuotioHostConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
         _ = await backend.bootstrap(mode: .monitor)
         QuotioCLIURLProtocol.enqueue(#"{"id":"refresh","status":"completed"}"#)
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"generated_at":"2026-09-16T12:01:00Z","providers":[],"failures":[]}"#)
@@ -241,7 +242,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         }
         """#.utf8)
 
-        let report = try makeQuotioCLIDecoder().decode(QuotioCLIUsageReport.self, from: data)
+        let report = try makeQuotioHostDecoder().decode(QuotioCLIUsageReport.self, from: data)
         let snapshot = QuotioCLIUsageMapper.snapshot(report)
 
         XCTAssertEqual(snapshot.quotas[.factoryDroid]?["Work"]?.models.first?.percentage, 75)
@@ -260,7 +261,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         }
         """#.utf8)
 
-        let report = try makeQuotioCLIDecoder().decode(QuotioCLIUsageReport.self, from: data)
+        let report = try makeQuotioHostDecoder().decode(QuotioCLIUsageReport.self, from: data)
         let snapshot = QuotioCLIUsageMapper.snapshot(report)
 
         XCTAssertEqual(Set(snapshot.quotas[.openRouter]?.keys.map(\.self) ?? []), ["Work", "Personal"])
@@ -273,7 +274,7 @@ final class QuotioCLIBackendTests: XCTestCase {
     func testRemovingQuotaOnlyRemovesAliasesForThatAccount() async throws {
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[{"provider":"amp","account_ref":{"origin":"owned","id":"work-id","label":"Work"},"account":{"id":"work","label":"Work"},"windows":[]},{"provider":"amp","account_ref":{"origin":"owned","id":"personal-id","label":"Personal"},"account":{"id":"personal","label":"Personal"},"windows":[]}],"failures":[]}"#)
         let backend = QuotioCLIBackend(session: stubSession())
-        await backend.connect(QuotioCLIConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test-token"))
+        await backend.connect(QuotioHostConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test-token"))
         _ = await backend.bootstrap(mode: .monitor)
 
         await backend.removeQuota(for: QuotaAccountID(provider: .amp, accountKey: "Work"), mode: .monitor)
@@ -310,7 +311,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         }
         """#.utf8)
 
-        let report = try makeQuotioCLIDecoder().decode(QuotioCLIUsageReport.self, from: data)
+        let report = try makeQuotioHostDecoder().decode(QuotioCLIUsageReport.self, from: data)
         let quota = try XCTUnwrap(QuotioCLIUsageMapper.snapshot(report).quotas[.codex]?["Codex User"])
 
         XCTAssertEqual(quota.lastUpdated, ISO8601DateFormatter().date(from: "2026-09-16T11:00:00Z"))
@@ -367,7 +368,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         }
         """#.utf8)
 
-        let report = try makeQuotioCLIDecoder().decode(QuotioCLIUsageReport.self, from: data)
+        let report = try makeQuotioHostDecoder().decode(QuotioCLIUsageReport.self, from: data)
         let snapshot = QuotioCLIUsageMapper.snapshot(report)
 
         XCTAssertEqual(snapshot.quotas[.codex]?["Local Codex"]?.accountDisplayName, "codex@example.com")
@@ -381,7 +382,7 @@ final class QuotioCLIBackendTests: XCTestCase {
     func testAccountCreateUsesBearerAndIdempotencyHeaders() async throws {
         QuotioCLIURLProtocol.enqueue(#"{"id":"operation-1","status":"completed","error":null}"#)
         let backend = QuotioCLIBackend(session: stubSession())
-        await backend.connect(QuotioCLIConnection(
+        await backend.connect(QuotioHostConnection(
             baseURL: URL(string: "http://127.0.0.1:43210")!,
             token: "private-token"
         ))
@@ -417,7 +418,7 @@ final class QuotioCLIBackendTests: XCTestCase {
             session: stubSession(),
             userDefaults: try XCTUnwrap(UserDefaults(suiteName: suite))
         )
-        await backend.connect(QuotioCLIConnection(
+        await backend.connect(QuotioHostConnection(
             baseURL: URL(string: "http://127.0.0.1:43210")!, token: "private-token"
         ))
 
@@ -470,7 +471,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"status":"checked","candidates":[{"status":"available","source":{"kind":"kiro_native"}}]}"#)
         QuotioCLIURLProtocol.enqueue(#"{"id":"existing","status":"failed","error":"duplicate_account"}"#)
         let backend = QuotioCLIBackend(session: stubSession(), userDefaults: try XCTUnwrap(UserDefaults(suiteName: suite)))
-        await backend.connect(QuotioCLIConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
+        await backend.connect(QuotioHostConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
 
         await backend.rescanNativeAccounts(for: .kiro)
 
@@ -496,7 +497,7 @@ final class QuotioCLIBackendTests: XCTestCase {
             session: stubSession(),
             userDefaults: try XCTUnwrap(UserDefaults(suiteName: suite))
         )
-        await backend.connect(QuotioCLIConnection(
+        await backend.connect(QuotioHostConnection(
             baseURL: URL(string: "http://127.0.0.1:43210")!, token: "private-token"
         ))
 
@@ -525,7 +526,7 @@ final class QuotioCLIBackendTests: XCTestCase {
             session: stubSession(),
             userDefaults: try XCTUnwrap(UserDefaults(suiteName: suite))
         )
-        await backend.connect(QuotioCLIConnection(
+        await backend.connect(QuotioHostConnection(
             baseURL: URL(string: "http://127.0.0.1:43210")!, token: "private-token"
         ))
 
@@ -551,7 +552,7 @@ final class QuotioCLIBackendTests: XCTestCase {
 
     func testLegacyImportUsesStableReceiptAndUnixExpiry() async throws {
         let backend = QuotioCLIBackend(session: stubSession())
-        await backend.connect(QuotioCLIConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "private-token"))
+        await backend.connect(QuotioHostConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "private-token"))
         let account = Account.make(providerID: AccountProviderID(rawValue: "kiro"), accountKey: "Work", source: .quotioKeychain)
         let credential = StoredCredential(accessToken: "synthetic-access", refreshToken: "synthetic-refresh", idToken: nil, accountID: "user", expiresAt: Date(timeIntervalSince1970: 1_700_000_000.9), extra: ["authMethod": "IdC", "clientId": "synthetic-client", "clientSecret": "synthetic-secret"])
         for _ in 0..<2 {
@@ -572,7 +573,7 @@ final class QuotioCLIBackendTests: XCTestCase {
 
     func testLegacyImportRejectsOutOfRangeExpiryWithoutSendingCredential() async throws {
         let backend = QuotioCLIBackend(session: stubSession())
-        await backend.connect(QuotioCLIConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "private-token"))
+        await backend.connect(QuotioHostConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "private-token"))
         let account = Account.make(providerID: AccountProviderID(rawValue: "claude"), accountKey: "Work", source: .quotioKeychain)
         let credential = StoredCredential(accessToken: "synthetic", refreshToken: "synthetic-refresh", idToken: nil, accountID: "user", expiresAt: Date(timeIntervalSince1970: 1e100), extra: [:])
         do {
@@ -586,7 +587,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[],"failures":[{"provider":"claude","account_ref":{"id":"local","label":"Local or environment account"},"code":"authentication"},{"provider":"clinepass","account_ref":{"id":"local","label":"Local or environment account"},"code":"unavailable"}]}"#)
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"accounts":[]}"#)
         let backend = QuotioCLIBackend(session: stubSession())
-        await backend.connect(QuotioCLIConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
+        await backend.connect(QuotioHostConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
         let snapshot = await backend.bootstrap(mode: .monitor)
         let accounts = await backend.accounts()
         XCTAssertTrue(accounts.isEmpty)
@@ -598,7 +599,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[{"provider":"amp","account_ref":{"id":"local","label":"Local Amp account"},"account":{"id":"amp","label":"Local Amp account"},"windows":[]},{"provider":"amp","account_ref":{"origin":"borrowed_native","id":"amp-native","label":"Local Amp account"},"account":{"id":"amp","label":"Local Amp account"},"windows":[]}],"failures":[]}"#)
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"accounts":[{"id":"amp-native","provider":"amp","origin":"borrowed_native","label":"Local Amp account","enabled":false,"source_kind":"amp_native"}]}"#)
         let backend = QuotioCLIBackend(session: stubSession())
-        await backend.connect(QuotioCLIConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
+        await backend.connect(QuotioHostConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
         _ = await backend.bootstrap(mode: .monitor)
         let accounts = await backend.accounts()
         XCTAssertEqual(accounts.count, 1)
@@ -614,7 +615,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[{"provider":"codex","account_ref":{"id":"local","label":"Local"},"account":{"id":"user","label":"Local"},"windows":[]}],"failures":[]}"#)
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"accounts":[]}"#)
         let backend = QuotioCLIBackend(session: stubSession())
-        await backend.connect(QuotioCLIConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "private-token"))
+        await backend.connect(QuotioHostConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "private-token"))
         _ = await backend.bootstrap(mode: .monitor)
 
         let accounts = await backend.accounts()
@@ -626,7 +627,7 @@ final class QuotioCLIBackendTests: XCTestCase {
     func testAccountsPreserveDisabledStateWhenMergingUsageReferences() async throws {
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[{"provider":"claude","account_ref":{"origin":"owned","id":"owned-1","label":"Work"},"account":{"id":"user","label":"Work"},"windows":[]}],"failures":[]}"#)
         let backend = QuotioCLIBackend(session: stubSession())
-        await backend.connect(QuotioCLIConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "private-token"))
+        await backend.connect(QuotioHostConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "private-token"))
         _ = await backend.bootstrap(mode: .monitor)
 
         for enabled in [false, true] {
@@ -646,7 +647,7 @@ final class QuotioCLIBackendTests: XCTestCase {
             QuotioCLIURLProtocol.enqueue(#"{"id":"operation-1","status":"completed","error":null}"#)
             QuotioCLIURLProtocol.enqueue(report)
             let backend = QuotioCLIBackend(session: stubSession())
-            await backend.connect(QuotioCLIConnection(
+            await backend.connect(QuotioHostConnection(
                 baseURL: URL(string: "http://127.0.0.1:43210")!,
                 token: "private-token"
             ))
@@ -670,7 +671,7 @@ final class QuotioCLIBackendTests: XCTestCase {
     func testScopedSnapshotFailureOnlyMarksRefreshedProvider() async throws {
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[{"provider":"claude","account":{"id":"claude-1","label":"Work"},"windows":[]},{"provider":"codex","account":{"id":"codex-1","label":"Personal"},"windows":[]}],"failures":[]}"#)
         let backend = QuotioCLIBackend(session: stubSession())
-        await backend.connect(QuotioCLIConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "private-token"))
+        await backend.connect(QuotioHostConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "private-token"))
         let initial = await backend.bootstrap(mode: .monitor)
         QuotioCLIURLProtocol.enqueue(#"{"id":"refresh","status":"completed"}"#)
         QuotioCLIURLProtocol.enqueue("{}")
@@ -701,7 +702,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         let emptyReport = #"{"schema_version":1,"generated_at":"2026-09-16T12:01:00Z","providers":[],"failures":[]}"#
         QuotioCLIURLProtocol.enqueue(report)
         let backend = QuotioCLIBackend(session: stubSession())
-        await backend.connect(QuotioCLIConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "private-token"))
+        await backend.connect(QuotioHostConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "private-token"))
         let initial = await backend.bootstrap(mode: .monitor)
 
         QuotioCLIURLProtocol.enqueue(#"{"id":"mutation","status":"completed"}"#)
@@ -748,7 +749,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         QuotioCLIURLProtocol.enqueue(report)
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"accounts":[{"id":"owned-1","provider":"claude","label":"Managed","origin":"owned","enabled":true,"source_kind":null}]}"#)
         let backend = QuotioCLIBackend(session: stubSession())
-        await backend.connect(QuotioCLIConnection(
+        await backend.connect(QuotioHostConnection(
             baseURL: URL(string: "http://127.0.0.1:43210")!,
             token: "private-token"
         ))
@@ -767,7 +768,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         QuotioCLIURLProtocol.enqueue(report)
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"accounts":[{"id":"monitor","provider":"warp","label":"Personal","origin":"owned","enabled":true},{"id":"mirror","provider":"warp","label":"__quotio_local_warp__:Work","origin":"owned","enabled":true}]}"#)
         let backend = QuotioCLIBackend(session: stubSession())
-        await backend.connect(QuotioCLIConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test-token"))
+        await backend.connect(QuotioHostConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test-token"))
         let snapshot = await backend.bootstrap(mode: .localProxy)
         XCTAssertEqual(Set(snapshot.quotas[.warp]?.keys.map { $0 } ?? []), ["Work"])
         XCTAssertEqual(Set(snapshot.accountIDs[.warp]?.values.map { $0 } ?? []), ["mirror", "mirror-failed"])
@@ -778,7 +779,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         let cached = await backend.accounts()
         XCTAssertEqual(Set(cached.map(\.id)), ["mirror"])
 
-        let decoded = try makeQuotioCLIDecoder().decode(QuotioCLIUsageReport.self, from: Data(report.utf8))
+        let decoded = try makeQuotioHostDecoder().decode(QuotioCLIUsageReport.self, from: Data(report.utf8))
         let monitor = QuotioCLIUsageMapper.snapshot(decoded, mode: .monitor)
         XCTAssertEqual(monitor.quotas[.warp]?.count, 2)
         XCTAssertEqual(monitor.accountIssues.count, 2)
@@ -787,7 +788,7 @@ final class QuotioCLIBackendTests: XCTestCase {
     func testLocalWarpMirrorsAreReadOnlyWhileManagedWarpAccountsRemainEditable() async throws {
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"accounts":[{"id":"managed","provider":"warp","label":"Managed","origin":"owned","enabled":true},{"id":"mirror","provider":"warp","label":"__quotio_local_warp__:Work","origin":"owned","enabled":true}]}"#)
         let backend = QuotioCLIBackend(session: stubSession())
-        await backend.connect(QuotioCLIConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "private-token"))
+        await backend.connect(QuotioHostConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "private-token"))
 
         let accounts = await backend.accounts()
 
@@ -802,7 +803,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         QuotioCLIURLProtocol.enqueue(#"{"id":"operation-1","status":"completed","error":null}"#)
         QuotioCLIURLProtocol.enqueue(#"{"id":"operation-2","status":"completed","error":null}"#)
         let backend = QuotioCLIBackend(session: stubSession())
-        await backend.connect(QuotioCLIConnection(
+        await backend.connect(QuotioHostConnection(
             baseURL: URL(string: "http://127.0.0.1:43210")!,
             token: "private-token"
         ))
@@ -820,7 +821,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         QuotioCLIURLProtocol.enqueue(#"{"provider":"copilot","workflow":"device_code","user_code":"CODE","id":"session-1","url":"https://github.com/login/device","expires_at":\#(expired),"status":"waiting","account_id":null,"error_code":null}"#)
         QuotioCLIURLProtocol.enqueue(#"{"provider":"copilot","workflow":"device_code","user_code":"CODE","id":"session-1","url":"https://github.com/login/device","expires_at":\#(expired),"status":"failed","account_id":null,"error_code":"unexpected_poll"}"#)
         let backend = QuotioCLIBackend(session: stubSession())
-        await backend.connect(QuotioCLIConnection(
+        await backend.connect(QuotioHostConnection(
             baseURL: URL(string: "http://127.0.0.1:43210")!,
             token: "private-token"
         ))
@@ -848,7 +849,7 @@ final class QuotioCLIBackendTests: XCTestCase {
     func testOAuthCallbackUsesExchangeTimeout() async throws {
         QuotioCLIURLProtocol.enqueue(#"{"provider":"codex","workflow":"browser_redirect","user_code":null,"id":"session-1","url":"https://example.com","expires_at":4102444800,"status":"completed","account_id":"account-1","error_code":null}"#)
         let backend = QuotioCLIBackend(session: stubSession())
-        await backend.connect(QuotioCLIConnection(
+        await backend.connect(QuotioHostConnection(
             baseURL: URL(string: "http://127.0.0.1:43210")!,
             token: "private-token"
         ))
@@ -875,7 +876,7 @@ final class QuotioCLIBackendTests: XCTestCase {
             customProviders: { [provider] },
             customProviderDomain: "com.example.quotio"
         )
-        await backend.connect(QuotioCLIConnection(
+        await backend.connect(QuotioHostConnection(
             baseURL: URL(string: "http://127.0.0.1:43210")!,
             token: "private-token"
         ))
@@ -897,7 +898,7 @@ final class QuotioCLIBackendTests: XCTestCase {
     func testCustomProviderReferencesAreReadOnly() async throws {
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"accounts":[{"id":"glm","provider":"zai","label":"GLM","origin":"borrowed_proxy","enabled":true,"source_kind":"quotio_custom_provider"},{"id":"cline","provider":"clinepass","label":"Cline","origin":"borrowed_proxy","enabled":true,"source_kind":"quotio_custom_provider"},{"id":"owned","provider":"zai","label":"Owned","origin":"owned","enabled":true}]}"#)
         let backend = QuotioCLIBackend(session: stubSession())
-        await backend.connect(QuotioCLIConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test-token"))
+        await backend.connect(QuotioHostConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test-token"))
         let accounts = await backend.accounts()
         XCTAssertEqual(accounts.count, 3)
         XCTAssertTrue(accounts.filter { $0.id != "owned" }.allSatisfy { $0.capabilities.isEmpty })
@@ -915,7 +916,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         QuotioCLIURLProtocol.enqueue(#"{"id":"refresh","status":"completed"}"#)
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[],"failures":[]}"#)
         let backend = QuotioCLIBackend(session: stubSession(), customProviders: { [provider] }, customProviderDomain: "com.example.quotio")
-        await backend.connect(QuotioCLIConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test-token"))
+        await backend.connect(QuotioHostConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test-token"))
         _ = await backend.refresh(QuotaFetchRequest(provider: .glm, mode: .monitor))
         let data = try XCTUnwrap(QuotioCLIURLProtocol.body(forPath: "/v1/accounts/custom-1"))
         XCTAssertEqual(try JSONSerialization.jsonObject(with: data) as? [String: Bool], ["enabled": true])
@@ -937,7 +938,7 @@ final class QuotioCLIBackendTests: XCTestCase {
             customProviders: { [provider] },
             customProviderDomain: "com.example.quotio"
         )
-        await backend.connect(QuotioCLIConnection(
+        await backend.connect(QuotioHostConnection(
             baseURL: URL(string: "http://127.0.0.1:43210")!,
             token: "private-token"
         ))
@@ -961,7 +962,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         QuotioCLIURLProtocol.enqueue(#"{"id":"refresh","status":"completed"}"#)
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[],"failures":[]}"#)
         let backend = QuotioCLIBackend(session: stubSession(), customProviders: { [provider] }, customProviderDomain: "com.example.quotio")
-        await backend.connect(QuotioCLIConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "private-token"))
+        await backend.connect(QuotioHostConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "private-token"))
 
         _ = await backend.refresh(QuotaFetchRequest(provider: .glm, mode: .monitor))
 
@@ -978,7 +979,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
         let report = #"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[{"provider":"cursor","account_ref":{"origin":"borrowed_native","id":"cursor-1","label":"Work"},"account":{"id":"cursor-user","label":"Work"},"windows":[]}],"failures":[]}"#
         let backend = QuotioCLIBackend(session: stubSession(), userDefaults: defaults)
-        await backend.connect(QuotioCLIConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "private-token"))
+        await backend.connect(QuotioHostConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "private-token"))
         QuotioCLIURLProtocol.enqueue(#"{"id":"import","status":"completed"}"#)
         QuotioCLIURLProtocol.enqueue(report)
         let imported = await backend.refresh(QuotaFetchRequest(provider: .cursor, mode: .monitor))
@@ -1010,7 +1011,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         for diagnostics in ["[]", #"[{"source":"supplemental","code":"transient"}]"#] {
             for extraFailure in ["", #",{"provider":"openrouter","account_ref":{"id":"work","label":"Work"},"code":"authentication"}"#] {
                 let data = Data(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[{"provider":"openrouter","account_ref":{"id":"work","label":"Work"},"account":{"id":"user","label":"Work"},"windows":[],"diagnostics":\#(diagnostics)}],"failures":[{"provider":"openrouter","account_ref":{"id":"work","label":"Work"},"code":"transient"}\#(extraFailure)]}"#.utf8)
-                let report = try makeQuotioCLIDecoder().decode(QuotioCLIUsageReport.self, from: data)
+                let report = try makeQuotioHostDecoder().decode(QuotioCLIUsageReport.self, from: data)
                 let snapshot = QuotioCLIUsageMapper.snapshot(report)
                 let issue = snapshot.accountIssues[QuotaAccountID(provider: .openRouter, accountKey: "Work")]
                 XCTAssertEqual(issue?.kind, diagnostics == "[]" || !extraFailure.isEmpty ? .failed : .partial)
@@ -1034,7 +1035,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         )
         QuotioCLIURLProtocol.enqueue(#"{"error":"not_ready"}"#, status: 503)
         let backend = QuotioCLIBackend(session: stubSession(), userDefaults: defaults)
-        await backend.connect(QuotioCLIConnection(
+        await backend.connect(QuotioHostConnection(
             baseURL: URL(string: "http://127.0.0.1:43210")!,
             token: "private-token"
         ))
@@ -1062,7 +1063,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[],"failures":[{"provider":"claude","account_ref":{"origin":"borrowed_proxy","id":"proxy-1","label":"Work"},"code":"authentication"}]}"#)
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"accounts":[]}"#)
         let backend = QuotioCLIBackend(session: stubSession())
-        await backend.connect(QuotioCLIConnection(
+        await backend.connect(QuotioHostConnection(
             baseURL: URL(string: "http://127.0.0.1:43210")!, token: "private-token"
         ))
 
@@ -1087,7 +1088,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         let report = #"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[{"provider":"claude","account_ref":{"origin":"owned","id":"owned","label":"Work"},"account":{"id":"owned","label":"Work"},"windows":[]},{"provider":"claude","account_ref":{"origin":"borrowed_proxy","id":"44ca7be0ce2c2f800a2fec0aa175c36b09f09b0ad21c7fecc83e4c345853a93d","label":"Work"},"account":{"id":"proxy","label":"Work"},"windows":[]}],"failures":[{"provider":"claude","account_ref":{"origin":"borrowed_proxy","id":"f7ff9ce8cb0a99488cf1712149ff9879ef7bbc2353795f901e76e286270c2fe1","label":"Failed"},"code":"authentication"}]}"#
         let disabledID = "44ca7be0ce2c2f800a2fec0aa175c36b09f09b0ad21c7fecc83e4c345853a93d"
         let backend = QuotioCLIBackend(session: stubSession(), userDefaults: UserDefaults(suiteName: suite)!, authFileState: state)
-        let connection = QuotioCLIConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test-token")
+        let connection = QuotioHostConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test-token")
         await backend.connect(connection)
         QuotioCLIURLProtocol.enqueue(report)
         let before = await backend.bootstrap(mode: .monitor)
@@ -1126,7 +1127,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         QuotioCLIURLProtocol.enqueue(#"{"id":"operation-1","status":"completed","error":null}"#)
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[],"failures":[]}"#)
         let backend = QuotioCLIBackend(session: stubSession())
-        await backend.connect(QuotioCLIConnection(
+        await backend.connect(QuotioHostConnection(
             baseURL: URL(string: "http://127.0.0.1:43210")!,
             token: "private-token"
         ))
@@ -1142,7 +1143,7 @@ final class QuotioCLIBackendTests: XCTestCase {
         QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"generated_at":"2026-09-16T12:00:00Z","providers":[{"provider":"claude","account_ref":{"origin":"owned","id":"owned-1","label":"Managed"},"account":{"id":"managed","label":"Managed","plan":null},"windows":[]}],"failures":[]}"#)
         QuotioCLIURLProtocol.enqueue("{}")
         let backend = QuotioCLIBackend(session: stubSession())
-        await backend.connect(QuotioCLIConnection(
+        await backend.connect(QuotioHostConnection(
             baseURL: URL(string: "http://127.0.0.1:43210")!,
             token: "private-token"
         ))

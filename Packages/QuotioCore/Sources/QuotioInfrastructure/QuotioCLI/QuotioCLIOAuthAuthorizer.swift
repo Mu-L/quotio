@@ -1,3 +1,4 @@
+import QuotioHostClient
 import Foundation
 import QuotioApplication
 import QuotioDomain
@@ -126,8 +127,8 @@ public actor QuotioCLIOAuthAuthorizer: OAuthAuthorizing {
     }
 
     private static func errorCode(_ error: Error) -> String {
-        if case let QuotioCLIBackendError.response(_, code) = error { return code }
-        if error is QuotioCLIBackendError { return "quotio_backend_unavailable" }
+        if case let QuotioHostClientError.response(_, code) = error { return code }
+        if error is QuotioHostClientError { return "quotio_backend_unavailable" }
         return "oauth_failed"
     }
 }

@@ -1,15 +1,6 @@
+import QuotioHostClient
 import Foundation
 import Security
-
-public struct QuotioCLIConnection: Sendable, Equatable {
-    public let baseURL: URL
-    public let token: String
-
-    public init(baseURL: URL, token: String) {
-        self.baseURL = baseURL
-        self.token = token
-    }
-}
 
 public enum QuotioCLIServerError: LocalizedError, Equatable {
     case helperUnavailable
@@ -85,7 +76,7 @@ public final class QuotioCLIServerProcess {
         self.proxyURL = proxyURL
     }
 
-    public func start() async throws -> QuotioCLIConnection {
+    public func start() async throws -> QuotioHostConnection {
         await stop()
         guard FileManager.default.isExecutableFile(atPath: executableURL.path) else {
             throw QuotioCLIServerError.helperUnavailable
@@ -170,7 +161,7 @@ public final class QuotioCLIServerProcess {
                 throw QuotioCLIServerError.incompatibleBootstrap
             }
             guard process.isRunning else { throw QuotioCLIServerError.startupFailed }
-            return QuotioCLIConnection(baseURL: baseURL, token: token)
+            return QuotioHostConnection(baseURL: baseURL, token: token)
         } catch {
             await stop()
             throw error

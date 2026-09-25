@@ -1,3 +1,4 @@
+import QuotioHostClient
 import Foundation
 import XCTest
 @testable import QuotioInfrastructure

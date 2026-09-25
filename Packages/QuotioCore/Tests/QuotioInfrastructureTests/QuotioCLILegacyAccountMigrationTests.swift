@@ -1,3 +1,4 @@
+import QuotioHostClient
 import Foundation
 import QuotioApplication
 import QuotioDomain
@@ -148,7 +149,7 @@ private actor MigrationDestination {
     func allowWrites() { allowed = true }
     func save(_ account: Account, credential: StoredCredential, disabled: Bool) throws {
         attempts.append(account.id)
-        guard allowed else { throw QuotioCLIBackendError.disconnected }
+        guard allowed else { throw QuotioHostClientError.disconnected }
         XCTAssertEqual(credential.refreshToken, "synthetic-refresh")
         saved[account.id] = disabled
         credentials[account.id] = credential

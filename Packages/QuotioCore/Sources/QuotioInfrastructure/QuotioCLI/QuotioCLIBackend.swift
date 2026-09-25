@@ -1,76 +1,8 @@
+import QuotioHostClient
 import Foundation
 import CryptoKit
 import QuotioApplication
 import QuotioDomain
-
-public enum QuotioCLIBackendError: Error, Equatable, Sendable {
-    case disconnected
-    case incompatible
-    case response(Int, String)
-    case timeout
-}
-
-private final class QuotioCLINoRedirectDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
-    func urlSession(
-        _ session: URLSession,
-        task: URLSessionTask,
-        willPerformHTTPRedirection response: HTTPURLResponse,
-        newRequest request: URLRequest,
-        completionHandler: @escaping @Sendable (URLRequest?) -> Void
-    ) {
-        completionHandler(nil)
-    }
-}
-
-private struct QuotioCLIHTTPClient: Sendable {
-    private struct Failure: Decodable { let error: String }
-
-    let connection: QuotioCLIConnection
-    let session: URLSession
-
-    init(connection: QuotioCLIConnection, session: URLSession? = nil) {
-        self.connection = connection
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForRequest = 20
-        configuration.timeoutIntervalForResource = 25
-        self.session = session ?? URLSession(
-            configuration: configuration,
-            delegate: QuotioCLINoRedirectDelegate(),
-            delegateQueue: nil
-        )
-    }
-
-    func request<T: Decodable & Sendable>(
-        _ path: String,
-        method: String = "GET",
-        body: Data? = nil,
-        idempotencyKey: String? = nil,
-        timeout: TimeInterval? = nil
-    ) async throws -> T {
-        var request = URLRequest(url: connection.baseURL.appendingPathComponent(path))
-        request.httpMethod = method
-        request.httpBody = body
-        if let timeout { request.timeoutInterval = timeout }
-        request.setValue("Bearer \(connection.token)", forHTTPHeaderField: "Authorization")
-        if body != nil { request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
-        if let idempotencyKey {
-            request.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key")
-        }
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw QuotioCLIBackendError.disconnected
-        }
-        guard http.url?.host == "127.0.0.1",
-              http.url?.port == connection.baseURL.port else {
-            throw QuotioCLIBackendError.incompatible
-        }
-        guard (200..<300).contains(http.statusCode) else {
-            let code = (try? JSONDecoder().decode(Failure.self, from: data).error) ?? "request_failed"
-            throw QuotioCLIBackendError.response(http.statusCode, code)
-        }
-        return try makeQuotioCLIDecoder().decode(T.self, from: data)
-    }
-}
 
 public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
     private struct Empty: Decodable, Sendable {}
@@ -104,7 +36,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
     }
 
     public private(set) var snapshot = QuotaSnapshot()
-    private var client: QuotioCLIHTTPClient?
+    private var client: QuotioHostHTTPClient?
     private var reportedAccounts: [Account] = []
     private var activeMode: QuotaOperatingMode = .monitor
     private var continuations: [UUID: AsyncStream<QuotaSnapshot>.Continuation] = [:]
@@ -140,8 +72,8 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         self.localization = localization
     }
 
-    public func connect(_ connection: QuotioCLIConnection) {
-        client = QuotioCLIHTTPClient(connection: connection, session: session)
+    public func connect(_ connection: QuotioHostConnection) {
+        client = QuotioHostHTTPClient(connection: connection, session: session)
     }
 
     public func disconnect() {
@@ -321,7 +253,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
     }
 
     public func authorizeNativeSource(_ source: NativeSourcePermission) async throws {
-        guard let client else { throw QuotioCLIBackendError.disconnected }
+        guard let client else { throw QuotioHostClientError.disconnected }
         let body = try JSONEncoder.quotioCLI.encode(QuotioCLISourceDiscovery.Candidate.Source(
             kind: source.kind,
             location: source.location,
@@ -338,16 +270,16 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
             )
         } catch {
             switch error {
-            case QuotioCLIBackendError.response(_, "quotio_vault_access_failed"),
-                 QuotioCLIBackendError.response(_, "credential_storage_unavailable"):
+            case QuotioHostClientError.response(_, "quotio_vault_access_failed"),
+                 QuotioHostClientError.response(_, "credential_storage_unavailable"):
                 throw NativeSourceAuthorizationFailure.quotioVault
-            case QuotioCLIBackendError.response(_, "native_keychain_access_failed"):
+            case QuotioHostClientError.response(_, "native_keychain_access_failed"):
                 throw NativeSourceAuthorizationFailure.nativeKeychain
-            case QuotioCLIBackendError.response(_, "native_login_required"):
+            case QuotioHostClientError.response(_, "native_login_required"):
                 throw NativeSourceAuthorizationFailure.nativeLogin
-            case QuotioCLIBackendError.response(_, "native_credential_invalid"):
+            case QuotioHostClientError.response(_, "native_credential_invalid"):
                 throw NativeSourceAuthorizationFailure.invalidCredential
-            case QuotioCLIBackendError.timeout:
+            case QuotioHostClientError.timeout:
                 throw NativeSourceAuthorizationFailure.timeout
             default:
                 throw NativeSourceAuthorizationFailure.unknown
@@ -409,33 +341,33 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
     }
 
     func resolvedAccounts() async throws -> QuotioHostAccountList {
-        guard let client else { throw QuotioCLIBackendError.disconnected }
+        guard let client else { throw QuotioHostClientError.disconnected }
         let result: QuotioHostAccountList = try await client.request("v2/accounts")
         guard result.schemaVersion == 2, result.host.apiVersions.contains(2) else {
-            throw QuotioCLIBackendError.incompatible
+            throw QuotioHostClientError.incompatible
         }
         return result
     }
 
     func renameResolvedAccount(id: String, userLabel: String?) async throws {
-        guard let client else { throw QuotioCLIBackendError.disconnected }
+        guard let client else { throw QuotioHostClientError.disconnected }
         let body = try JSONSerialization.data(withJSONObject: ["user_label": userLabel.map { $0 as Any } ?? NSNull()])
         try await mutate(client: client, path: QuotioHostAccountTarget.account(id).path, method: "PATCH", body: body)
     }
 
     func setResolvedEnabled(_ enabled: Bool, target: QuotioHostAccountTarget) async throws {
-        guard let client else { throw QuotioCLIBackendError.disconnected }
+        guard let client else { throw QuotioHostClientError.disconnected }
         let body = try JSONEncoder.quotioCLI.encode(EnabledBody(enabled: enabled))
         try await mutate(client: client, path: target.path, method: "PATCH", body: body)
     }
 
     func removeResolved(_ target: QuotioHostAccountTarget) async throws {
-        guard let client else { throw QuotioCLIBackendError.disconnected }
+        guard let client else { throw QuotioHostClientError.disconnected }
         try await mutate(client: client, path: target.path, method: "DELETE", body: nil)
     }
 
     public func importLegacyAccount(_ account: Account, credential: StoredCredential, disabled: Bool) async throws {
-        guard let client else { throw QuotioCLIBackendError.disconnected }
+        guard let client else { throw QuotioHostClientError.disconnected }
         struct Import: Encodable {
             let legacyId: String
             let provider: String
@@ -445,7 +377,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         }
         guard let domainProvider = QuotaProvider(rawValue: account.providerID.rawValue),
               let provider = QuotioCLIProviderMap.cli(domainProvider) else {
-            throw QuotioCLIBackendError.incompatible
+            throw QuotioHostClientError.incompatible
         }
         var credential = credential
         if domainProvider == .antigravity {
@@ -458,7 +390,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         encoder.dateEncodingStrategy = .custom { date, encoder in
             let seconds = date.timeIntervalSince1970
             guard seconds.isFinite, seconds >= 0, seconds < Double(Int64.max) else {
-                throw QuotioCLIBackendError.incompatible
+                throw QuotioHostClientError.incompatible
             }
             var container = encoder.singleValueContainer()
             try container.encode(Int64(seconds))
@@ -499,9 +431,9 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
     }
 
     public func synchronizeWarpTokens(_ tokens: [WarpToken]) async throws {
-        guard let client else { throw QuotioCLIBackendError.disconnected }
+        guard let client else { throw QuotioHostClientError.disconnected }
         let response: QuotioCLIAccountList = try await client.request("v1/accounts")
-        guard response.schemaVersion == 1 else { throw QuotioCLIBackendError.incompatible }
+        guard response.schemaVersion == 1 else { throw QuotioHostClientError.incompatible }
         let existing = response.accounts.filter(QuotioCLIWarpMirror.isMirror)
         var retained = Set<String>()
         for token in tokens where token.isEnabled {
@@ -561,7 +493,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
     }
 
     func beginOAuth(provider: String) async throws -> QuotioCLIOAuthSession {
-        guard let client else { throw QuotioCLIBackendError.disconnected }
+        guard let client else { throw QuotioHostClientError.disconnected }
         let body = try JSONSerialization.data(withJSONObject: [
             "provider": provider,
             "callback_mode": "relay",
@@ -575,12 +507,12 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
     }
 
     func oauthSession(id: String) async throws -> QuotioCLIOAuthSession {
-        guard let client else { throw QuotioCLIBackendError.disconnected }
+        guard let client else { throw QuotioHostClientError.disconnected }
         return try await client.request("v1/auth/sessions/\(id)")
     }
 
     func completeOAuth(id: String, callbackURL: String? = nil, code: String? = nil) async throws -> QuotioCLIOAuthSession {
-        guard let client else { throw QuotioCLIBackendError.disconnected }
+        guard let client else { throw QuotioHostClientError.disconnected }
         var value: [String: String] = [:]
         if let callbackURL { value["callback_url"] = callbackURL }
         if let code { value["code"] = code }
@@ -635,12 +567,12 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
             )
             let deadline = ContinuousClock.now + .seconds(180)
             while operation.status == "running" {
-                guard ContinuousClock.now < deadline else { throw QuotioCLIBackendError.timeout }
+                guard ContinuousClock.now < deadline else { throw QuotioHostClientError.timeout }
                 try await Task.sleep(for: .milliseconds(300))
                 operation = try await client.request("v1/operations/\(operation.id)")
             }
             guard operation.status == "completed" else {
-                throw QuotioCLIBackendError.response(500, operation.error ?? operation.status)
+                throw QuotioHostClientError.response(500, operation.error ?? operation.status)
             }
             await loadSnapshot(mode: mode, refreshedProviders: domainProviders, importedAccounts: importedAccounts)
         } catch {
@@ -664,7 +596,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         do {
             let report: QuotioCLIUsageReport = try await client.request("v1/usage")
             guard activeMode == mode else { return }
-            guard report.schemaVersion == 1 else { throw QuotioCLIBackendError.incompatible }
+            guard report.schemaVersion == 1 else { throw QuotioHostClientError.incompatible }
             let localization = await localization()
             guard activeMode == mode else { return }
             let previous = snapshot
@@ -754,7 +686,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         return nil
     }
 
-    private func synchronizeCustomProviders(client: QuotioCLIHTTPClient) async throws {
+    private func synchronizeCustomProviders(client: QuotioHostHTTPClient) async throws {
         guard let customProviders else { return }
         let desired = try customProviders().compactMap { provider -> (CustomProvider, String)? in
             guard provider.isEnabled, !provider.apiKeys.isEmpty else { return nil }
@@ -768,7 +700,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
             }
         }
         let response: QuotioCLIAccountList = try await client.request("v1/accounts")
-        guard response.schemaVersion == 1 else { throw QuotioCLIBackendError.incompatible }
+        guard response.schemaVersion == 1 else { throw QuotioHostClientError.incompatible }
         var existing = response.accounts.filter { $0.sourceKind == "quotio_custom_provider" }
         for account in existing where !desired.contains(where: {
             $0.1 == account.sourceId
@@ -804,7 +736,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
     }
 
     private func discoverNativeSource(
-        client: QuotioCLIHTTPClient,
+        client: QuotioHostHTTPClient,
         provider: String,
         kind: String,
         inspect: Bool
@@ -819,7 +751,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
             method: "POST",
             body: body
         )
-        guard response.schemaVersion == 1 else { throw QuotioCLIBackendError.incompatible }
+        guard response.schemaVersion == 1 else { throw QuotioHostClientError.incompatible }
         return response
     }
 
@@ -888,7 +820,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
     }
 
     private func mutate(
-        client: QuotioCLIHTTPClient,
+        client: QuotioHostHTTPClient,
         path: String,
         method: String,
         body: Data?,
@@ -903,12 +835,12 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         )
         let deadline = ContinuousClock.now + timeout
         while operation.status == "running" {
-            guard ContinuousClock.now < deadline else { throw QuotioCLIBackendError.timeout }
+            guard ContinuousClock.now < deadline else { throw QuotioHostClientError.timeout }
             try await Task.sleep(for: .milliseconds(100))
             operation = try await client.request("v1/operations/\(operation.id)")
         }
         guard operation.status == "completed" else {
-            throw QuotioCLIBackendError.response(500, operation.error ?? operation.status)
+            throw QuotioHostClientError.response(500, operation.error ?? operation.status)
         }
     }
 
@@ -992,21 +924,21 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
 
     private static func failureCategory(_ error: Error) -> String {
         switch error {
-        case QuotioCLIBackendError.response(_, "credential_storage_unavailable"),
-             QuotioCLIBackendError.response(_, "account_storage_unavailable"),
-             QuotioCLIBackendError.response(_, "account_storage_disabled"):
+        case QuotioHostClientError.response(_, "credential_storage_unavailable"),
+             QuotioHostClientError.response(_, "account_storage_unavailable"),
+             QuotioHostClientError.response(_, "account_storage_disabled"):
             "account_storage"
-        case QuotioCLIBackendError.response(_, "duplicate_account"): "duplicate_account"
-        case QuotioCLIBackendError.response(_, "credential_validation_failed"): "credential_validation"
-        case QuotioCLIBackendError.response(let status, _): "http_\(status)"
-        case QuotioCLIBackendError.timeout: "timeout"
-        case QuotioCLIBackendError.disconnected: "disconnected"
+        case QuotioHostClientError.response(_, "duplicate_account"): "duplicate_account"
+        case QuotioHostClientError.response(_, "credential_validation_failed"): "credential_validation"
+        case QuotioHostClientError.response(let status, _): "http_\(status)"
+        case QuotioHostClientError.timeout: "timeout"
+        case QuotioHostClientError.disconnected: "disconnected"
         default: "unclassified"
         }
     }
 
     private static func accountFailure(_ error: Error) -> AccountServiceFailure {
-        guard case let QuotioCLIBackendError.response(_, code) = error else {
+        guard case let QuotioHostClientError.response(_, code) = error else {
             return .invalidCredential
         }
         switch code {
