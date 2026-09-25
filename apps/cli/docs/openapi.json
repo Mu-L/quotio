@@ -3912,7 +3912,8 @@
           "description",
           "display_name",
           "enabled",
-          "capabilities"
+          "capabilities",
+          "actions"
         ],
         "properties": {
           "id": {
@@ -3927,6 +3928,10 @@
           },
           "enabled": {
             "type": "boolean"
+          },
+          "actions": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/V2Action" }
           },
           "capabilities": {
             "$ref": "#/components/schemas/ProviderCapability"

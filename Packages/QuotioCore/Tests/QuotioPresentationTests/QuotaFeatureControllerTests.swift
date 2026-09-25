@@ -386,6 +386,7 @@ private struct QuotaFeatureAuthFileState: ManagedAuthFileStateRepository {
 
 private actor QuotaFeatureMonitoringSettings: MonitoringSettingsManaging {
     var value = MonitoringSettings(revision: "fixture", enabledProviders: Set(QuotaProvider.allCases.map(\.rawValue)), disabledProviders: [], automaticallyDiscoverLogins: true, refreshInterval: 600)
+    func monitoringProviders() -> [MonitoringProvider] { QuotaProvider.allCases.map { .init(id: $0, displayName: $0.rawValue, actions: [], inputs: []) } }
     func monitoringSettings() -> MonitoringSettings { value }
     func updateMonitoringSettings(_ settings: MonitoringSettings) -> MonitoringSettings {
         value = settings

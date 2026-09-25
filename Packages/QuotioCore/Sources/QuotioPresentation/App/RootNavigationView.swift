@@ -32,10 +32,11 @@ public struct RootNavigationView: View {
     }
 
     private var providers: [ProviderSettingsState] {
-        QuotaProvider.allCases.filter {
-            $0.supportsQuotaOnlyMode && (search.isEmpty || $0.displayName.localizedCaseInsensitiveContains(search))
-        }.map { provider in
-            ProviderSettingsState(provider: provider, accounts: accounts.accounts,
+        controller.providers.filter {
+            search.isEmpty || $0.displayName.localizedCaseInsensitiveContains(search)
+        }.map { descriptor in
+            let provider = descriptor.id
+            return ProviderSettingsState(provider: provider, accounts: accounts.accounts,
                 permissions: accounts.nativeSourcePermissions, quota: quota.state,
                 tracking: controller.trackingPreferences)
         }.sorted {
@@ -88,7 +89,7 @@ public struct RootNavigationView: View {
     private func providerRow(_ state: ProviderSettingsState) -> some View {
         HStack {
             ProviderIcon(provider: state.provider, size: 18)
-            Text(state.provider.displayName)
+            Text(controller.providers.first { $0.id == state.provider }?.displayName ?? state.provider.displayName)
             Spacer()
             Image(systemName: state.needsAttention ? "exclamationmark.triangle" : state.connection.symbol)
                 .foregroundStyle(state.needsAttention ? Color.orange : state.connection.color)

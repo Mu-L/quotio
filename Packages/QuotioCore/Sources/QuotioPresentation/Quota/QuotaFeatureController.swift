@@ -11,12 +11,13 @@ public final class QuotaFeatureController {
         case autoOpen
     }
 
+    public private(set) var providers: [MonitoringProvider] = []
     public private(set) var monitoringSettings: MonitoringSettings?
     public private(set) var settingsError: String?
     public private(set) var isUpdatingSettings = false
     public var trackingPreferences: ProviderTrackingPreferences {
         guard let settings = monitoringSettings else { return .init() }
-        return .init(disabledProviders: Set(QuotaProvider.allCases.filter {
+        return .init(disabledProviders: Set(providers.map(\.id).filter {
             !settings.enabledProviders.contains($0.rawValue) || settings.disabledProviders.contains($0.rawValue)
         }), automaticallyDiscoverLogins: settings.automaticallyDiscoverLogins)
     }
@@ -91,9 +92,12 @@ public final class QuotaFeatureController {
         let requestID = UUID()
         settingsRequestID = requestID
         do {
+            async let catalog = settingsService.monitoringProviders()
             let settings = try await settingsService.monitoringSettings()
+            let descriptors = try await catalog
             guard settingsRequestID == requestID else { return }
             monitoringSettings = settings
+            providers = descriptors
             settingsError = nil
         } catch {
             guard settingsRequestID == requestID else { return }
@@ -145,7 +149,7 @@ public final class QuotaFeatureController {
     }
 
     public func refresh(provider: QuotaProvider, force: Bool = true) async {
-        guard provider.supportsQuotaOnlyMode, trackingPreferences.isEnabled(provider) else { return }
+        guard trackingPreferences.isEnabled(provider) else { return }
         await quota.refresh(provider: provider, mode: operatingMode, force: force)
         if provider == .antigravity {
             await antigravityAccounts.detectActiveAccount()
@@ -154,7 +158,7 @@ public final class QuotaFeatureController {
     }
 
     public func refresh(account: QuotaAccountID) async {
-        guard account.provider.supportsQuotaOnlyMode, trackingPreferences.isEnabled(account.provider) else { return }
+        guard trackingPreferences.isEnabled(account.provider) else { return }
         await quota.refresh(
             provider: account.provider,
             scope: .account(account.accountKey),

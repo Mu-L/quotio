@@ -440,6 +440,20 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
         )
     }
 
+    public func monitoringProviders() async throws -> [MonitoringProvider] {
+        guard let client else { throw QuotioHostClientError.disconnected }
+        let epoch = connectionID
+        let catalog: QuotioHostProviders = try await client.request("v1/providers")
+        guard epoch == connectionID else { throw QuotioHostClientError.disconnected }
+        guard catalog.schemaVersion == 1 else { throw QuotioHostClientError.incompatible }
+        return try catalog.providers.map { value in
+            guard let id = QuotioCLIProviderMap.domain(value.id) else { throw QuotioHostClientError.incompatible }
+            return MonitoringProvider(id: id, displayName: value.displayName,
+                actions: Set(value.actions.filter(\.available).map(\.kind)),
+                inputs: value.capabilities.settings.map { .init(name: $0.name, fieldPath: $0.fieldPath, required: $0.required, values: $0.values) })
+        }
+    }
+
     public func monitoringSettings() async throws -> MonitoringSettings {
         guard let client else { throw QuotioHostClientError.disconnected }
         let epoch = connectionID

@@ -80,6 +80,19 @@ final class QuotioCLIBackendTests: XCTestCase {
         }
     }
 
+    func testProviderCatalogKeepsUnknownProvidersAndUsesHostActions() async throws {
+        let backend = QuotioCLIBackend(session: stubSession())
+        await backend.connect(.init(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
+        QuotioCLIURLProtocol.enqueue(#"{"schema_version":1,"providers":[{"id":"future-provider","display_name":"Future Provider","actions":[{"kind":"add_api_key","available":true,"reason":null,"interaction":"client"},{"kind":"start_oauth","available":false,"reason":"unsupported_platform","interaction":"host_user"}],"capabilities":{"operations":["usage"],"settings":[{"name":"organization","field_path":"settings.organization","required":true}]}}]}"#)
+        let providers = try await backend.monitoringProviders()
+        XCTAssertEqual(providers.count, 1)
+        XCTAssertEqual(providers[0].id.rawValue, "future-provider")
+        XCTAssertEqual(providers[0].displayName, "Future Provider")
+        XCTAssertEqual(providers[0].actions, ["add_api_key"])
+        XCTAssertEqual(providers[0].inputs.first?.fieldPath, "settings.organization")
+        XCTAssertEqual(providers[0].inputs.first?.required, true)
+    }
+
     func testMonitoringSettingsAndDefaultScopesAreOwnedByHost() async throws {
         let backend = QuotioCLIBackend(session: stubSession())
         await backend.connect(.init(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))

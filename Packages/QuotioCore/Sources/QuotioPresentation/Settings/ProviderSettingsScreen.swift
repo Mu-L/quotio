@@ -17,7 +17,9 @@ struct ProviderSettingsScreen: View {
     @State private var permission: NativeSourcePermission?
     @State private var actionFailed = false
 
-    private var supportsOAuth: Bool { [.claude, .codex, .copilot].contains(provider) }
+    private var descriptor: MonitoringProvider? { controller.providers.first { $0.id == provider } }
+    private var supportsOAuth: Bool { descriptor?.actions.contains("start_oauth") == true }
+    private var providerName: String { descriptor?.displayName ?? provider.displayName }
     private var tracked: Bool { controller.trackingPreferences.isEnabled(provider) }
 
     var body: some View {
@@ -31,7 +33,7 @@ struct ProviderSettingsScreen: View {
                     HStack(alignment: .top, spacing: 12) {
                         ProviderIcon(provider: provider, size: 40)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(provider.displayName).font(.title2.weight(.semibold))
+                            Text(providerName).font(.title2.weight(.semibold))
                             Label(state.connection.title, systemImage: state.connection.symbol)
                                 .foregroundStyle(state.connection.color)
                             Text(String(format: "settings.accountsCount".localized(), state.accounts.count))
@@ -126,7 +128,7 @@ struct ProviderSettingsScreen: View {
                             Button("action.login".localized()) { oauthPresented = true }
                         }
                     }
-                    if provider.usesAPIKeyAuth {
+                    if descriptor?.actions.contains("add_api_key") == true {
                         LabeledContent("settings.apiKey".localized()) {
                             Button("settings.addAPIKey".localized()) {
                                 editingAccount = nil
@@ -134,7 +136,7 @@ struct ProviderSettingsScreen: View {
                             }
                         }
                     }
-                    if provider.hasDiscoverableNativeLogin {
+                    if descriptor?.actions.contains("discover_native") == true {
                         if accounts.failedDiscoveryProviders.contains(provider) {
                             Text("settings.discoveryFailed".localized()).font(.caption).foregroundStyle(.orange)
                         }
@@ -159,7 +161,7 @@ struct ProviderSettingsScreen: View {
             }
             .formStyle(.grouped)
         }
-        .navigationTitle(provider.displayName)
+        .navigationTitle(providerName)
         .sheet(isPresented: $oauthPresented) {
             OAuthSheet(provider: provider) { oauthPresented = false }
         }
@@ -202,7 +204,7 @@ struct ProviderSettingsScreen: View {
                 get: { account.isDisabled }, set: { disabled in Task { await controller.setAccountDisabled(disabled, accountID: account.id) } }
             ))
             .disabled(!account.capabilities.contains(.disable))
-            if account.capabilities.contains(.edit), provider.usesAPIKeyAuth {
+            if account.capabilities.contains(.edit), descriptor?.actions.contains("add_api_key") == true {
                 Button("action.edit".localized()) { editingAccount = account; apiKeyPresented = true }
             }
             if provider == .antigravity {

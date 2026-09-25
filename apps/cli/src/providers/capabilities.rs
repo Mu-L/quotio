@@ -8,11 +8,51 @@ pub struct ProviderDescriptor {
     pub display_name: &'static str,
     pub description: &'static str,
     pub enabled: bool,
+    pub actions: Vec<crate::contract::Action>,
     pub capabilities: ProviderCapability,
 }
 
 impl ProviderDescriptor {
     pub fn new(provider: Provider, enabled: &[Provider]) -> Self {
+        use crate::contract::{Action, InteractionLocation};
+        let capabilities = capability(provider);
+        let storage = capabilities
+            .account_storage_platforms
+            .contains(&std::env::consts::OS);
+        let mut actions = Vec::new();
+        for (kind, offered, available, interaction) in [
+            (
+                "add_api_key",
+                capabilities.auth.contains(&AuthMethod::ApiKey),
+                storage,
+                InteractionLocation::Client,
+            ),
+            (
+                "start_oauth",
+                capabilities.operations.contains(&Operation::StartOAuth),
+                storage,
+                InteractionLocation::Client,
+            ),
+            (
+                "discover_native",
+                capabilities.auth.contains(&AuthMethod::Native),
+                storage
+                    && capabilities.source_references.iter().any(|source| {
+                        source.origin == "borrowed_native"
+                            && source.platforms.contains(&std::env::consts::OS)
+                    }),
+                InteractionLocation::Host,
+            ),
+        ] {
+            if offered {
+                actions.push(Action {
+                    kind: kind.into(),
+                    available,
+                    reason: (!available).then(|| "unsupported_platform".into()),
+                    interaction,
+                });
+            }
+        }
         Self {
             id: provider,
             display_name: match provider {
@@ -29,7 +69,8 @@ impl ProviderDescriptor {
             },
             description: provider.description(),
             enabled: enabled.contains(&provider),
-            capabilities: capability(provider),
+            actions,
+            capabilities,
         }
     }
 }
