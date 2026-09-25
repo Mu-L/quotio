@@ -33,6 +33,7 @@ public final class AccountsScreenModel {
 
     public func reloadAccounts() async {
         accounts = await accountService.accounts()
+        await reloadDiscovery()
         storageAccessRequired = await accountService.accountStorageRequiresAuthorization()
     }
 

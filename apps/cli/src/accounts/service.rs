@@ -1405,10 +1405,20 @@ pub(crate) async fn adapters_in_vault(
     filter: Option<&str>,
     vault: Vault,
 ) -> Result<Vec<Arc<dyn ProviderAdapter>>, AccountError> {
-    adapters_with_vault(providers, true, include_owned, timeout, filter, move || {
-        Ok(vault.clone())
-    })
-    .await
+    let native_defaults = providers
+        .iter()
+        .filter(|provider| **provider != Provider::Mock)
+        .map(|provider| provider.id().to_owned())
+        .collect();
+    let mut adapters =
+        adapters_with_vault(providers, true, include_owned, timeout, filter, move || {
+            Ok(vault.clone())
+        })
+        .await?;
+    // Native discovery registers precise sources. Collection must not bypass its opt-out
+    // or permissions by falling back to a provider's implicit local login.
+    retain_unsuppressed_defaults(&mut adapters, &native_defaults);
+    Ok(adapters)
 }
 
 async fn adapters_with_vault(
@@ -1532,6 +1542,17 @@ mod tests {
         .await
         .unwrap();
         remove(vault.clone(), id).await.unwrap();
+        let local = adapters_with_vault(
+            vec![Provider::Codex],
+            true,
+            true,
+            Duration::from_secs(1),
+            None,
+            || Ok(vault.clone()),
+        )
+        .await
+        .unwrap();
+        assert!(local.is_empty());
         let providers = adapters_in_vault(
             vec![Provider::Codex],
             true,
@@ -1589,17 +1610,17 @@ mod tests {
             );
             tx.commit().unwrap();
         }
-        assert!(
-            adapters_in_vault(
-                vec![Provider::Codex],
-                true,
-                Duration::from_secs(1),
-                Some("local"),
-                vault
-            )
-            .await
-            .is_ok()
-        );
+        let local = adapters_with_vault(
+            vec![Provider::Codex],
+            true,
+            true,
+            Duration::from_secs(1),
+            Some("local"),
+            || Ok(vault.clone()),
+        )
+        .await
+        .unwrap();
+        assert_eq!(local.len(), 1);
         std::fs::remove_dir_all(dir).unwrap();
     }
 
@@ -2136,7 +2157,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn excluding_owned_accounts_restores_native_adapter_selection() {
+    async fn host_collection_never_recreates_implicit_native_sources() {
         let path = std::env::temp_dir().join(random_string().unwrap());
         let vault = Vault::new(Arc::new(Memory::default()), path.clone());
         for provider in [
@@ -2177,10 +2198,20 @@ mod tests {
                     include_owned,
                 );
                 if !include_owned {
-                    assert_eq!(selected.len(), 1);
-                    let reference = selected[0].account_ref().unwrap();
-                    assert_eq!(reference.id, "local");
-                    assert_eq!(reference.origin, None);
+                    let configured = provider
+                        .catalog()
+                        .map(|definition| definition.key_env)
+                        .or_else(|| provider.api_key_name())
+                        .is_some_and(|key| std::env::var_os(key).is_some());
+                    assert_eq!(
+                        selected.len(),
+                        usize::from(configured),
+                        "provider {}",
+                        provider.id()
+                    );
+                    if let Some(adapter) = selected.first() {
+                        assert_eq!(adapter.account_ref().unwrap().id, "local");
+                    }
                 }
             }
             assert!(matches!(
