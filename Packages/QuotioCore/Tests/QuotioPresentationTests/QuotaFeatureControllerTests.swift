@@ -308,7 +308,8 @@ private actor QuotaFeatureAccountService: AccountManaging {
         providerID: AccountProviderID,
         label: String,
         apiKey: String,
-        existingAccountID: String?
+        existingAccountID: String?,
+        fields: [String: String] = [:]
     ) {}
 
     func disabledUpdates() -> [DisabledUpdate] { recordedDisabledUpdates }

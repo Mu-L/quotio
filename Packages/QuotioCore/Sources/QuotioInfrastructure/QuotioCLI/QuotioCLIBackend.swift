@@ -374,7 +374,8 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
         providerID: AccountProviderID,
         label: String,
         apiKey: String,
-        existingAccountID: String?
+        existingAccountID: String?,
+        fields: [String: String] = [:]
     ) async throws {
         guard let client,
               let provider = QuotaProvider(rawValue: providerID.rawValue),
@@ -389,15 +390,37 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
                 }
                 let sources = account.sources.filter { $0.actions.contains { $0.kind == "replace_api_key" && $0.available } }
                 guard sources.count == 1 else { throw AccountServiceFailure.invalidCredential }
-                let body = try JSONSerialization.data(withJSONObject: ["api_key": apiKey])
+                var payload = try Self.apiKeyFields(fields)
+                payload["api_key"] = apiKey
+                let body = try JSONSerialization.data(withJSONObject: payload)
                 try await mutate(client: client, path: QuotioHostAccountTarget.source(sources[0].id).path, method: "PATCH", body: body)
             } else {
-                let body = try JSONEncoder.quotioCLI.encode(APIKeyBody(provider: cliProvider, label: label, apiKey: apiKey))
+                var payload = try Self.apiKeyFields(fields)
+                payload["provider"] = cliProvider
+                payload["label"] = label
+                payload["api_key"] = apiKey
+                let body = try JSONSerialization.data(withJSONObject: payload)
                 try await mutate(client: client, path: "v2/accounts", method: "POST", body: body)
             }
         } catch {
             throw Self.accountFailure(error)
         }
+    }
+
+    private static func apiKeyFields(_ fields: [String: String]) throws -> [String: Any] {
+        var payload: [String: Any] = [:]
+        var settings: [String: String] = [:]
+        for (path, value) in fields where !value.isEmpty {
+            if path == "region" || path == "organization" {
+                payload[path] = value
+            } else if path.hasPrefix("settings.") {
+                let key = String(path.dropFirst("settings.".count))
+                guard !key.isEmpty, !key.contains(".") else { throw AccountServiceFailure.invalidCredential }
+                settings[key] = value
+            } else { throw AccountServiceFailure.invalidCredential }
+        }
+        if !settings.isEmpty { payload["settings"] = settings }
+        return payload
     }
 
     func beginOAuth(provider: String) async throws -> QuotioCLIOAuthSession {

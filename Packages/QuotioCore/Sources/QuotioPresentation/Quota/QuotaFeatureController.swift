@@ -222,37 +222,16 @@ public final class QuotaFeatureController {
         provider: QuotaProvider,
         label: String,
         apiKey: String,
-        existingAccountID: String? = nil
+        existingAccountID: String? = nil,
+        fields: [String: String] = [:]
     ) async throws {
-        let trimmedLabel = label.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedLabel.isEmpty, !trimmedKey.isEmpty else {
-            throw QuotaCredentialInputError.invalidCredential
-        }
-        guard provider != .amp
-            || trimmedLabel.caseInsensitiveCompare(ProviderAccountKey.ampNative) != .orderedSame else {
-            throw QuotaCredentialInputError.invalidCredential
-        }
-
-        let previousAccount = existingAccountID.flatMap { id in
-            accounts.accounts.first { $0.id == id && $0.providerID.rawValue == provider.rawValue }
-        }
-        do {
-            try await accounts.saveAPIKey(
-                providerID: AccountProviderID(rawValue: provider.rawValue),
-                label: trimmedLabel,
-                apiKey: trimmedKey,
-                existingAccountID: existingAccountID
-            )
-        } catch is AccountServiceFailure {
-            throw QuotaCredentialInputError.invalidCredential
-        }
-        if let previousAccount, previousAccount.accountKey != trimmedLabel {
-            await quota.removeQuota(
-                for: QuotaAccountID(provider: provider, accountKey: previousAccount.accountKey),
-                mode: operatingMode
-            )
-        }
+        try await accounts.saveAPIKey(
+            providerID: AccountProviderID(rawValue: provider.rawValue),
+            label: label.trimmingCharacters(in: .whitespacesAndNewlines),
+            apiKey: apiKey.trimmingCharacters(in: .whitespacesAndNewlines),
+            existingAccountID: existingAccountID,
+            fields: fields
+        )
         await refresh(provider: provider)
     }
 
@@ -426,14 +405,6 @@ public final class QuotaFeatureController {
     }
 
 
-}
-
-private enum QuotaCredentialInputError: LocalizedError {
-    case invalidCredential
-
-    var errorDescription: String? {
-        "The Monitor credential file is invalid."
-    }
 }
 
 struct QuotaOAuthState: Identifiable, Equatable {

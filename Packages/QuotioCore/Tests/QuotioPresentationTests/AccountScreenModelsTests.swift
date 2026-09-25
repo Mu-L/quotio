@@ -226,7 +226,8 @@ private actor AccountScreenModelService: AccountManaging {
         providerID: AccountProviderID,
         label: String,
         apiKey: String,
-        existingAccountID: String?
+        existingAccountID: String?,
+        fields: [String: String] = [:]
     ) {}
 }
 

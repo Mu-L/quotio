@@ -60,7 +60,8 @@ public protocol AccountManaging: Sendable {
         providerID: AccountProviderID,
         label: String,
         apiKey: String,
-        existingAccountID: String?
+        existingAccountID: String?,
+        fields: [String: String]
     ) async throws
 }
 

@@ -142,7 +142,8 @@ private actor EmptyAccountManager: AccountManaging {
         providerID: AccountProviderID,
         label: String,
         apiKey: String,
-        existingAccountID: String?
+        existingAccountID: String?,
+        fields: [String: String] = [:]
     ) throws {}
     func setDisabled(_ disabled: Bool, accountID: String) {}
     func delete(accountID: String) throws {}

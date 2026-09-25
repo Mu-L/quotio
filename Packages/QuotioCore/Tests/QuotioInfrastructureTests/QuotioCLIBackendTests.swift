@@ -339,6 +339,24 @@ final class QuotioCLIBackendTests: XCTestCase {
         XCTAssertNotNil(request.value(forHTTPHeaderField: "Idempotency-Key"))
     }
 
+    func testAPIKeyFieldsUseDeclaredPathsAndCannotOverwriteTheCredential() async throws {
+        let backend = QuotioCLIBackend(session: stubSession())
+        await backend.connect(.init(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
+        do {
+            try await backend.saveAPIKey(providerID: .init(rawValue: "future-provider"), label: "Work", apiKey: "fixture", existingAccountID: nil, fields: ["api_key": "override"])
+            XCTFail("Unexpected field path accepted")
+        } catch {}
+        XCTAssertTrue(QuotioCLIURLProtocol.requests().isEmpty)
+        QuotioCLIURLProtocol.enqueue(#"{"id":"create","status":"completed"}"#)
+        try await backend.saveAPIKey(providerID: .init(rawValue: "future-provider"), label: "Work", apiKey: "fixture", existingAccountID: nil, fields: ["region": "eu", "settings.organization": "team", "settings.optional": ""])
+        let data = try XCTUnwrap(QuotioCLIURLProtocol.body(forPath: "/v2/accounts"))
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(body["provider"] as? String, "future-provider")
+        XCTAssertEqual(body["api_key"] as? String, "fixture")
+        XCTAssertEqual(body["region"] as? String, "eu")
+        XCTAssertEqual(body["settings"] as? [String: String], ["organization": "team"])
+    }
+
     func testLegacyImportUsesStableReceiptAndUnixExpiry() async throws {
         let backend = QuotioCLIBackend(session: stubSession())
         await backend.connect(QuotioHostConnection(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "private-token"))

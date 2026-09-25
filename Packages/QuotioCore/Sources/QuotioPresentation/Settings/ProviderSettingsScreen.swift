@@ -166,8 +166,8 @@ struct ProviderSettingsScreen: View {
             OAuthSheet(provider: provider) { oauthPresented = false }
         }
         .sheet(isPresented: $apiKeyPresented) {
-            MonitorAPIKeyConnectionSheet(provider: provider, account: editingAccount) { label, key in
-                try await controller.saveAPIKey(provider: provider, label: label, apiKey: key, existingAccountID: editingAccount?.id)
+            MonitorAPIKeyConnectionSheet(provider: provider, account: editingAccount, inputs: descriptor?.inputs ?? [], providerName: providerName) { label, key, fields in
+                try await controller.saveAPIKey(provider: provider, label: label, apiKey: key, existingAccountID: editingAccount?.id, fields: fields)
             }
         }
         .sheet(item: $permission) { source in NativePermissionSheet(source: source) }

@@ -127,14 +127,16 @@ public final class AccountsScreenModel {
         providerID: AccountProviderID,
         label: String,
         apiKey: String,
-        existingAccountID: String? = nil
+        existingAccountID: String? = nil,
+        fields: [String: String] = [:]
     ) async throws {
         do {
             try await accountService.saveAPIKey(
                 providerID: providerID,
                 label: label,
                 apiKey: apiKey,
-                existingAccountID: existingAccountID
+                existingAccountID: existingAccountID,
+                fields: fields
             )
             await reloadAccounts()
             failure = nil

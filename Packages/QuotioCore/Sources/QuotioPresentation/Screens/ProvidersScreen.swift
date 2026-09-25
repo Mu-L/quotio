@@ -298,12 +298,13 @@ struct ProvidersScreen: View {
             }
         }
         .sheet(item: $monitorAPIKeyProvider) { provider in
-            MonitorAPIKeyConnectionSheet(provider: provider, account: editingMonitorAPIKeyAccount) { label, apiKey in
+            MonitorAPIKeyConnectionSheet(provider: provider, account: editingMonitorAPIKeyAccount) { label, apiKey, fields in
                 try await quotaController.saveAPIKey(
                     provider: provider,
                     label: label,
                     apiKey: apiKey,
-                    existingAccountID: editingMonitorAPIKeyAccount?.id
+                    existingAccountID: editingMonitorAPIKeyAccount?.id,
+                    fields: fields
                 )
                 editingMonitorAPIKeyAccount = nil
             }
