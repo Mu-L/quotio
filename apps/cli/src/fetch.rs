@@ -81,7 +81,7 @@ impl Collector {
         for (index, result) in results {
             let result = result.and_then(|usage| {
                 if usage.provider != ids[index]
-                    || usage.windows.is_empty()
+                    || !usage.has_observations()
                     || usage.windows.iter().any(|window| {
                         !window.quota.is_valid()
                             || window.consumption.as_ref().is_some_and(|c| {

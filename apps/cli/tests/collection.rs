@@ -595,3 +595,36 @@ async fn invalid_consumption_cannot_enter_json_reports() {
         assert_eq!(report.failures[0].code, ProviderError::InvalidData);
     }
 }
+
+struct PlanOnly(Option<&'static str>);
+impl ProviderAdapter for PlanOnly {
+    fn id(&self) -> ProviderId {
+        ProviderId("mock".into())
+    }
+    fn fetch<'a>(&'a self, context: &'a ProviderContext) -> FetchFuture<'a> {
+        Box::pin(async move {
+            let mut usage = MockProvider.fetch(context).await?;
+            usage.windows.clear();
+            usage.account.plan = self.0.map(str::to_owned);
+            Ok(usage)
+        })
+    }
+}
+
+#[tokio::test]
+async fn plan_only_responses_are_successful_without_inventing_metrics() {
+    for plan in [Some("Pro"), Some(" "), None] {
+        let report = collector()
+            .collect(request(vec![Arc::new(PlanOnly(plan))]))
+            .await;
+        if plan == Some("Pro") {
+            assert_eq!(report.exit_code(), 0);
+            assert_eq!(report.providers[0].account.plan.as_deref(), plan);
+            assert!(report.providers[0].windows.is_empty());
+            assert!(report.failures.is_empty());
+        } else {
+            assert!(report.providers.is_empty());
+            assert_eq!(report.failures[0].code, ProviderError::InvalidData);
+        }
+    }
+}

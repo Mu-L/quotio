@@ -204,6 +204,16 @@ pub struct ProviderUsage {
     pub account: AccountIdentity,
     pub windows: Vec<QuotaWindow>,
 }
+impl ProviderUsage {
+    pub fn has_observations(&self) -> bool {
+        !self.windows.is_empty()
+            || self
+                .account
+                .plan
+                .as_ref()
+                .is_some_and(|plan| !plan.trim().is_empty())
+    }
+}
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct CodexProfileAnalytics {
     pub daily_usage: Vec<CodexDailyUsage>,

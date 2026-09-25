@@ -261,7 +261,7 @@ impl UsageCache {
                 == identity;
         if same_identity {
             if let Some(usage) = report.providers.first() {
-                if !adapter.cacheable(usage) {
+                if !adapter.cacheable(usage) || !valid(usage) {
                     return report;
                 }
                 if let Some(entry) = entry {
