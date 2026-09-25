@@ -84,6 +84,11 @@ public struct QuotioHostSnapshot: Decodable, Sendable {
         public let fetchedAt: Date?
         public let expiresAt: Date?
         public let plan: String?
+        public let subscriptionStatus: String?
+        public let resetCredits: QuotioHostResetCredits?
+        public let codexProfile: QuotioHostCodexProfile?
+        public let codexResetCredits: QuotioHostCodexResetCredits?
+        public let antigravitySubscription: QuotioHostSubscription?
         public let metrics: [Metric]
         public let issue: Issue?
     }

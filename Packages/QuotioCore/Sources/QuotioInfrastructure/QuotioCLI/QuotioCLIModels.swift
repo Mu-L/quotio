@@ -1,3 +1,4 @@
+import QuotioHostClient
 import Foundation
 import QuotioApplication
 import QuotioDomain
@@ -23,43 +24,11 @@ struct QuotioCLIProviderUsage: Decodable, Sendable {
     let account: Identity
     let accountRef: QuotioCLIAccountReference?
     let windows: [QuotioCLIUsageWindow]
-    let antigravitySubscription: QuotioCLISubscription?
-    let resetCredits: QuotioCLIResetCredits?
-    let codexProfile: QuotioCLICodexProfile?
-    let codexResetCredits: QuotioCLICodexResetCredits?
+    let antigravitySubscription: QuotioHostSubscription?
+    let resetCredits: QuotioHostResetCredits?
+    let codexProfile: QuotioHostCodexProfile?
+    let codexResetCredits: QuotioHostCodexResetCredits?
     let diagnostics: [Diagnostic]?
-}
-
-struct QuotioCLIResetCredits: Decodable, Sendable {
-    let availableCount: UInt64
-    let fetchedAt: Date
-}
-
-struct QuotioCLICodexProfile: Decodable, Sendable {
-    struct DailyUsage: Decodable, Sendable {
-        let date: String
-        let tokens: UInt64
-    }
-
-    let dailyUsage: [DailyUsage]
-    let latest30BucketsTokens: UInt64
-    let lifetimeTokens: UInt64?
-    let peakDailyTokens: UInt64?
-    let longestRunningTurnSeconds: UInt64?
-    let currentStreakDays: UInt64?
-    let longestStreakDays: UInt64?
-    let fetchedAt: Date
-}
-
-struct QuotioCLICodexResetCredits: Decodable, Sendable {
-    struct Credit: Decodable, Sendable {
-        let id: String
-        let expiresAt: Date?
-    }
-
-    let availableCount: UInt64
-    let credits: [Credit]
-    let fetchedAt: Date
 }
 
 struct QuotioCLIAccountReference: Decodable, Sendable {
@@ -102,17 +71,6 @@ struct QuotioCLIUsageFailure: Decodable, Sendable {
     let provider: String
     let accountRef: QuotioCLIAccountReference?
     let code: String
-}
-
-struct QuotioCLISubscription: Decodable, Sendable {
-    struct Tier: Decodable, Sendable {
-        let id: String?
-        let name: String?
-        let description: String?
-    }
-
-    let currentTier: Tier?
-    let paidTier: Tier?
 }
 
 struct QuotioCLIAccountList: Decodable, Sendable {
@@ -362,7 +320,7 @@ struct QuotioCLIUsageMapper {
         return analytics.isEmpty ? nil : analytics
     }
 
-    private func profileAnalytics(_ profile: QuotioCLICodexProfile) -> QuotaAnalytics {
+    private func profileAnalytics(_ profile: QuotioHostCodexProfile) -> QuotaAnalytics {
         let calendar = Calendar.current
         let buckets = Dictionary(uniqueKeysWithValues: profile.dailyUsage.map { ($0.date, $0.tokens) })
         let today = dayString(profile.fetchedAt, calendar: calendar)
@@ -578,7 +536,7 @@ struct QuotioCLIUsageMapper {
 
     private func subscription(_ usage: QuotioCLIProviderUsage) -> QuotaSubscriptionInfo? {
         guard let subscription = usage.antigravitySubscription else { return nil }
-        func tier(_ value: QuotioCLISubscription.Tier?) -> QuotaSubscriptionTier? {
+        func tier(_ value: QuotioHostSubscription.Tier?) -> QuotaSubscriptionTier? {
             value.map {
                 QuotaSubscriptionTier(
                     id: $0.id ?? "unknown",

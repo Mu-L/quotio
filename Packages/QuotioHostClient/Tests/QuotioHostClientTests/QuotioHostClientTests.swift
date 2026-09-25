@@ -20,6 +20,13 @@ final class QuotioHostClientTests: XCTestCase {
         XCTAssertEqual(snapshot.accounts[1].sources.count, 2)
         XCTAssertTrue(snapshot.usage[0].metrics.isEmpty)
         var changed = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        var usage = try XCTUnwrap(changed["usage"] as? [[String: Any]])
+        usage[0]["reset_credits"] = ["available_count": 2, "fetched_at": "2026-01-01T00:00:00Z", "earliest_expires_at": NSNull(), "source": "fixture"]
+        usage[0]["subscription_status"] = "active"
+        changed["usage"] = usage
+        let supplemental = try QuotioHostSnapshot.decode(JSONSerialization.data(withJSONObject: changed))
+        XCTAssertEqual(supplemental.usage[0].resetCredits?.availableCount, 2)
+        XCTAssertEqual(supplemental.usage[0].subscriptionStatus, "active")
         changed["schema_version"] = 3
         XCTAssertThrowsError(try QuotioHostSnapshot.decode(JSONSerialization.data(withJSONObject: changed)))
     }
