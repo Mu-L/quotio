@@ -355,15 +355,15 @@ async fn local_and_distinct_saved_accounts_are_all_reported() {
     );
 }
 #[tokio::test(start_paused = true)]
-async fn duplicates_prefer_saved_but_workspace_or_ambiguous_emails_stay_separate() {
+async fn collection_preserves_sources_with_matching_emails_plans_and_legacy_ids() {
     for (local_id, saved_id, local_plan, saved_plan, expected) in [
-        ("same-id", "same-id", Some("business"), Some("business"), 1),
+        ("same-id", "same-id", Some("business"), Some("business"), 2),
         (
             "demo@example.com",
             "account-id",
             Some("pro"),
             Some("pro"),
-            1,
+            2,
         ),
         (
             "demo@example.com",
@@ -381,12 +381,6 @@ async fn duplicates_prefer_saved_but_workspace_or_ambiguous_emails_stay_separate
             ]))
             .await;
         assert_eq!(report.providers.len(), expected);
-        if expected == 1 {
-            assert_eq!(
-                report.providers[0].account_ref.as_ref().unwrap().id,
-                "saved"
-            );
-        }
     }
     let report = collector()
         .collect(request(vec![
@@ -470,7 +464,7 @@ impl ProviderAdapter for AmpCandidate {
     }
 }
 #[tokio::test]
-async fn amp_dedup_requires_same_identity_and_quota_scope() {
+async fn amp_collection_preserves_sources_even_with_identical_email_and_quota() {
     for (local_email, saved_email, local_balance, saved_balance, expected) in [
         (
             "local@example.invalid",
@@ -484,7 +478,7 @@ async fn amp_dedup_requires_same_identity_and_quota_scope() {
             "same@example.invalid",
             10.0,
             10.0,
-            1,
+            2,
         ),
         (
             "same@example.invalid",
@@ -512,12 +506,6 @@ async fn amp_dedup_requires_same_identity_and_quota_scope() {
             .await;
         assert_eq!(report.providers.len(), expected);
         assert_eq!(report.exit_code(), 0);
-        if expected == 1 {
-            assert_eq!(
-                report.providers[0].account_ref.as_ref().unwrap().id,
-                "saved"
-            );
-        }
     }
 }
 #[tokio::test]
@@ -548,7 +536,7 @@ async fn amp_local_failure_keeps_saved_usage_and_failure_identity() {
 }
 
 #[tokio::test]
-async fn key_scoped_providers_do_not_merge_different_keys() {
+async fn key_scoped_collection_preserves_every_source() {
     for provider in ["synthetic", "openrouter", "zai", "minimax"] {
         for saved_id in ["key:local", "key:other"] {
             let candidates: Vec<Arc<dyn ProviderAdapter>> =
@@ -566,16 +554,7 @@ async fn key_scoped_providers_do_not_merge_different_keys() {
                     })
                     .collect();
             let report = collector().collect(request(candidates)).await;
-            assert_eq!(
-                report.providers.len(),
-                if saved_id == "key:local" { 1 } else { 2 }
-            );
-            if saved_id == "key:local" {
-                assert_eq!(
-                    report.providers[0].account_ref.as_ref().unwrap().id,
-                    "saved"
-                );
-            }
+            assert_eq!(report.providers.len(), 2);
         }
     }
 }

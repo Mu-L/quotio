@@ -1,7 +1,7 @@
 //! Persistent normalized usage, shared by CLI and REST refresh cycles.
 use crate::{
     domain::*,
-    fetch::{CollectRequest, Collector, reconcile_accounts},
+    fetch::{CollectRequest, Collector},
     providers::{ProviderAdapter, ProviderContext},
 };
 use std::{
@@ -151,7 +151,6 @@ impl UsageCache {
                 usage.reset_credits = None;
             }
         }
-        reconcile_accounts(&mut report.providers);
         report.include_diagnostics();
         report
     }

@@ -99,7 +99,6 @@ impl Collector {
                 }),
             }
         }
-        reconcile_accounts(&mut report.providers);
         report.include_diagnostics();
         report
     }
@@ -134,80 +133,3 @@ pub(crate) fn valid_usage(usage: &ProviderUsage) -> bool {
 
 // Prefer a managed snapshot only when it identifies the same account. Email-only
 // local identity is sufficient for a unique personal account, never a workspace.
-pub(crate) fn reconcile_accounts(providers: &mut Vec<ProviderUsage>) {
-    let personal = |usage: &ProviderUsage| {
-        matches!(
-            usage.account.plan.as_deref(),
-            Some("free" | "plus" | "pro" | "go")
-        )
-    };
-    let mut remove = Vec::new();
-    for (index, local) in providers.iter().enumerate() {
-        let catalog_key = crate::providers::catalog::find(&local.provider.0)
-            .is_some_and(|d| d.auth == crate::providers::catalog::AuthKind::ApiKey);
-        if (!matches!(
-            local.provider.0.as_str(),
-            "codex" | "amp" | "synthetic" | "openrouter" | "zai" | "minimax"
-        ) && !catalog_key)
-            || local.account_ref.as_ref().is_none_or(|a| a.id != "local")
-        {
-            continue;
-        }
-        let managed: Vec<_> = providers
-            .iter()
-            .filter(|p| {
-                p.provider == local.provider
-                    && p.account_ref.as_ref().is_some_and(|a| a.id != "local")
-            })
-            .collect();
-        if !matches!(local.provider.0.as_str(), "codex" | "amp") {
-            if !local.account.id.is_empty()
-                && managed
-                    .iter()
-                    .any(|saved| saved.account.id == local.account.id)
-            {
-                remove.push(index);
-            }
-            continue;
-        }
-        if local.provider.0 == "amp" {
-            let duplicate = managed.iter().any(|saved| {
-                !local.account.id.is_empty()
-                    && local.account.id.eq_ignore_ascii_case(&saved.account.id)
-                    && local.windows.len() == saved.windows.len()
-                    && local.windows.iter().zip(&saved.windows).all(|(a, b)| {
-                        a.label == b.label
-                            && a.quota == b.quota
-                            && a.amounts == b.amounts
-                            && a.consumption == b.consumption
-                            && a.resets_at == b.resets_at
-                            && a.reset_description == b.reset_description
-                    })
-            });
-            if duplicate {
-                remove.push(index);
-            }
-            continue;
-        }
-        let exact = managed
-            .iter()
-            .any(|p| !local.account.id.is_empty() && p.account.id == local.account.id);
-        let email_matches: Vec<_> = managed
-            .iter()
-            .filter(|p| p.account.label.eq_ignore_ascii_case(&local.account.label))
-            .collect();
-        let same_personal = personal(local)
-            && local.account.label.contains('@')
-            && email_matches.len() == 1
-            && personal(email_matches[0]);
-        if exact || same_personal {
-            remove.push(index);
-        }
-    }
-    let mut index = 0;
-    providers.retain(|_| {
-        let keep = !remove.contains(&index);
-        index += 1;
-        keep
-    });
-}
