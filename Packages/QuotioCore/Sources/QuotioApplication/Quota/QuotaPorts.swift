@@ -40,15 +40,18 @@ public struct QuotaRefreshIssue: Equatable, Sendable {
     public let kind: QuotaRefreshIssueKind
     public let occurredAt: Date
     public let reason: QuotaRefreshFailureReason?
+    public let recoveryAction: QuotaRecoveryAction?
 
-    public init(kind: QuotaRefreshIssueKind, occurredAt: Date, reason: QuotaRefreshFailureReason? = nil) {
+    public init(kind: QuotaRefreshIssueKind, occurredAt: Date, reason: QuotaRefreshFailureReason? = nil, recoveryAction: QuotaRecoveryAction? = nil) {
         self.kind = kind
         self.occurredAt = occurredAt
         self.reason = reason
+        self.recoveryAction = recoveryAction
     }
 }
 
 public struct QuotaSnapshot: Equatable, Sendable {
+    public var accountStates: [QuotaAccountID: AccountMonitoringState]
     public var quotas: [QuotaProvider: [String: ProviderQuota]]
     public var accountAliases: [QuotaProvider: [String: String]]
     public var accountIDs: [QuotaProvider: [String: String]]
@@ -60,6 +63,7 @@ public struct QuotaSnapshot: Equatable, Sendable {
     public var lastUpdated: Date?
 
     public init(
+        accountStates: [QuotaAccountID: AccountMonitoringState] = [:],
         quotas: [QuotaProvider: [String: ProviderQuota]] = [:],
         accountAliases: [QuotaProvider: [String: String]] = [:],
         accountIDs: [QuotaProvider: [String: String]] = [:],
@@ -70,6 +74,7 @@ public struct QuotaSnapshot: Equatable, Sendable {
         refreshingProviders: Set<QuotaProvider> = [],
         lastUpdated: Date? = nil
     ) {
+        self.accountStates = accountStates
         self.quotas = quotas
         self.accountAliases = accountAliases
         self.accountIDs = accountIDs
@@ -93,11 +98,6 @@ public protocol QuotaCoordinating: Sendable {
         providers: Set<QuotaProvider>?,
         force: Bool
     ) async -> QuotaSnapshot
-    func replaceQuotas(
-        _ quotas: [String: ProviderQuota],
-        for provider: QuotaProvider,
-        mode: QuotaOperatingMode
-    ) async
     func removeQuota(for account: QuotaAccountID, mode: QuotaOperatingMode) async
     func cancel(provider: QuotaProvider) async
     func cancelForTermination() async

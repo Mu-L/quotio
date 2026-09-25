@@ -91,9 +91,7 @@ public struct QuotioHostHTTPClient: Sendable {
 
     public func snapshot() async throws -> QuotioHostSnapshot {
         let value: QuotioHostSnapshot = try await request("v2/snapshot")
-        guard value.schemaVersion == 2, value.host.apiVersions.contains(2) else {
-            throw QuotioHostClientError.incompatible
-        }
+        try value.validate()
         return value
     }
 }

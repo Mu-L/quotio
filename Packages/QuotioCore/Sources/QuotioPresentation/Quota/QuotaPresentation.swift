@@ -100,6 +100,8 @@ public extension QuotaMetricUnit {
             String.localizedStringWithFormat("quota.metric.unit.requests".localizedStatic(), value)
         case .searches:
             String.localizedStringWithFormat("quota.metric.unit.searches".localizedStatic(), value)
+        default:
+            value.formatted(.number.precision(.fractionLength(0...2))) + " " + rawValue
         }
     }
 }

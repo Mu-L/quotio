@@ -10,7 +10,6 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         let providers: [String]
         let accountId: String?
         let force: Bool
-        let includeOwned: Bool
         let disabledProxyAuthFiles: [String]
     }
     private struct APIKeyBody: Encodable {
@@ -19,33 +18,23 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         let apiKey: String
     }
     private struct EnabledBody: Encodable { let enabled: Bool }
-    private struct LabelBody: Encodable { let label: String }
     private struct SourceDiscoveryBody: Encodable {
         let provider: String
         let kind: String
         let inspect: Bool
     }
-    private struct CustomProviderSourceBody: Encodable {
-        struct Source: Encodable {
-            let domain: String
-            let recordId: String
-        }
-
-        let kind = "quotio_custom_provider"
-        let source: Source
-    }
-
     public private(set) var snapshot = QuotaSnapshot()
     private var client: QuotioHostHTTPClient?
     private var reportedAccounts: [Account] = []
+    private var hostSnapshot: QuotioHostSnapshot?
+    private var connectionID = UUID()
+    private var snapshotRequestID = UUID()
     private var activeMode: QuotaOperatingMode = .monitor
     private var continuations: [UUID: AsyncStream<QuotaSnapshot>.Continuation] = [:]
     private let logger: (any ApplicationLogging)?
     private let trackingPreferences: (any ProviderTrackingPreferencesRepository)?
     private let session: URLSession?
     private let userDefaults: UserDefaults
-    private let customProviders: (@Sendable () throws -> [CustomProvider])?
-    private let customProviderDomain: String
     private let authFileState: (any ManagedAuthFileStateRepository)?
     private let localization: @MainActor @Sendable () -> (bundle: Bundle, locale: Locale)
     private var storageRequiresAuthorization = false
@@ -57,8 +46,6 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         logger: (any ApplicationLogging)? = nil,
         trackingPreferences: (any ProviderTrackingPreferencesRepository)? = nil,
         userDefaults: UserDefaults = .standard,
-        customProviders: (@Sendable () throws -> [CustomProvider])? = nil,
-        customProviderDomain: String = "production",
         authFileState: (any ManagedAuthFileStateRepository)? = nil,
         localization: @escaping @MainActor @Sendable () -> (bundle: Bundle, locale: Locale) = { (.main, .current) }
     ) {
@@ -66,17 +53,20 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         self.logger = logger
         self.trackingPreferences = trackingPreferences
         self.userDefaults = userDefaults
-        self.customProviders = customProviders
-        self.customProviderDomain = customProviderDomain
         self.authFileState = authFileState
         self.localization = localization
     }
 
     public func connect(_ connection: QuotioHostConnection) {
+        connectionID = UUID()
+        hostSnapshot = nil
+        reportedAccounts = []
+        snapshot = QuotaSnapshot()
         client = QuotioHostHTTPClient(connection: connection, session: session)
     }
 
     public func disconnect() {
+        connectionID = UUID()
         client = nil
         markFailure(for: Set(Self.supportedProviders))
     }
@@ -94,7 +84,6 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
 
     public func bootstrap(mode: QuotaOperatingMode) async -> QuotaSnapshot {
         selectMode(mode)
-        mergeImportedIDEQuotas()
         await loadSnapshot(mode: mode)
         return snapshot
     }
@@ -133,16 +122,6 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         return snapshot
     }
 
-    public func replaceQuotas(
-        _ quotas: [String: ProviderQuota],
-        for provider: QuotaProvider,
-        mode: QuotaOperatingMode
-    ) {
-        snapshot.quotas[provider] = quotas.isEmpty ? nil : quotas
-        saveImportedIDEQuotas()
-        publish()
-    }
-
     public func removeQuota(for account: QuotaAccountID, mode: QuotaOperatingMode) {
         snapshot.quotas[account.provider]?[account.accountKey] = nil
         snapshot.accountIDs[account.provider]?[account.accountKey] = nil
@@ -150,7 +129,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
             .forEach { snapshot.accountAliases[account.provider]?[$0.key] = nil }
         snapshot.subscriptions[account.provider]?[account.accountKey] = nil
         snapshot.accountIssues[account] = nil
-        saveImportedIDEQuotas()
+        snapshot.accountStates[account] = nil
         publish()
     }
 
@@ -312,32 +291,8 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
     }
 
     public func accounts() async -> [Account] {
-        removeDisabledProxyQuotas()
-        guard let client else { return reportedAccounts }
-        do {
-            let response: QuotioCLIAccountList = try await client.request("v1/accounts")
-            guard response.schemaVersion == 1 else { return [] }
-            storageRequiresAuthorization = false
-            removeDisabledProxyQuotas()
-            let excludedIDs = disabledProxyAccountIDs()
-            let accounts = response.accounts
-                .filter { !excludedIDs.contains($0.id) }
-                .filter { activeMode == .monitor || $0.origin != "owned" || QuotioCLIWarpMirror.isMirror($0) }
-                .compactMap { value in
-                    let provider = QuotioCLIProviderMap.domain(value.provider)
-                    let key = provider.flatMap { snapshot.accountAliases[$0]?[value.id] }
-                    return Self.account(value, accountKey: key)
-                }
-            return AccountSelectionPolicy.preferred(
-                accounts + reportedAccounts.filter { reported in
-                    !accounts.contains { $0.id == reported.id && $0.providerID == reported.providerID }
-                },
-                disabledIDs: Set(accounts.filter(\.isDisabled).map(\.id))
-            )
-        } catch {
-            if Self.failureCategory(error) == "account_storage" { storageRequiresAuthorization = true }
-            return reportedAccounts
-        }
+        await loadSnapshot(mode: activeMode)
+        return reportedAccounts
     }
 
     func resolvedAccounts() async throws -> QuotioHostAccountList {
@@ -410,7 +365,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         guard let body else { return }
         try? await mutate(
             client: client,
-            path: "v1/accounts/\(accountID)",
+            path: "v2/accounts/\(accountID)",
             method: "PATCH",
             body: body
         )
@@ -421,7 +376,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         do {
             try await mutate(
                 client: client,
-                path: "v1/accounts/\(accountID)",
+                path: "v2/accounts/\(accountID)",
                 method: "DELETE",
                 body: nil
             )
@@ -476,17 +431,19 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
             throw AccountServiceFailure.invalidCredential
         }
         do {
-            let body = try JSONEncoder.quotioCLI.encode(APIKeyBody(
-                provider: existingAccountID == nil ? cliProvider : nil,
-                label: label,
-                apiKey: apiKey
-            ))
-            try await mutate(
-                client: client,
-                path: existingAccountID.map { "v1/accounts/\($0)" } ?? "v1/accounts",
-                method: existingAccountID == nil ? "POST" : "PATCH",
-                body: body
-            )
+            if let id = existingAccountID {
+                let host = try await client.snapshot()
+                guard let account = host.accounts.first(where: { $0.id == id && $0.providerId == cliProvider }) else {
+                    throw AccountServiceFailure.accountNotFound
+                }
+                let sources = account.sources.filter { $0.actions.contains { $0.kind == "replace_api_key" && $0.available } }
+                guard sources.count == 1 else { throw AccountServiceFailure.invalidCredential }
+                let body = try JSONSerialization.data(withJSONObject: ["api_key": apiKey])
+                try await mutate(client: client, path: QuotioHostAccountTarget.source(sources[0].id).path, method: "PATCH", body: body)
+            } else {
+                let body = try JSONEncoder.quotioCLI.encode(APIKeyBody(provider: cliProvider, label: label, apiKey: apiKey))
+                try await mutate(client: client, path: "v2/accounts", method: "POST", body: body)
+            }
         } catch {
             throw Self.accountFailure(error)
         }
@@ -550,14 +507,10 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         snapshot.refreshingProviders.formUnion(domainProviders)
         publish()
         do {
-            if providers.contains("zai") || providers.contains("clinepass") {
-                try await synchronizeCustomProviders(client: client)
-            }
             let body = try JSONEncoder.quotioCLI.encode(RefreshBody(
                 providers: providers,
                 accountId: accountID,
                 force: force,
-                includeOwned: mode == .monitor,
                 disabledProxyAuthFiles: (authFileState?.disabledAuthFileNames() ?? []).sorted()
             ))
             var operation: QuotioCLIOperation = try await client.request(
@@ -588,76 +541,36 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         refreshedProviders: Set<QuotaProvider>? = nil,
         importedAccounts: Set<String>? = nil
     ) async {
-        removeDisabledProxyQuotas()
         guard let client else {
             markFailure(for: refreshedProviders ?? Set(Self.supportedProviders))
             return
         }
+        let requestConnection = connectionID
+        let requestID = UUID()
+        snapshotRequestID = requestID
         do {
-            let report: QuotioCLIUsageReport = try await client.request("v1/usage")
-            guard activeMode == mode else { return }
-            guard report.schemaVersion == 1 else { throw QuotioHostClientError.incompatible }
+            let host = try await client.snapshot()
             let localization = await localization()
-            guard activeMode == mode else { return }
-            let previous = snapshot
-            snapshot = QuotioCLIUsageMapper.snapshot(
-                report, mode: mode, bundle: localization.bundle, locale: localization.locale,
-                excludedAccountIDs: disabledProxyAccountIDs(),
-                previousAliases: previous.accountAliases
-            )
-            if let refreshedProviders {
-                for provider in QuotaProvider.allCases where !refreshedProviders.contains(provider) {
-                    snapshot.quotas[provider] = previous.quotas[provider]
-                    snapshot.accountIDs[provider] = previous.accountIDs[provider]
-                    snapshot.accountAliases[provider] = previous.accountAliases[provider]
-                    snapshot.subscriptions[provider] = previous.subscriptions[provider]
-                    snapshot.issues[provider] = previous.issues[provider]
-                    snapshot.sourceIssues[provider] = previous.sourceIssues[provider]
-                }
-                snapshot.accountIssues = snapshot.accountIssues.filter { refreshedProviders.contains($0.key.provider) }
-                for (account, issue) in previous.accountIssues where !refreshedProviders.contains(account.provider) {
-                    snapshot.accountIssues[account] = issue
-                }
-                snapshot.refreshingProviders = previous.refreshingProviders.subtracting(refreshedProviders)
-                if refreshedProviders.contains(.cursor), let importedAccounts {
-                    snapshot.quotas[.cursor] = snapshot.quotas[.cursor]?.filter { importedAccounts.contains($0.key) }
-                }
-            } else {
-                snapshot.quotas[.cursor] = nil
-                mergeImportedIDEQuotas()
+            guard activeMode == mode, connectionID == requestConnection, snapshotRequestID == requestID else { return }
+            var frame = host
+            if let previous = hostSnapshot, previous.host.id == host.host.id {
+                if host.revision < previous.revision { return }
+                if host.revision == previous.revision { frame = previous }
             }
-            let cursorKeys = Set(snapshot.quotas[.cursor]?.keys.map { $0 } ?? [])
-            snapshot.accountIDs[.cursor] = snapshot.accountIDs[.cursor]?.filter { cursorKeys.contains($0.key) }
-            snapshot.accountAliases[.cursor] = snapshot.accountAliases[.cursor]?.filter { cursorKeys.contains($0.value) }
-            snapshot.accountIssues = snapshot.accountIssues.filter {
-                $0.key.provider != .cursor || cursorKeys.contains($0.key.accountKey)
-            }
-            saveImportedIDEQuotas()
-            let references = report.providers.map { ($0.provider, $0.accountRef) }
-                + report.failures.filter { failure in
-                    // A failed default adapter does not prove a local login exists.
-                    reportedAccounts.contains {
-                        $0.id == failure.accountRef?.id
-                            && QuotaProvider(rawValue: $0.providerID.rawValue).flatMap(QuotioCLIProviderMap.cli) == failure.provider
-                    }
-                }.map { ($0.provider, $0.accountRef) }
-            reportedAccounts = references.compactMap { name, reference in
-                guard let reference,
-                      let provider = QuotioCLIProviderMap.domain(name),
-                      let key = snapshot.accountAliases[provider]?[reference.id] else { return nil }
-                return Self.account(reference, provider: provider, accountKey: key)
-            }
-            removeDisabledProxyQuotas()
-            for provider in (refreshedProviders ?? Set(Self.supportedProviders)).sorted(by: { $0.rawValue < $1.rawValue }) {
-                let reasons = Set(snapshot.accountIssues.filter { $0.key.provider == provider }.values.compactMap { $0.reason?.rawValue })
-                    .union(snapshot.issues[provider]?.reason.map { [$0.rawValue] } ?? [])
-                let quotas = snapshot.quotas[provider] ?? [:]
-                await logger?.write(.info, message: "Quota snapshot provider=\(provider.rawValue) accounts=\(quotas.count) withMetrics=\(quotas.values.filter { !$0.models.isEmpty }.count) reasons=\(reasons.sorted().joined(separator: ","))")
-            }
-            publish()
+            let refreshing = snapshot.refreshingProviders
+            var next = QuotioHostPresentationMapper.resolvedSnapshot(frame, bundle: localization.bundle, locale: localization.locale)
+            next.refreshingProviders = refreshing.subtracting(refreshedProviders ?? [])
+            let accounts = frame.accounts.compactMap(Self.resolvedAccount)
+            let changed = snapshot != next || reportedAccounts != accounts
+            snapshot = next
+            hostSnapshot = frame
+            reportedAccounts = accounts
+            storageRequiresAuthorization = false
+            if changed { publish() }
         } catch {
+            guard activeMode == mode, connectionID == requestConnection, snapshotRequestID == requestID else { return }
+            if Self.failureCategory(error) == "account_storage" { storageRequiresAuthorization = true }
             await logger?.write(.warning, message: "Quota snapshot failed=\(Self.failureCategory(error))")
-            guard activeMode == mode else { return }
             markFailure(for: refreshedProviders ?? Set(Self.supportedProviders))
         }
     }
@@ -671,60 +584,43 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
     }
 
     private func accountID(provider: String, accountKey: String) async -> String? {
-        guard let client else { return nil }
-        if let domainProvider = QuotioCLIProviderMap.domain(provider) {
-            let quotaKey = snapshot.accountAliases[domainProvider]?[accountKey] ?? accountKey
-            if let id = snapshot.accountIDs[domainProvider]?[quotaKey] { return id }
-        }
-        if let list: QuotioCLIAccountList = try? await client.request("v1/accounts"),
-           let id = list.accounts.first(where: {
-            $0.provider == provider
-                && ($0.id == accountKey || $0.label.caseInsensitiveCompare(accountKey) == .orderedSame)
-           })?.id {
-            return id
-        }
-        return nil
+        hostSnapshot?.accounts.first { $0.providerId == provider && $0.id == accountKey }?.id
     }
 
-    private func synchronizeCustomProviders(client: QuotioHostHTTPClient) async throws {
-        guard let customProviders else { return }
-        let desired = try customProviders().compactMap { provider -> (CustomProvider, String)? in
-            guard provider.isEnabled, !provider.apiKeys.isEmpty else { return nil }
-            let sourceID = Self.customProviderSourceID(
-                domain: customProviderDomain,
-                recordID: provider.id
-            )
-            switch provider.type {
-            case .glmCompatibility, .clinePass: return (provider, sourceID)
-            default: return nil
+    private static func resolvedAccount(_ value: QuotioHostSnapshot.Account) -> Account? {
+        guard let provider = QuotioCLIProviderMap.domain(value.providerId) else { return nil }
+        func sourceKind(_ origin: String) -> AccountSource {
+            switch origin {
+            case "owned": .quotioKeychain
+            case "borrowed_proxy": .legacyCLIProxy
+            default: .nativeCredential
             }
         }
-        let response: QuotioCLIAccountList = try await client.request("v1/accounts")
-        guard response.schemaVersion == 1 else { throw QuotioHostClientError.incompatible }
-        var existing = response.accounts.filter { $0.sourceKind == "quotio_custom_provider" }
-        for account in existing where !desired.contains(where: {
-            $0.1 == account.sourceId
-        }) {
-            try await mutate(client: client, path: "v1/accounts/\(account.id)", method: "DELETE", body: nil)
-            existing.removeAll { $0.id == account.id }
-        }
-        for (provider, sourceID) in desired {
-            if let account = existing.first(where: { $0.sourceId == sourceID }) {
-                if !account.enabled {
-                    let body = try JSONEncoder.quotioCLI.encode(EnabledBody(enabled: true))
-                    try await mutate(client: client, path: "v1/accounts/\(account.id)", method: "PATCH", body: body)
-                }
-                if account.label != provider.name {
-                    let body = try JSONEncoder.quotioCLI.encode(LabelBody(label: provider.name))
-                    try await mutate(client: client, path: "v1/accounts/\(account.id)", method: "PATCH", body: body)
-                }
-                continue
+        func status(_ state: String) -> AccountStatus {
+            switch state {
+            case "ready": .ready
+            case "disabled": .disabled
+            case "needs_login": .expired
+            case "needs_authorization", "unavailable": .unavailable
+            default: .unknown
             }
-            let body = try JSONEncoder.quotioCLI.encode(CustomProviderSourceBody(
-                source: .init(domain: customProviderDomain, recordId: provider.id.uuidString)
-            ))
-            try await mutate(client: client, path: "v1/account-sources", method: "POST", body: body)
         }
+        var capabilities: Set<AccountCapability> = []
+        if value.actions.contains(where: { $0.kind == "remove" && $0.available }) { capabilities.insert(.delete) }
+        if value.actions.contains(where: { $0.kind == "set_enabled" && $0.available }) { capabilities.insert(.disable) }
+        let editable = value.sources.filter { $0.actions.contains { $0.kind == "replace_api_key" && $0.available } }
+        if editable.count == 1 { capabilities.insert(.edit) }
+        let source = value.sources.first(where: \.selected) ?? value.sources.first
+        return Account(
+            identity: AccountIdentity(id: value.id, providerID: .init(rawValue: provider.rawValue), accountKey: value.id),
+            displayName: value.displayName, source: sourceKind(source?.origin ?? ""),
+            credentialReference: source?.kind, capabilities: capabilities,
+            status: status(value.state), enabled: value.enabled,
+            sources: value.sources.map { source in
+                AccountLoginSource(accountID: source.id, source: sourceKind(source.origin), credentialReference: source.kind,
+                    status: status(source.state), location: source.location)
+            }
+        )
     }
 
     private func disabledProxyAccountIDs() -> Set<String> {
@@ -776,39 +672,6 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         }
     }
 
-    private func mergeImportedIDEQuotas() {
-        guard let data = userDefaults.data(forKey: "persisted.ideQuotas"),
-              let stored = try? JSONDecoder().decode([String: [String: ProviderQuota]].self, from: data) else {
-            return
-        }
-        for provider in [QuotaProvider.cursor]
-            where snapshot.quotas[provider]?.isEmpty != false {
-            snapshot.quotas[provider] = stored[provider.rawValue]
-        }
-    }
-
-    private func saveImportedIDEQuotas() {
-        let stored = [QuotaProvider.cursor, .trae].reduce(into: [String: [String: ProviderQuota]]()) {
-            if let quotas = snapshot.quotas[$1], !quotas.isEmpty { $0[$1.rawValue] = quotas }
-        }
-        guard !stored.isEmpty else {
-            userDefaults.removeObject(forKey: "persisted.ideQuotas")
-            return
-        }
-        if let data = try? JSONEncoder().encode(stored) {
-            userDefaults.set(data, forKey: "persisted.ideQuotas")
-        }
-    }
-
-    private static func customProviderSourceID(domain: String, recordID: UUID) -> String {
-        let identifier = switch domain {
-        case "production": "app.bytrong.quotio"
-        case "development": "app.bytrong.quotio.dev"
-        default: domain
-        }
-        return sourceID(["quotio_custom_provider", identifier, recordID.uuidString.lowercased()])
-    }
-
     private static func sourceID(_ parts: [String]) -> String {
         var data = Data()
         for part in parts {
@@ -845,12 +708,12 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
     }
 
     private func markFailure(for providers: Set<QuotaProvider>) {
+        guard providers.contains(where: { snapshot.issues[$0]?.kind != .failed || snapshot.issues[$0]?.reason != nil || snapshot.refreshingProviders.contains($0) }) else { return }
         let now = Date()
         snapshot.refreshingProviders.subtract(providers)
         for provider in providers {
             snapshot.issues[provider] = QuotaRefreshIssue(kind: .failed, occurredAt: now)
         }
-        snapshot.lastUpdated = now
         publish()
     }
 
@@ -860,66 +723,6 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
 
     private func removeContinuation(_ id: UUID) {
         continuations[id] = nil
-    }
-
-    private static func account(_ value: QuotioCLIAccount, accountKey: String? = nil) -> Account? {
-        guard let provider = QuotioCLIProviderMap.domain(value.provider) else { return nil }
-        let label = value.origin == "borrowed_native" && provider == .copilot
-            ? accountKey ?? value.label
-            : QuotioCLIWarpMirror.displayLabel(value.label, provider: value.provider)
-        let source: AccountSource = switch value.origin {
-        case "borrowed_proxy": .legacyCLIProxy
-        case "owned": .quotioKeychain
-        default: .nativeCredential
-        }
-        var capabilities: Set<AccountCapability> = [.disable]
-        if value.origin != "borrowed_proxy" { capabilities.insert(.delete) }
-        if value.origin == "owned", provider.usesAPIKeyAuth { capabilities.insert(.edit) }
-        if QuotioCLIWarpMirror.isMirror(value) || value.sourceKind == "quotio_custom_provider" { capabilities = [] }
-        return Account(
-            identity: AccountIdentity(
-                id: value.id,
-                providerID: AccountProviderID(rawValue: provider.rawValue),
-                accountKey: accountKey ?? label
-            ),
-            displayName: label,
-            source: source,
-            credentialReference: value.sourceKind,
-            capabilities: capabilities,
-            status: value.enabled ? .ready : .disabled,
-            credentialMetadata: RedactedCredentialMetadata(
-                kind: value.origin == "owned" && provider.usesAPIKeyAuth ? .apiKey : .external
-            ),
-            sources: [AccountLoginSource(
-                accountID: value.id, source: source, credentialReference: value.sourceKind,
-                status: value.enabled ? .ready : .disabled, location: value.sourceLocation
-            )]
-        )
-    }
-
-    private static func account(
-        _ reference: QuotioCLIAccountReference,
-        provider: QuotaProvider,
-        accountKey: String
-    ) -> Account {
-        let label = QuotioCLIWarpMirror.displayLabel(reference.label, provider: provider.rawValue)
-        let source: AccountSource = switch reference.origin {
-        case "borrowed_proxy": .legacyCLIProxy
-        case "owned": .quotioKeychain
-        default: .nativeCredential
-        }
-        return Account(
-            identity: AccountIdentity(
-                id: reference.id,
-                providerID: AccountProviderID(rawValue: provider.rawValue),
-                accountKey: accountKey
-            ),
-            displayName: label,
-            source: source,
-            credentialReference: nil,
-            capabilities: [],
-            status: .ready
-        )
     }
 
     private static func failureCategory(_ error: Error) -> String {

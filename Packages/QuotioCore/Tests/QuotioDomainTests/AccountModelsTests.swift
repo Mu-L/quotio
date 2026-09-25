@@ -11,7 +11,6 @@ final class AccountModelsTests: XCTestCase {
 
         XCTAssertEqual(identity.id, "monitor-a8110b8da0533693c274")
         XCTAssertEqual(identity.accountKey, "Person@Example.com")
-        XCTAssertEqual(identity.deduplicationKey, "codex:person@example.com")
     }
 
     func testAccountCodingPreservesVersionOneMetadataShape() throws {
@@ -45,26 +44,6 @@ final class AccountModelsTests: XCTestCase {
         XCTAssertNil(decoded.credentialMetadata)
     }
 
-    func testPreferredAccountUsesSourcePriorityAndDisabledMetadata() {
-        let providerID = AccountProviderID(rawValue: "codex")
-        let legacy = Account.make(
-            providerID: providerID,
-            accountKey: "person@example.com",
-            source: .legacyCLIProxy
-        )
-        let native = Account.make(
-            providerID: providerID,
-            accountKey: "PERSON@example.com",
-            source: .nativeCredential
-        )
-
-        let selected = AccountSelectionPolicy.preferred([legacy, native], disabledIDs: [native.id])
-
-        XCTAssertEqual(selected.count, 1)
-        XCTAssertEqual(selected.first?.source, .nativeCredential)
-        XCTAssertEqual(selected.first?.status, .disabled)
-        XCTAssertEqual(Set(selected.first?.sources.map(\.source) ?? []), [.nativeCredential, .legacyCLIProxy])
-    }
 
     func testAmpNativeAndNamedAccountsHaveDistinctIdentities() {
         let providerID = AccountProviderID(rawValue: QuotaProvider.amp.rawValue)
@@ -80,67 +59,11 @@ final class AccountModelsTests: XCTestCase {
             source: .quotioKeychain
         )
 
-        XCTAssertEqual(AccountSelectionPolicy.preferred([native, named]).count, 2)
+        XCTAssertNotEqual(native.id, named.id)
         XCTAssertEqual(native.displayName, "Amp")
         XCTAssertNotEqual(native.accountKey, named.accountKey)
     }
 
-    func testMergingQuotaDoesNotInventAccountsFromQuotaKeys() {
-        let codex = Account.make(
-            providerID: AccountProviderID(rawValue: QuotaProvider.codex.rawValue),
-            accountKey: "person@example.com",
-            source: .nativeCredential
-        )
-        let quota = ProviderQuota(
-            models: [],
-            accountDisplayName: "Person"
-        )
 
-        let merged = AccountSelectionPolicy.mergingQuotaAccounts(
-            [codex],
-            quotas: [
-                .codex: ["person@example.com": quota],
-                .cursor: ["cursor@example.com": quota],
-            ]
-        )
 
-        XCTAssertEqual(merged.count, 1)
-        XCTAssertEqual(merged.filter { $0.providerID.rawValue == QuotaProvider.codex.rawValue }.count, 1)
-        let cursor = merged.first { $0.providerID.rawValue == QuotaProvider.cursor.rawValue }
-        XCTAssertNil(cursor)
-    }
-
-    func testMergingQuotaDisplayNameDoesNotChangeExistingAccountIdentity() {
-        let account = Account.make(
-            providerID: AccountProviderID(rawValue: QuotaProvider.factoryDroid.rawValue),
-            accountKey: "org-123",
-            displayName: "Factory Droid",
-            source: .nativeCredential
-        )
-        let quota = ProviderQuota(accountDisplayName: "factory@example.com")
-
-        let merged = AccountSelectionPolicy.mergingQuotaAccounts(
-            [account],
-            quotas: [.factoryDroid: [account.accountKey: quota]]
-        )
-
-        XCTAssertEqual(merged.first?.displayName, "factory@example.com")
-        XCTAssertEqual(merged.first?.accountKey, account.accountKey)
-        XCTAssertEqual(merged.first?.id, account.id)
-    }
-
-    func testMergingQuotaAccountsHidesGenericPlaceholderWhenSpecificAccountExists() {
-        let specific = Account.make(
-            providerID: AccountProviderID(rawValue: QuotaProvider.claude.rawValue),
-            accountKey: "person@example.com",
-            source: .nativeCredential
-        )
-
-        let merged = AccountSelectionPolicy.mergingQuotaAccounts(
-            [specific],
-            quotas: [.claude: ["Claude Code": ProviderQuota()]]
-        )
-
-        XCTAssertEqual(merged, [specific])
-    }
 }

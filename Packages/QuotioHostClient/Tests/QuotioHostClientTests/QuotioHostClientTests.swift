@@ -31,6 +31,30 @@ final class QuotioHostClientTests: XCTestCase {
         XCTAssertThrowsError(try QuotioHostSnapshot.decode(JSONSerialization.data(withJSONObject: changed)))
     }
 
+    func testInvalidRelationshipsAndDuplicateAnalyticsAreRejected() throws {
+        let original = try XCTUnwrap(JSONSerialization.jsonObject(with: fixture()) as? [String: Any])
+        var redirect = original
+        redirect["account_redirects"] = ["old-account": "missing-account"]
+        XCTAssertThrowsError(try QuotioHostSnapshot.decode(JSONSerialization.data(withJSONObject: redirect)))
+        var profile = original
+        var usage = profile["usage"] as! [[String: Any]]
+        usage[0]["codex_profile"] = [
+            "daily_usage": [["date":"2026-09-24", "tokens":0], ["date":"2026-09-24", "tokens":1]],
+            "latest_30_buckets_tokens":1, "fetched_at":"2026-09-24T00:00:00Z"
+        ]
+        profile["usage"] = usage
+        XCTAssertThrowsError(try QuotioHostSnapshot.decode(JSONSerialization.data(withJSONObject: profile)))
+        var missingTime = original
+        var untimed = missingTime["usage"] as! [[String: Any]]
+        untimed[0]["fetched_at"] = NSNull(); missingTime["usage"] = untimed
+        XCTAssertThrowsError(try QuotioHostSnapshot.decode(JSONSerialization.data(withJSONObject: missingTime)))
+        var disabled = original
+        var accounts = disabled["accounts"] as! [[String: Any]]
+        accounts[0]["enabled"] = false
+        disabled["accounts"] = accounts
+        XCTAssertThrowsError(try QuotioHostSnapshot.decode(JSONSerialization.data(withJSONObject: disabled)))
+    }
+
     func testHostConnectionsKeepCredentialsSeparateAndRejectUnsafeTransport() async throws {
         Stub.state.reset(try fixture())
         let config = URLSessionConfiguration.ephemeral

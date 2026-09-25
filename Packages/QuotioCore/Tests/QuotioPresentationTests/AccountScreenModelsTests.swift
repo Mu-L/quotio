@@ -76,20 +76,18 @@ final class AccountScreenModelsTests: XCTestCase {
         )
     }
 
-    func testAccountsModelReloadDoesNotInventQuotaDerivedAccounts() async {
+    func testAccountsModelReloadPreservesEmptyHostResult() async {
         let model = AccountsScreenModel(
             accountService: AccountScreenModelService(accounts: []),
             authFileRepository: AccountScreenModelAuthFiles(files: [])
         )
 
-        await model.reloadAccounts(merging: [
-            .cursor: ["person@example.com": ProviderQuota(accountDisplayName: "Person")],
-        ])
+        await model.reloadAccounts()
 
         XCTAssertTrue(model.accounts.isEmpty)
     }
 
-    func testQuotaAliasesDoNotCreateSyntheticDuplicateOfOwnedAccount() async throws {
+    func testAccountsModelForwardsHostIDsAndDisabledState() async throws {
         let owned = Account(
             identity: AccountIdentity(id: "vault-id", providerID: .init(rawValue: "codex"),
                 accountKey: "same@example.com-pro"),
@@ -100,21 +98,18 @@ final class AccountScreenModelsTests: XCTestCase {
         let model = AccountsScreenModel(accountService: service,
             authFileRepository: AccountScreenModelAuthFiles(files: []))
 
-        await model.reloadAccounts(
-            merging: [.codex: ["same@example.com": ProviderQuota()]],
-            aliases: [.codex: ["same@example.com-pro": "same@example.com"]]
-        )
+        await model.reloadAccounts()
 
         XCTAssertEqual(model.accounts.count, 1)
         let account = try XCTUnwrap(model.accounts.first)
-        XCTAssertEqual(account.accountKey, "same@example.com")
+        XCTAssertEqual(account.accountKey, owned.accountKey)
         XCTAssertEqual(account.id, owned.id)
         XCTAssertEqual(account.source, owned.source)
         XCTAssertEqual(account.credentialReference, owned.credentialReference)
         XCTAssertEqual(account.capabilities, owned.capabilities)
         XCTAssertTrue(account.isDisabled)
         await model.setDisabled(false, accountID: account.id)
-        XCTAssertEqual(model.accounts.map(\.accountKey), ["same@example.com"])
+        XCTAssertEqual(model.accounts.map(\.accountKey), [owned.accountKey])
         try await model.delete(accountID: account.id)
         let disabledID = await service.lastDisabledID
         let deletedID = await service.lastDeletedID
@@ -122,7 +117,7 @@ final class AccountScreenModelsTests: XCTestCase {
         XCTAssertEqual(deletedID, owned.id)
     }
 
-    func testAliasesMergeSourcesButKeepDistinctWorkspaceAndOtherProvider() async {
+    func testReloadDoesNotMergeDistinctHostAccounts() async {
         let provider = AccountProviderID(rawValue: "codex")
         let owned = Account.make(providerID: provider, accountKey: "same@example.com",
             source: .quotioKeychain, capabilities: [.disable, .delete])
@@ -136,12 +131,11 @@ final class AccountScreenModelsTests: XCTestCase {
             accountService: AccountScreenModelService(accounts: [legacy, owned, workspace, other]),
             authFileRepository: AccountScreenModelAuthFiles(files: []))
 
-        await model.reloadAccounts(merging: [:],
-            aliases: [.codex: ["same@example.com-pro": "same@example.com"]])
-
-        XCTAssertEqual(Set(model.accounts.map(\.id)), [owned.id, workspace.id, other.id])
         await model.reloadAccounts()
-        XCTAssertEqual(Set(model.accounts.map(\.id)), [owned.id, workspace.id, other.id])
+
+        XCTAssertEqual(Set(model.accounts.map(\.id)), [owned.id, legacy.id, workspace.id, other.id])
+        await model.reloadAccounts()
+        XCTAssertEqual(Set(model.accounts.map(\.id)), [owned.id, legacy.id, workspace.id, other.id])
     }
 
     func testDownloadEligibilityRequiresAnAuthFileName() {

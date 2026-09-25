@@ -5,14 +5,15 @@ import QuotioDomain
 final class ProviderSettingsStateTests: XCTestCase {
     func testConnectionIsIndependentOfProviderQuotaFailureAndDisabledAccountsRemainVisible() {
         let account = Account.make(providerID: .init(rawValue: "claude"), accountKey: "fixture", source: .nativeCredential)
-        let quota = QuotaSnapshot(issues: [.claude: .init(kind: .failed, occurredAt: Date(), reason: .timeout)])
+        var quota = QuotaSnapshot(issues: [.claude: .init(kind: .failed, occurredAt: Date(), reason: .timeout)])
+        quota.accountStates[.init(provider: .claude, accountKey: account.accountKey)] = .init(connection: .connected, quota: .notLoaded)
         let state = ProviderSettingsState(provider: .claude, accounts: [account], permissions: [], quota: quota,
-            tracking: .init(), cadence: .oneMinute, now: Date())
+            tracking: .init())
         XCTAssertEqual(state.connection, .connected)
         XCTAssertEqual(state.accountStates[account.id]?.quota, .notLoaded)
         XCTAssertTrue(state.needsAttention)
         let disabled = ProviderSettingsState(provider: .claude, accounts: [account], permissions: [], quota: quota,
-            tracking: .init(disabledProviders: [.claude]), cadence: .oneMinute, now: Date())
+            tracking: .init(disabledProviders: [.claude]))
         XCTAssertEqual(disabled.connection, .disabled)
         XCTAssertEqual(disabled.accounts, [account])
         XCTAssertFalse(disabled.needsAttention)
@@ -21,7 +22,7 @@ final class ProviderSettingsStateTests: XCTestCase {
     func testUnconnectedProviderDoesNotInheritGlobalRefreshFailure() {
         let quota = QuotaSnapshot(issues: [.claude: .init(kind: .failed, occurredAt: Date(), reason: .timeout)])
         let state = ProviderSettingsState(provider: .claude, accounts: [], permissions: [], quota: quota,
-            tracking: .init(), cadence: .oneMinute, now: Date())
+            tracking: .init())
         XCTAssertTrue(state.isUnconnected)
         XCTAssertFalse(state.needsAttention)
         XCTAssertNil(state.latestIssue)
@@ -30,7 +31,7 @@ final class ProviderSettingsStateTests: XCTestCase {
     func testPendingSourceDoesNotCountAsAnAccount() {
         let state = ProviderSettingsState(provider: .claude, accounts: [],
             permissions: [.init(provider: .claude, kind: "claude_native", location: "code_keychain")],
-            quota: .init(), tracking: .init(), cadence: .oneMinute, now: Date())
+            quota: .init(), tracking: .init())
         XCTAssertEqual(state.connection, .permissionRequired)
         XCTAssertTrue(state.accounts.isEmpty)
         XCTAssertFalse(state.isUnconnected)

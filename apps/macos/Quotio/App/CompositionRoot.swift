@@ -87,8 +87,6 @@ enum CompositionRoot {
         let quotioBackend = QuotioCLIBackend(
             logger: OSApplicationLogger(subsystem: AppIdentity.bundleIdentifier, category: "NativeQuota"),
             trackingPreferences: providerTrackingRepository,
-            customProviders: customProviderRepository.load,
-            customProviderDomain: AppIdentity.bundleIdentifier,
             authFileState: authFileState,
             localization: { (languageManager.bundle, languageManager.locale) }
         )

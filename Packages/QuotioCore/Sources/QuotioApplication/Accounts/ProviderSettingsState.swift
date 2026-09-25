@@ -13,14 +13,14 @@ public struct ProviderSettingsState: Sendable {
     public let sourceIssues: [String: QuotaRefreshIssue]
 
     public var needsAttention: Bool {
-        connection != .disabled && (!permissions.isEmpty || latestIssue != nil)
+        connection != .disabled && (connection == .permissionRequired || connection == .reauthenticationRequired || !permissions.isEmpty || latestIssue != nil)
     }
 
     public var isUnconnected: Bool { accounts.isEmpty && permissions.isEmpty }
 
     public init(
         provider: QuotaProvider, accounts: [Account], permissions: [NativeSourcePermission],
-        quota: QuotaSnapshot, tracking: ProviderTrackingPreferences, cadence: RefreshCadence, now: Date
+        quota: QuotaSnapshot, tracking: ProviderTrackingPreferences
     ) {
         self.provider = provider
         self.accounts = accounts.filter { $0.providerID.rawValue == provider.rawValue }
@@ -31,13 +31,8 @@ public struct ProviderSettingsState: Sendable {
         sourceIssues = quota.sourceIssues[provider] ?? [:]
         for account in self.accounts {
             let id = QuotaAccountID(provider: provider, accountKey: account.accountKey)
-            let updated = quota.quotas[provider]?[account.accountKey]?.lastUpdated
             let issue = quota.accountIssues[id]
-            let state = AccountMonitoringState.resolve(
-                isTracked: tracked && !account.isDisabled, hasSource: !account.sources.isEmpty,
-                needsPermission: false, lastUpdated: updated, issue: issue,
-                isRefreshing: quota.refreshingProviders.contains(provider), cadence: cadence, now: now
-            )
+            let state = quota.accountStates[id] ?? AccountMonitoringState(connection: .notConnected, quota: .notLoaded)
             states[account.id] = state
             if !account.isDisabled {
                 if case .failed = state.quota, let issue { currentIssues.append((account.id, quota.accountIDs[provider]?[account.accountKey], issue)) }
@@ -58,7 +53,7 @@ public struct ProviderSettingsState: Sendable {
             connection = .disabled
         } else if states.values.contains(where: { $0.connection == .connected }) {
             connection = .connected
-        } else if !self.permissions.isEmpty {
+        } else if !self.permissions.isEmpty || states.values.contains(where: { $0.connection == .permissionRequired }) {
             connection = .permissionRequired
         } else if states.values.contains(where: { $0.connection == .reauthenticationRequired }) {
             connection = .reauthenticationRequired

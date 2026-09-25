@@ -89,14 +89,6 @@ public final class QuotaScreenModel {
         ))
     }
 
-    public func replaceQuotas(
-        _ quotas: [String: ProviderQuota],
-        for provider: QuotaProvider,
-        mode: QuotaOperatingMode
-    ) async {
-        await coordinator.replaceQuotas(quotas, for: provider, mode: mode)
-        resetObservation(to: await coordinator.snapshot)
-    }
 
     public func removeQuota(for account: QuotaAccountID, mode: QuotaOperatingMode) async {
         await coordinator.removeQuota(for: account, mode: mode)

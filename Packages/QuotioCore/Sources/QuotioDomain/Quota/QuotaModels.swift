@@ -93,11 +93,33 @@ public struct QuotaAccountID: Hashable, Sendable {
     }
 }
 
-public enum QuotaMetricUnit: String, Codable, Equatable, Sendable {
-    case usd
-    case credits
-    case requests
-    case searches
+public struct QuotaMetricUnit: RawRepresentable, Codable, Equatable, Sendable {
+    public let rawValue: String
+    public static let usd = Self(rawValue: "usd")!
+    public static let credits = Self(rawValue: "credits")!
+    public static let requests = Self(rawValue: "requests")!
+    public static let searches = Self(rawValue: "searches")!
+
+    public init?(rawValue: String) {
+        let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return nil }
+        let known = ["usd", "credits", "requests", "searches"]
+        self.rawValue = known.contains(value.lowercased()) ? value.lowercased() : value
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let value = try container.decode(String.self)
+        guard let unit = Self(rawValue: value) else {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Empty metric unit")
+        }
+        self = unit
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 }
 
 public enum QuotaAmountSemantics: String, Codable, Equatable, Sendable {
@@ -113,6 +135,7 @@ public enum QuotaMetricPresentation: Codable, Equatable, Sendable {
 
 public struct QuotaMetric: Codable, Equatable, Identifiable, Sendable {
     public let name: String
+    public let backendID: String?
     public let percentage: Double
     public let resetTime: String
     public var presentation: QuotaMetricPresentation?
@@ -121,11 +144,12 @@ public struct QuotaMetric: Codable, Equatable, Identifiable, Sendable {
     public var remaining: Int?
     public var tooltip: String?
 
-    public var id: String { name }
+    public var id: String { backendID ?? name }
     public var usedPercentage: Double { 100 - percentage }
 
     public init(
         name: String,
+        id: String? = nil,
         percentage: Double,
         resetTime: String,
         presentation: QuotaMetricPresentation? = nil,
@@ -135,6 +159,7 @@ public struct QuotaMetric: Codable, Equatable, Identifiable, Sendable {
         tooltip: String? = nil
     ) {
         self.name = name
+        self.backendID = id
         self.percentage = percentage
         self.resetTime = resetTime
         self.presentation = presentation

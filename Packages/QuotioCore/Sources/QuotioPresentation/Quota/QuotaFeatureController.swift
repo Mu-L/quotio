@@ -275,16 +275,11 @@ public final class QuotaFeatureController {
         if account.isDisabled { return ("disabled", nil) }
         let accountID = QuotaAccountID(provider: provider, accountKey: account.accountKey)
         let updated = QuotaPolicy.lastUpdated(for: accountID, in: quota.providerQuotas)
-        if let issue = quota.state.accountIssues[accountID], updated == nil || updated! <= issue.occurredAt {
+        if let issue = quota.state.accountIssues[accountID] {
             return (issue.kind == .partial ? "partial" : "failed", issue.explanation)
         }
         guard let updated else { return (nil, nil) }
-        let monitoring = AccountMonitoringState.resolve(
-            isTracked: !account.isDisabled, hasSource: true, needsPermission: false,
-            lastUpdated: updated, issue: nil, isRefreshing: false,
-            cadence: refreshSettings.refreshCadence, now: Date()
-        )
-        if monitoring.quota == .stale {
+        if quota.state.accountStates[accountID]?.quota == .stale {
             return (
                 "outdated",
                 String(format: "monitor.status.outdated".localized(), updated.formatted(date: .abbreviated, time: .shortened))
@@ -371,10 +366,7 @@ public final class QuotaFeatureController {
     }
 
     private func reloadAccounts() async {
-        await accounts.reloadAccounts(
-            merging: quota.providerQuotas,
-            aliases: quota.state.accountAliases
-        )
+        await accounts.reloadAccounts()
     }
 
     private func removeDisabledMonitorQuotas() async {

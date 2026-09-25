@@ -24,7 +24,7 @@ struct ProviderSettingsScreen: View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
             let state = ProviderSettingsState(provider: provider, accounts: accounts.accounts,
                 permissions: accounts.nativeSourcePermissions, quota: quota.state,
-                tracking: controller.trackingPreferences, cadence: refreshSettings.refreshCadence, now: context.date)
+                tracking: controller.trackingPreferences)
             Form {
                 AccountStorageAccessSection()
                 Section {
@@ -87,8 +87,8 @@ struct ProviderSettingsScreen: View {
                                         Text(ConnectionState.disabled.title).font(.caption)
                                     } else if let issue = state.sourceIssues[source.accountID] {
                                         Text(issue.explanation).font(.caption).foregroundStyle(.orange)
-                                    } else if quota.state.accountIDs[provider]?[account.accountKey] == source.accountID {
-                                        Text(state.accountStates[account.id]?.connection.title ?? "settings.sources.unchecked".localized()).font(.caption)
+                                    } else if source.status == .ready {
+                                        Text(ConnectionState.connected.title).font(.caption)
                                     } else {
                                         Text("settings.sources.unchecked".localized()).font(.caption).foregroundStyle(.secondary)
                                     }
@@ -214,7 +214,7 @@ struct ProviderSettingsScreen: View {
 
     @ViewBuilder
     private func recoveryAction(_ issue: QuotaRefreshIssue, accounts: [Account], sourceID: String?) -> some View {
-        switch issue.reason?.recoveryAction {
+        switch issue.recoveryAction {
         case .signIn:
             if supportsOAuth, accounts.flatMap(\.sources).contains(where: { $0.accountID == sourceID && $0.source == .quotioKeychain }) {
                 Button("action.login".localized()) { oauthPresented = true }
@@ -224,7 +224,7 @@ struct ProviderSettingsScreen: View {
             }
         case .authorize:
             if let source = accounts.flatMap(\.sources).first(where: {
-                $0.accountID == sourceID && ["code_keychain", "gemini_keychain", "v2_login_keychain", "v2_keyring", "legacy"].contains($0.location ?? "")
+                $0.accountID == sourceID
             }), let kind = source.credentialReference {
                 Button("settings.authorize".localized()) {
                     permission = NativeSourcePermission(provider: provider, kind: kind, location: source.location)

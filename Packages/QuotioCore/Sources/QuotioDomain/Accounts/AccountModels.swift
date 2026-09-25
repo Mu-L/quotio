@@ -20,13 +20,7 @@ public enum AccountSource: String, Codable, CaseIterable, Sendable {
     case localIDE
     case apiKey
 
-    public var priority: Int {
-        switch self {
-        case .quotioKeychain: 300
-        case .nativeCredential, .localIDE, .apiKey: 200
-        case .legacyCLIProxy: 100
-        }
-    }
+
 }
 
 public enum AccountCapability: String, Codable, Hashable, Sendable {
@@ -102,9 +96,7 @@ public struct AccountIdentity: Codable, Hashable, Sendable {
         )
     }
 
-    public var deduplicationKey: String {
-        "\(providerID.rawValue):\(accountKey.lowercased())"
-    }
+
 }
 
 public struct Account: Identifiable, Codable, Hashable, Sendable {
@@ -114,17 +106,20 @@ public struct Account: Identifiable, Codable, Hashable, Sendable {
     public let credentialReference: String?
     public let capabilities: Set<AccountCapability>
     public var status: AccountStatus
+    public var enabled: Bool
     public let credentialMetadata: RedactedCredentialMetadata?
     public var sources: [AccountLoginSource]
 
     public var id: String { identity.id }
     public var providerID: AccountProviderID { identity.providerID }
     public var accountKey: String { identity.accountKey }
-    public var deduplicationKey: String { identity.deduplicationKey }
     public var canDelete: Bool { capabilities.contains(.delete) }
     public var isDisabled: Bool {
-        get { status == .disabled }
-        set { status = newValue ? .disabled : .unknown }
+        get { !enabled }
+        set {
+            enabled = !newValue
+            status = newValue ? .disabled : .unknown
+        }
     }
 
     public init(
@@ -134,6 +129,7 @@ public struct Account: Identifiable, Codable, Hashable, Sendable {
         credentialReference: String? = nil,
         capabilities: Set<AccountCapability> = [.disable],
         status: AccountStatus = .unknown,
+        enabled: Bool? = nil,
         credentialMetadata: RedactedCredentialMetadata? = nil,
         sources: [AccountLoginSource]? = nil
     ) {
@@ -143,6 +139,7 @@ public struct Account: Identifiable, Codable, Hashable, Sendable {
         self.credentialReference = credentialReference
         self.capabilities = capabilities
         self.status = status
+        self.enabled = enabled ?? (status != .disabled)
         self.credentialMetadata = credentialMetadata
         self.sources = sources ?? [AccountLoginSource(
             accountID: identity.id, source: source, credentialReference: credentialReference, status: status
@@ -204,6 +201,7 @@ public struct Account: Identifiable, Codable, Hashable, Sendable {
         capabilities = canDelete ? [.disable, .delete] : [.disable]
         let isDisabled = try container.decodeIfPresent(Bool.self, forKey: .isDisabled) ?? false
         status = isDisabled ? .disabled : .unknown
+        enabled = !isDisabled
         credentialMetadata = nil
         sources = try container.decodeIfPresent([AccountLoginSource].self, forKey: .sources) ?? [
             AccountLoginSource(accountID: id, source: source, credentialReference: credentialReference, status: status),
@@ -221,55 +219,5 @@ public struct Account: Identifiable, Codable, Hashable, Sendable {
         try container.encode(canDelete, forKey: .canDelete)
         try container.encode(isDisabled, forKey: .isDisabled)
         try container.encode(sources, forKey: .sources)
-    }
-}
-
-public enum AccountSelectionPolicy {
-    public static func preferred(
-        _ candidates: [Account],
-        disabledIDs: Set<String> = []
-    ) -> [Account] {
-        var selected: [String: Account] = [:]
-        for var account in candidates {
-            account.isDisabled = disabledIDs.contains(account.id)
-            let key = account.deduplicationKey
-            if let existing = selected[key] {
-                var preferred = existing.source.priority >= account.source.priority ? existing : account
-                var seen = Set<String>()
-                preferred.sources = (existing.sources + account.sources).filter { seen.insert($0.id).inserted }
-                selected[key] = preferred
-            } else {
-                selected[key] = account
-            }
-        }
-        return selected.values.sorted {
-            if $0.providerID == $1.providerID {
-                return $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
-            }
-            return $0.providerID.rawValue < $1.providerID.rawValue
-        }
-    }
-
-    public static func mergingQuotaAccounts(
-        _ accounts: [Account],
-        quotas: [QuotaProvider: [String: ProviderQuota]]
-    ) -> [Account] {
-        let merged = accounts.map { account in
-            guard let provider = QuotaProvider(rawValue: account.providerID.rawValue),
-                  let displayName = quotas[provider]?[account.accountKey]?.accountDisplayName else {
-                return account
-            }
-            return Account(
-                identity: account.identity,
-                displayName: displayName,
-                source: account.source,
-                credentialReference: account.credentialReference,
-                capabilities: account.capabilities,
-                status: account.status,
-                credentialMetadata: account.credentialMetadata,
-                sources: account.sources
-            )
-        }
-        return preferred(merged, disabledIDs: Set(merged.filter(\.isDisabled).map(\.id)))
     }
 }

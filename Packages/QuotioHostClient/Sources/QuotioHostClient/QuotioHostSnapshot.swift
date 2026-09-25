@@ -97,14 +97,46 @@ public struct QuotioHostSnapshot: Decodable, Sendable {
     public let revision: UInt64
     public let generatedAt: Date
     public let accounts: [Account]
+    public let accountRedirects: [String: String]?
     public let usage: [Usage]
+    public let providerIssues: [String: Issue]?
 
     public static func decode(_ data: Data) throws -> Self {
         let value = try makeQuotioHostDecoder().decode(Self.self, from: data)
-        guard value.schemaVersion == 2, value.host.apiVersions.contains(2) else {
-            throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Unsupported host contract version"))
-        }
+        try value.validate()
         return value
+    }
+
+    public func validate() throws {
+        func validID(_ id: String) -> Bool {
+            !id.isEmpty && id.utf8.count <= 256 && id.utf8.allSatisfy {
+                ($0 >= 65 && $0 <= 90) || ($0 >= 97 && $0 <= 122) || ($0 >= 48 && $0 <= 57) || $0 == 45 || $0 == 95
+            }
+        }
+        guard schemaVersion == 2, host.apiVersions.contains(2), validID(host.id) else { throw QuotioHostClientError.incompatible }
+        let accountIDs = Set(accounts.map(\.id))
+        guard accountIDs.count == accounts.count else { throw QuotioHostClientError.incompatible }
+        var sourceIDs = Set<String>()
+        for account in accounts {
+            guard validID(account.id), !account.providerId.isEmpty, !account.displayName.isEmpty,
+                  account.sources.filter(\.selected).count <= 1 else { throw QuotioHostClientError.incompatible }
+            for source in account.sources {
+                guard validID(source.id), sourceIDs.insert(source.id).inserted,
+                      !source.selected || (source.enabled && account.enabled) else { throw QuotioHostClientError.incompatible }
+            }
+        }
+        for (old, target) in accountRedirects ?? [:] {
+            guard validID(old), !accountIDs.contains(old), accountIDs.contains(target) else { throw QuotioHostClientError.incompatible }
+        }
+        var usageIDs = Set<String>()
+        for value in usage {
+            if ["fresh", "stale"].contains(value.freshness), value.fetchedAt == nil { throw QuotioHostClientError.incompatible }
+            guard accountIDs.contains(value.accountId), usageIDs.insert(value.accountId).inserted,
+                  Set(value.metrics.map(\.id)).count == value.metrics.count,
+                  value.metrics.allSatisfy({ validID($0.id) }) else { throw QuotioHostClientError.incompatible }
+            if let profile = value.codexProfile,
+               Set(profile.dailyUsage.map(\.date)).count != profile.dailyUsage.count { throw QuotioHostClientError.incompatible }
+        }
     }
 }
 
@@ -113,6 +145,7 @@ public struct QuotioHostAccountList: Decodable, Sendable {
     public let host: QuotioHostSnapshot.Host
     public let revision: UInt64
     public let accounts: [QuotioHostSnapshot.Account]
+    public let accountRedirects: [String: String]?
 }
 
 /// Mutation scope comes from the resource the user selected, not a provider-specific rule.

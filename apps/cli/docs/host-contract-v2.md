@@ -1,6 +1,6 @@
 # Resolved host contract v2
 
-The resolved account read API initializes its protected metadata automatically on first access. Resolved snapshots are available at `GET /v2/snapshot`; production macOS has not switched to that endpoint yet. There is no CLI schema-selection flag or compatibility guarantee for the old account array. Older production routes are being removed as the frontend cutover proceeds. The definitions are published under `V2*` in `openapi.json`; Rust types live in `src/contract.rs`. Frontends must not switch production CRUD or quota traffic until their corresponding v2 operations and snapshot services are available.
+The resolved account read API initializes its protected metadata automatically on first access. Resolved snapshots are available at `GET /v2/snapshot`; macOS reads its account and quota state from this endpoint. There is no CLI schema-selection flag or compatibility guarantee for the old account array. Older production routes are being removed as the frontend cutover proceeds. The definitions are published under `V2*` in `openapi.json`; Rust types live in `src/contract.rs`. The macOS account CRUD now uses v2 account/source resources; discovery and authentication orchestration are the remaining transport cutover work.
 
 ## Resource ownership
 
@@ -49,7 +49,7 @@ Data migration preserves current credentials, source IDs, names and enabled stat
 - HTTP: `GET /v2/accounts` uses the same service. First access atomically initializes protected metadata, preserving original source IDs and credentials. Repeated reads keep the host ID and revision stable.
 - CLI `use` and `remove` accept logical account IDs, including a group whose original source was removed. Removing a logical account unlinks all its registered sources, never external provider login files.
 - The standalone CLI's default vault is not the macOS app's isolated vault. Use the appropriate host connection; never merge namespaces implicitly.
-- Account-list reads report `not_checked`; use `/v2/snapshot` for source health and quota state. It advertises the supported logical-account and source actions. Production UI cutover remains in progress.
+- Account-list reads report `not_checked`; use `/v2/snapshot` for source health and quota state. It advertises the supported logical-account and source actions. Provider discovery and authentication are still being moved out of the frontend.
 
 ## Logical account and source mutations
 
@@ -70,3 +70,5 @@ With `--no-saved-accounts`, snapshots do not access the protected vault. Default
 ## CLI quota output
 
 `quotio usage --format json` emits the same `Snapshot` shape as `/v2/snapshot`; text output formats its resolved names, IDs and selected metrics. Provider/account filters limit the returned accounts. `--account` resolves a logical account and collects its enabled sources, including after the original source was unlinked. The no-saved-account path performs no protected-vault read. Internal per-source cache records are not a public output format.
+
+`account_redirects` contains persisted logical-account redirects. Source IDs are a separate scope and must never be inferred as redirects; a reassigned source must not retarget an old account bookmark. Loaded usage requires a fetch timestamp. Duplicate metric IDs, invalid graph references and duplicate profile dates are rejected before rendering. Malformed collected data reports `invalid_snapshot`, not a credential-storage permission error.

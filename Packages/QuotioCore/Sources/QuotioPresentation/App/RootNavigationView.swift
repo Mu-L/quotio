@@ -37,7 +37,7 @@ public struct RootNavigationView: View {
         }.map { provider in
             ProviderSettingsState(provider: provider, accounts: accounts.accounts,
                 permissions: accounts.nativeSourcePermissions, quota: quota.state,
-                tracking: controller.trackingPreferences, cadence: refreshSettings.refreshCadence, now: Date())
+                tracking: controller.trackingPreferences)
         }.sorted {
             if $0.needsAttention != $1.needsAttention { return $0.needsAttention }
             return $0.provider.displayName.localizedStandardCompare($1.provider.displayName) == .orderedAscending

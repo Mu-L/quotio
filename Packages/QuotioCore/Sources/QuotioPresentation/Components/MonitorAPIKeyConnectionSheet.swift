@@ -80,7 +80,7 @@ struct MonitorAPIKeyConnectionSheet: View {
             .padding(20)
         }
         .frame(width: 450, height: 360)
-        .onAppear { label = account?.accountKey ?? "" }
+        .onAppear { label = account?.displayName ?? "" }
     }
 
     private func localized(_ suffix: String) -> String {
