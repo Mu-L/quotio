@@ -4756,6 +4756,7 @@
           "usage"
         ],
         "properties": {
+          "provider_issues": {"type": "object", "additionalProperties": {"$ref": "#/components/schemas/V2Issue"}},
           "schema_version": {
             "const": 2
           },

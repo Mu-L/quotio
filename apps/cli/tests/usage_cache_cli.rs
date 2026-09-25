@@ -107,13 +107,9 @@ fn cli_reuses_disk_cache_force_refreshes_and_switching_login_fails_closed() {
     let switched = f.usage(false);
     assert_eq!(switched.status.code(), Some(3));
     let switched: serde_json::Value = serde_json::from_slice(&switched.stdout).unwrap();
-    assert!(
-        switched["usage"][0]["metrics"]
-            .as_array()
-            .unwrap()
-            .is_empty()
-    );
-    assert_eq!(switched["usage"][0]["freshness"], "unavailable");
+    assert!(switched["usage"].as_array().unwrap().is_empty());
+    assert!(switched["accounts"].as_array().unwrap().is_empty());
+    assert!(!switched["provider_issues"].as_object().unwrap().is_empty());
 }
 #[tokio::test]
 async fn rest_refresh_reuses_the_cli_cache() {

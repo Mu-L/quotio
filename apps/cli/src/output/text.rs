@@ -221,6 +221,9 @@ pub fn render_snapshot(snapshot: &crate::contract::Snapshot) -> String {
 
 pub fn snapshot_failures(snapshot: &crate::contract::Snapshot) -> String {
     let mut text = String::new();
+    for (provider, issue) in &snapshot.provider_issues {
+        let _ = writeln!(text, "{}: {}", safe(provider), safe(&issue.code));
+    }
     for account in &snapshot.accounts {
         for source in &account.sources {
             if let Some(issue) = &source.issue {

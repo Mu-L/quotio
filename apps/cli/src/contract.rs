@@ -174,6 +174,8 @@ pub struct Snapshot {
     pub generated_at: OffsetDateTime,
     pub accounts: Vec<Account>,
     pub usage: Vec<Usage>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub provider_issues: BTreeMap<String, Issue>,
 }
 
 impl Snapshot {

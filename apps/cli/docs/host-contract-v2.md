@@ -61,7 +61,7 @@ Data migration preserves current credentials, source IDs, names and enabled stat
 
 ## Resolved snapshots
 
-`GET /v2/snapshot` combines registered accounts with collected observations. Rust chooses one enabled source per account, preferring fresh results over stale results and a working source over a failed source. It preserves metric states, amounts, notes, reset descriptions and provider supplemental observations. A secondary source failure stays on that source instead of hiding another source's quota. A plan-only success has no invented metrics.
+`GET /v2/snapshot` combines registered accounts with collected observations. Rust chooses one enabled source per account, preferring fresh results over stale results and a working source over a failed source. It preserves metric states, amounts, notes, reset descriptions and provider supplemental observations. A secondary source failure stays on that source instead of hiding another source's quota. A plan-only success has no invented metrics. Failed unregistered login probes appear in `provider_issues` and do not create account rows.
 
 Snapshot reads use the current vault under its transaction lock. Deleted sources cannot reappear from an old report, and replacing an API-key identity discards that identity's old quota. Format 12 persists a digest of account/usage state: the revision increases when those values change, including freshness transitions, but not on an unchanged read. The response is published only after the revision commits.
 

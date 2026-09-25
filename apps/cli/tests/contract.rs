@@ -320,3 +320,48 @@ async fn snapshot_includes_unregistered_observations_without_reading_credentials
             .id
     );
 }
+
+#[test]
+fn failed_unregistered_probes_report_provider_issues_without_inventing_accounts() {
+    use quotio::{
+        contract::{AccountList, snapshot::project},
+        domain::{AccountOrigin, AccountRef, ProviderFailure, ProviderId},
+        error::ProviderError,
+    };
+    let mut accounts: AccountList =
+        serde_json::from_str(include_str!("fixtures/contracts/accounts-v2.json")).unwrap();
+    accounts.accounts.clear();
+    for reference in [
+        None,
+        Some(AccountRef {
+            id: "borrowed-probe".into(),
+            label: "Work".into(),
+            origin: Some(AccountOrigin::BorrowedProxy),
+        }),
+    ] {
+        let report = UsageReport {
+            schema_version: 1,
+            generated_at: datetime!(2026-01-01 0:00 UTC),
+            providers: vec![],
+            failures: vec![ProviderFailure {
+                account_ref: reference,
+                provider: ProviderId("mock".into()),
+                code: ProviderError::Authentication,
+                message: "internal detail must not escape".into(),
+            }],
+        };
+        let snapshot = project(
+            accounts.clone(),
+            &report,
+            report.generated_at,
+            time::Duration::minutes(5),
+        )
+        .unwrap();
+        assert!(snapshot.accounts.is_empty());
+        assert!(snapshot.usage.is_empty());
+        assert_eq!(snapshot.provider_issues["mock"].code, "authentication");
+        let value = serde_json::to_value(&snapshot).unwrap();
+        validator("V2Snapshot").validate(&value).unwrap();
+        assert!(!value.to_string().contains("internal detail"));
+    }
+}

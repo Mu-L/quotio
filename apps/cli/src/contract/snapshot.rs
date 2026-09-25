@@ -16,23 +16,13 @@ fn reference_matches(provider: &str, reference: Option<&AccountRef>, source: &st
 }
 
 fn include_external(accounts: &mut Vec<Account>, report: &UsageReport) {
-    let observations = report
-        .providers
-        .iter()
-        .map(|value| {
-            (
-                value.provider.0.as_str(),
-                value.account_ref.as_ref(),
-                Some(value.account.label.as_str()),
-            )
-        })
-        .chain(report.failures.iter().map(|failure| {
-            (
-                failure.provider.0.as_str(),
-                failure.account_ref.as_ref(),
-                None,
-            )
-        }));
+    let observations = report.providers.iter().map(|value| {
+        (
+            value.provider.0.as_str(),
+            value.account_ref.as_ref(),
+            Some(value.account.label.as_str()),
+        )
+    });
     for (provider, reference, label) in observations {
         if accounts.iter().any(|account| {
             account.provider_id == provider
@@ -205,8 +195,26 @@ pub fn project(
         generated_at: now,
         accounts: accounts.accounts,
         usage: Vec::new(),
+        provider_issues: BTreeMap::new(),
     };
     include_external(&mut snapshot.accounts, report);
+    for failure in &report.failures {
+        let reference = failure.account_ref.as_ref();
+        if reference.is_none_or(|reference| {
+            reference.id == "local" || reference.origin == Some(AccountOrigin::BorrowedProxy)
+        }) && !snapshot.accounts.iter().any(|account| {
+            account.provider_id == failure.provider.0
+                && account
+                    .sources
+                    .iter()
+                    .any(|source| reference_matches(&failure.provider.0, reference, &source.id))
+        }) {
+            snapshot
+                .provider_issues
+                .entry(failure.provider.0.clone())
+                .or_insert_with(|| issue(failure.code));
+        }
+    }
     for account in &mut snapshot.accounts {
         let mut choices = Vec::new();
         for source in &mut account.sources {
@@ -325,7 +333,12 @@ pub fn project(
 }
 
 pub fn digest(snapshot: &Snapshot) -> Result<String, crate::accounts::AccountError> {
-    let content = serde_json::to_string(&(&snapshot.host, &snapshot.accounts, &snapshot.usage))
-        .map_err(|_| crate::accounts::AccountError::Corrupt)?;
+    let content = serde_json::to_string(&(
+        &snapshot.host,
+        &snapshot.accounts,
+        &snapshot.usage,
+        &snapshot.provider_issues,
+    ))
+    .map_err(|_| crate::accounts::AccountError::Corrupt)?;
     Ok(crate::cache::fingerprint(&[&content]))
 }

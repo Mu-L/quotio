@@ -231,17 +231,15 @@ fn real_provider_selection_and_mixed_missing_auth() {
             .iter()
             .any(|account| account["provider_id"] == "mock")
     );
-    let failed = accounts
-        .iter()
-        .find(|account| account["provider_id"] == "factory")
-        .unwrap();
-    let usage = value["usage"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|usage| usage["account_id"] == failed["id"])
-        .unwrap();
-    assert_eq!(usage["issue"]["code"], "authentication");
+    assert!(
+        !accounts
+            .iter()
+            .any(|account| account["provider_id"] == "factory")
+    );
+    assert_eq!(
+        value["provider_issues"]["factory"]["code"],
+        "authentication"
+    );
 }
 
 #[test]
