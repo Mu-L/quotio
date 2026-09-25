@@ -311,7 +311,7 @@ async fn parent_pipe_bootstrap_authentication_and_eof_shutdown() {
     let pid = child.id().unwrap();
     let mut input = child.stdin.take().unwrap();
     input
-        .write_all(format!("{token}\n").as_bytes())
+        .write_all(format!("{}\n", serde_json::json!({"token":token,"preferences":{"disabled_providers":["amp"],"automatically_discover_logins":false,"refresh_interval":0}})).as_bytes())
         .await
         .unwrap();
     let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
@@ -322,7 +322,12 @@ async fn parent_pipe_bootstrap_authentication_and_eof_shutdown() {
         .unwrap();
     assert!(!record.contains(token));
     let record: serde_json::Value = serde_json::from_str(&record).unwrap();
-    assert_eq!(record["bootstrap_version"], 1);
+    assert_eq!(record["bootstrap_version"], 2);
+    let migrated = quotio::config::Config::load(Some(&config.0)).unwrap();
+    assert_eq!(migrated.refresh_interval, 0);
+    assert!(!migrated.automatically_discover_logins);
+    assert_eq!(migrated.disabled_providers, vec!["amp"]);
+    assert!(migrated.enabled_providers.is_empty());
     assert_eq!(record["api_version"], 1);
     assert_eq!(record["server_version"], env!("CARGO_PKG_VERSION"));
     assert_eq!(record["pid"], pid);

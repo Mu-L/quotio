@@ -31,6 +31,14 @@ pub struct SettingsPatch {
     pub refresh_interval: Option<u64>,
     pub provider_timeout: Option<u64>,
 }
+/// One-time values supplied by the native app before the host starts any work.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NativePreferences {
+    pub disabled_providers: Vec<Provider>,
+    pub automatically_discover_logins: bool,
+    pub refresh_interval: u64,
+}
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SettingsError {
     Invalid,
@@ -48,7 +56,7 @@ impl SettingsStore {
     pub fn new(path: PathBuf, overrides: Overrides) -> Self {
         Self { path, overrides }
     }
-    fn read(&self) -> Result<(Config, String), SettingsError> {
+    fn read(&self) -> Result<(Config, String, String), SettingsError> {
         let mut options = OpenOptions::new();
         options.read(true);
         #[cfg(unix)]
@@ -79,7 +87,7 @@ impl SettingsStore {
         };
         let config = Config::parse(&input).map_err(|_| SettingsError::Invalid)?;
         validate(&config)?;
-        Ok((config, crate::cache::fingerprint(&[&input])))
+        Ok((config, crate::cache::fingerprint(&[&input]), input))
     }
     fn effective(&self, mut values: Config, revision: String) -> SettingsView {
         let mut overridden = Vec::new();
@@ -102,8 +110,48 @@ impl SettingsStore {
         }
     }
     pub fn load(&self) -> Result<SettingsView, SettingsError> {
-        let (config, revision) = self.read()?;
+        let (config, revision, _) = self.read()?;
         Ok(self.effective(config, revision))
+    }
+    pub fn import_native_preferences(
+        &self,
+        preferences: NativePreferences,
+    ) -> Result<SettingsView, SettingsError> {
+        use clap::ValueEnum;
+        let (_, revision, input) = self.read()?;
+        let fields: toml::Table = toml::from_str(&input).map_err(|_| SettingsError::Invalid)?;
+        if [
+            "enabled_providers",
+            "disabled_providers",
+            "automatically_discover_logins",
+            "refresh_interval",
+        ]
+        .iter()
+        .all(|key| fields.contains_key(*key))
+        {
+            return self.load();
+        }
+        // Preserve explicit host choices. Persist all fields once, so later app launches cannot overwrite them.
+        let store = Self::new(self.path.clone(), Overrides::default());
+        store.patch(SettingsPatch {
+            revision,
+            enabled_providers: (!fields.contains_key("enabled_providers")).then(|| {
+                Provider::value_variants()
+                    .iter()
+                    .copied()
+                    .filter(|provider| *provider != Provider::Mock)
+                    .collect()
+            }),
+            disabled_providers: (!fields.contains_key("disabled_providers"))
+                .then_some(preferences.disabled_providers),
+            automatically_discover_logins: (!fields.contains_key("automatically_discover_logins"))
+                .then_some(preferences.automatically_discover_logins),
+            refresh_interval: (!fields.contains_key("refresh_interval"))
+                .then_some(preferences.refresh_interval),
+            cache_ttl_seconds: None,
+            provider_timeout: None,
+        })?;
+        self.load()
     }
     pub fn patch(&self, patch: SettingsPatch) -> Result<SettingsView, SettingsError> {
         let parent = self
@@ -142,7 +190,7 @@ impl SettingsStore {
         {
             return Err(SettingsError::Storage);
         }
-        let (mut config, revision) = self.read()?;
+        let (mut config, revision, _) = self.read()?;
         if patch.revision != revision {
             return Err(SettingsError::Conflict);
         }
@@ -210,6 +258,39 @@ fn validate(config: &Config) -> Result<(), SettingsError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn imports_native_preferences_once_without_overwriting_host_choices() {
+        let dir = std::env::temp_dir().join(format!(
+            "quotio-preferences-{}",
+            crate::accounts::random_string().unwrap()
+        ));
+        fs::create_dir(&dir).unwrap();
+        let path = dir.join("config.toml");
+        fs::write(&path, "refresh_interval = 0\ncache_ttl_seconds = 17\n").unwrap();
+        let store = SettingsStore::new(path, Overrides::default());
+        let preferences = || NativePreferences {
+            disabled_providers: vec![Provider::Amp],
+            automatically_discover_logins: false,
+            refresh_interval: 600,
+        };
+        let first = store.import_native_preferences(preferences()).unwrap();
+        assert_eq!(first.values.refresh_interval, 0);
+        assert_eq!(first.values.cache_ttl_seconds, 17);
+        assert_eq!(first.values.disabled_providers, vec!["amp"]);
+        assert!(!first.values.automatically_discover_logins);
+        assert!(!first.values.enabled_providers.is_empty());
+        assert!(!first.values.enabled_providers.contains(&"mock".into()));
+        let second = store
+            .import_native_preferences(NativePreferences {
+                disabled_providers: vec![],
+                automatically_discover_logins: true,
+                refresh_interval: 30,
+            })
+            .unwrap();
+        assert_eq!(first.revision, second.revision);
+        assert_eq!(second.values.disabled_providers, vec!["amp"]);
+        fs::remove_dir_all(dir).unwrap();
+    }
     #[test]
     fn persists_checks_revisions_and_rejects_overrides() {
         let dir = std::env::temp_dir().join(format!(

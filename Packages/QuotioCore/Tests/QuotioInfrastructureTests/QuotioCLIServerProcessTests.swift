@@ -1,5 +1,6 @@
 import Foundation
 import QuotioInfrastructure
+import QuotioDomain
 import XCTest
 
 @MainActor
@@ -11,6 +12,7 @@ final class QuotioCLIServerProcessTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         let marker = directory.appendingPathComponent("stopped")
         let arguments = directory.appendingPathComponent("arguments")
+        let handshake = directory.appendingPathComponent("handshake")
         let environment = directory.appendingPathComponent("environment")
         let proxyAuthDirectory = directory.appendingPathComponent("proxy-auth")
         try FileManager.default.createDirectory(at: proxyAuthDirectory, withIntermediateDirectories: true)
@@ -22,7 +24,8 @@ final class QuotioCLIServerProcessTests: XCTestCase {
         printf '%s\n%s\n' "$PATH" "$HTTPS_PROXY" > "\(environment.path)"
         IFS= read -r token
         [ -n "$token" ] || exit 2
-        printf '{"bootstrap_version":1,"api_version":1,"pid":%s,"host":"127.0.0.1","port":43210}\n' "$$"
+        printf '%s' "$token" > "\(handshake.path)"
+        printf '{"bootstrap_version":2,"api_version":1,"pid":%s,"host":"127.0.0.1","port":43210}\n' "$$"
         cat >/dev/null
         """
         try Data(script.utf8).write(to: helper)
@@ -35,6 +38,7 @@ final class QuotioCLIServerProcessTests: XCTestCase {
             configurationURL: directory.appendingPathComponent("config.toml"),
             accountDataDirectory: directory.appendingPathComponent("accounts"),
             proxyAuthDirectory: proxyAuthDirectory,
+            initialPreferences: { (ProviderTrackingPreferences(disabledProviders: [.copilot], automaticallyDiscoverLogins: false), RefreshPreferences(cadence: .manual)) },
             executableDirectories: [directory.appendingPathComponent("bin")],
             accountVaultNamespace: "quotio-macos-test",
             proxyURL: { "http://proxy.example:8080" }
@@ -44,6 +48,12 @@ final class QuotioCLIServerProcessTests: XCTestCase {
 
         XCTAssertEqual(connection.baseURL.absoluteString, "http://127.0.0.1:43210")
         XCTAssertFalse(connection.token.isEmpty)
+        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: handshake)) as? [String: Any])
+        XCTAssertEqual(payload["token"] as? String, connection.token)
+        let preferences = try XCTUnwrap(payload["preferences"] as? [String: Any])
+        XCTAssertEqual(preferences["disabled_providers"] as? [String], ["copilot"])
+        XCTAssertEqual(preferences["automatically_discover_logins"] as? Bool, false)
+        XCTAssertEqual(preferences["refresh_interval"] as? Int, 0)
         let launchedArguments = try String(contentsOf: arguments, encoding: .utf8)
         XCTAssertTrue(launchedArguments.contains("--refresh-interval\n0\n"))
         XCTAssertTrue(launchedArguments.contains("--account-vault-namespace\nquotio-macos-test\n"))
@@ -93,7 +103,7 @@ final class QuotioCLIServerProcessTests: XCTestCase {
         let script = """
         #!/bin/sh
         IFS= read -r token
-        printf '{"bootstrap_version":1,"api_version":1,"pid":1,"host":"127.0.0.1","port":43210}\n'
+        printf '{"bootstrap_version":2,"api_version":1,"pid":1,"host":"127.0.0.1","port":43210}\n'
         """
         try Data(script.utf8).write(to: helper)
         try FileManager.default.setAttributes(

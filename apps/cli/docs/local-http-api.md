@@ -270,15 +270,19 @@ updates `last_completed_at` but does not postpone that timer. The next time is n
 while the scheduler is refreshing or waiting for another refresh to finish.
 Settings and account changes wake the scheduler and replace its pending timer.
 
-## Native parent pipe, bootstrap version 1
+## Native parent pipe, bootstrap version 2
 
 `serve --manage --parent-pipe --listen 127.0.0.1:0` is the native app transport.
-The parent supplies one 32–4096 byte visible-ASCII token followed by LF over an
-inherited stdin pipe within five seconds. Do not also set `QUOTIO_SERVER_TOKEN`.
+The parent supplies one JSON object followed by LF over an inherited stdin pipe
+within five seconds (maximum 16 KiB). The `token` field contains 32–4096 visible
+ASCII bytes. Optional `preferences` contains `disabled_providers`,
+`automatically_discover_logins` and `refresh_interval` from the native app. Rust
+imports only missing configuration fields before starting work; later launches
+preserve all persisted host choices. Do not also set `QUOTIO_SERVER_TOKEN`.
 The process emits one JSON line on stdout after binding and initialization:
 
 ```json
-{"bootstrap_version":1,"api_version":1,"server_version":"0.1.1","pid":123,"host":"127.0.0.1","port":49152}
+{"bootstrap_version":2,"api_version":1,"server_version":"0.1.1","pid":123,"host":"127.0.0.1","port":49152}
 ```
 
 The example port and PID are illustrative. Use the actual record, then authenticate

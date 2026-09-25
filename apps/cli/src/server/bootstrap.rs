@@ -5,6 +5,7 @@ use tokio::io::{AsyncRead, AsyncReadExt};
 
 pub struct Parent {
     token: String,
+    preferences: Option<crate::settings::NativePreferences>,
     #[cfg(unix)]
     input: tokio::net::unix::pipe::Receiver,
 }
@@ -25,13 +26,21 @@ impl Parent {
             let fd = unsafe { OwnedFd::from_raw_fd(fd) };
             let mut input = tokio::net::unix::pipe::Receiver::from_owned_fd(fd)
                 .map_err(|_| ServerError::Initialize)?;
-            let token = tokio::time::timeout(Duration::from_secs(5), read_token(&mut input))
-                .await
-                .map_err(|_| ServerError::Security)??;
-            Ok(Self { token, input })
+            let handshake =
+                tokio::time::timeout(Duration::from_secs(5), read_handshake(&mut input))
+                    .await
+                    .map_err(|_| ServerError::Security)??;
+            Ok(Self {
+                token: handshake.token,
+                preferences: handshake.preferences,
+                input,
+            })
         }
         #[cfg(not(unix))]
         Err(ServerError::Initialize)
+    }
+    pub fn take_preferences(&mut self) -> Option<crate::settings::NativePreferences> {
+        self.preferences.take()
     }
     pub fn take_token(&mut self) -> String {
         std::mem::take(&mut self.token)
@@ -44,17 +53,27 @@ impl Parent {
         }
     }
 }
-async fn read_token(input: &mut (impl AsyncRead + Unpin)) -> Result<String, ServerError> {
-    let mut bytes = Vec::with_capacity(64);
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Handshake {
+    token: String,
+    preferences: Option<crate::settings::NativePreferences>,
+}
+async fn read_handshake(input: &mut (impl AsyncRead + Unpin)) -> Result<Handshake, ServerError> {
+    let mut bytes = Vec::with_capacity(512);
     loop {
         let byte = input.read_u8().await.map_err(|_| ServerError::Security)?;
         if byte == b'\n' {
-            if bytes.len() < 32 {
+            let handshake: Handshake =
+                serde_json::from_slice(&bytes).map_err(|_| ServerError::Security)?;
+            if !(32..=4096).contains(&handshake.token.len())
+                || !handshake.token.bytes().all(|byte| byte.is_ascii_graphic())
+            {
                 return Err(ServerError::Security);
             }
-            return String::from_utf8(bytes).map_err(|_| ServerError::Security);
+            return Ok(handshake);
         }
-        if !byte.is_ascii_graphic() || bytes.len() == 4096 {
+        if bytes.len() == 16384 {
             return Err(ServerError::Security);
         }
         bytes.push(byte);
@@ -62,7 +81,7 @@ async fn read_token(input: &mut (impl AsyncRead + Unpin)) -> Result<String, Serv
 }
 pub fn announce(address: SocketAddr) -> Result<(), ServerError> {
     let record = serde_json::json!({
-        "bootstrap_version": 1,
+        "bootstrap_version": 2,
         "api_version": 1,
         "server_version": env!("CARGO_PKG_VERSION"),
         "pid": std::process::id(),
@@ -78,17 +97,28 @@ pub fn announce(address: SocketAddr) -> Result<(), ServerError> {
 mod tests {
     use super::*;
     #[tokio::test]
-    async fn token_is_bounded_and_requires_a_complete_visible_ascii_line() {
+    async fn handshake_requires_bounded_json_and_a_visible_ascii_token() {
         for value in [
-            "short\n".to_string(),
+            serde_json::json!({"token":"short"}).to_string() + "\n",
+            serde_json::json!({"token":"x".repeat(4097)}).to_string() + "\n",
+            serde_json::json!({"token":"x".repeat(32) + "\n"}).to_string() + "\n",
+            serde_json::json!({"token":"x".repeat(32),"unknown":true}).to_string() + "\n",
+            "x".repeat(16385) + "\n",
             "x".repeat(4097) + "\n",
             "x".repeat(32) + "\r\n",
             "x".repeat(32),
             "x".repeat(32) + " \n",
         ] {
-            assert!(read_token(&mut value.as_bytes()).await.is_err());
+            assert!(read_handshake(&mut value.as_bytes()).await.is_err());
         }
-        let value = "x".repeat(4096) + "\n";
-        assert_eq!(read_token(&mut value.as_bytes()).await.unwrap().len(), 4096);
+        let value = serde_json::json!({"token":"x".repeat(4096)}).to_string() + "\n";
+        assert_eq!(
+            read_handshake(&mut value.as_bytes())
+                .await
+                .unwrap()
+                .token
+                .len(),
+            4096
+        );
     }
 }

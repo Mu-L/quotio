@@ -3878,7 +3878,7 @@
         ],
         "properties": {
           "bootstrap_version": {
-            "const": 1
+            "const": 2
           },
           "api_version": {
             "const": 1
@@ -4962,9 +4962,9 @@
     }
   },
   "x-quotio-parent-pipe": {
-    "version": 1,
+    "version": 2,
     "bootstrap_schema": "#/components/schemas/Bootstrap",
-    "description": "Inherited stdin token line and lifetime pipe; one stdout JSON record after bind. Authenticate /v1/status before use. An absolute --cli-proxy-auth-dir may provide read-only borrowed Codex, Claude, GitHub Copilot, Antigravity, Kiro, and Vertex auth files."
+    "description": "Inherited stdin JSON token/preferences line (maximum 16 KiB) and lifetime pipe; one stdout JSON record after bind. Authenticate /v1/status before use. An absolute --cli-proxy-auth-dir may provide read-only borrowed Codex, Claude, GitHub Copilot, Antigravity, Kiro, and Vertex auth files."
   },
   "x-quotio-account-idempotency": {
     "successful_writes": "atomic protected-vault receipt across restart",

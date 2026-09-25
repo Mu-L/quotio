@@ -813,12 +813,19 @@ pub async fn run(args: ServeArgs) -> Result<(), ServerError> {
             provider_timeout: args.timeout,
         },
     );
-    let view = store.load().map_err(|_| ServerError::Config)?;
     let mut parent = if args.parent_pipe {
         Some(bootstrap::Parent::open().await?)
     } else {
         None
     };
+    let view = match parent
+        .as_mut()
+        .and_then(bootstrap::Parent::take_preferences)
+    {
+        Some(preferences) => store.import_native_preferences(preferences),
+        None => store.load(),
+    }
+    .map_err(|_| ServerError::Config)?;
     let token = if let Some(parent) = &mut parent {
         Some(parent.take_token())
     } else {

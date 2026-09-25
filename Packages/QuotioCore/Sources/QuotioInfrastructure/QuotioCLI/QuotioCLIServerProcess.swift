@@ -1,5 +1,6 @@
 import QuotioHostClient
 import Foundation
+import QuotioDomain
 import Security
 
 public enum QuotioCLIServerError: LocalizedError, Equatable {
@@ -40,6 +41,7 @@ public final class QuotioCLIServerProcess {
     private let accountDataDirectory: URL?
     private let proxyAuthDirectory: URL?
     private let providers: [String]
+    private let initialPreferences: @MainActor () -> (ProviderTrackingPreferences, RefreshPreferences)?
     private let executableDirectories: [URL]
     private let applicationSupportDirectoryName: String
     private let accountVaultNamespace: String
@@ -58,6 +60,7 @@ public final class QuotioCLIServerProcess {
         accountDataDirectory: URL? = nil,
         proxyAuthDirectory: URL? = nil,
         providers: [String] = [],
+        initialPreferences: @escaping @MainActor () -> (ProviderTrackingPreferences, RefreshPreferences)? = { nil },
         executableDirectories: [URL] = [],
         applicationSupportDirectoryName: String = "app.bytrong.quotio",
         accountVaultNamespace: String = "quotio-macos",
@@ -70,6 +73,7 @@ public final class QuotioCLIServerProcess {
         self.accountDataDirectory = accountDataDirectory
         self.proxyAuthDirectory = proxyAuthDirectory
         self.providers = providers
+        self.initialPreferences = initialPreferences
         self.executableDirectories = executableDirectories
         self.applicationSupportDirectoryName = applicationSupportDirectoryName
         self.accountVaultNamespace = accountVaultNamespace
@@ -150,9 +154,19 @@ public final class QuotioCLIServerProcess {
 
         do {
             try process.run()
-            try input.fileHandleForWriting.write(contentsOf: Data((token + "\n").utf8))
+            var handshake: [String: Any] = ["token": token]
+            if let (tracking, refresh) = initialPreferences() {
+                handshake["preferences"] = [
+                    "disabled_providers": tracking.disabledProviders.compactMap(QuotioCLIProviderMap.cli).sorted(),
+                    "automatically_discover_logins": tracking.automaticallyDiscoverLogins,
+                    "refresh_interval": Int(refresh.cadence.intervalSeconds ?? 0),
+                ]
+            }
+            var payload = try JSONSerialization.data(withJSONObject: handshake)
+            payload.append(0x0A)
+            try input.fileHandleForWriting.write(contentsOf: payload)
             let bootstrap = try await bootstrap(from: stream)
-            guard bootstrap.bootstrapVersion == 1,
+            guard bootstrap.bootstrapVersion == 2,
                   bootstrap.apiVersion == 1,
                   bootstrap.pid == process.processIdentifier,
                   bootstrap.host == "127.0.0.1",

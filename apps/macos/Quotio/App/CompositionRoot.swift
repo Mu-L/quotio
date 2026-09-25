@@ -98,6 +98,9 @@ enum CompositionRoot {
                 "factory", "devin-desktop", "grok", "openrouter", "amp", "zai",
                 "vertexai", "warp", "clinepass",
             ],
+            initialPreferences: {
+                (providerTrackingRepository.load(), UserDefaultsRefreshPreferencesRepository().load())
+            },
             executableDirectories: [CLIAgent.codexCLI, .ampCLI]
                 .compactMap(agentInstallationProbe.path)
                 .map { URL(fileURLWithPath: $0).deletingLastPathComponent() },
