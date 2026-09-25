@@ -758,11 +758,14 @@ pub(super) async fn validate_refresh_account(
         }
         return Ok(());
     }
-    let account = tokio::time::timeout(Duration::from_secs(10), api::get(vault(state)?, id.into()))
-        .await
-        .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "account_busy"))?
-        .map_err(account_error)?;
-    if account.provider != provider {
+    let account = tokio::time::timeout(
+        Duration::from_secs(10),
+        api::resolved_get(vault(state)?, id.into()),
+    )
+    .await
+    .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "account_busy"))?
+    .map_err(account_error)?;
+    if account.provider_id != provider.id() {
         return Err(ApiError(StatusCode::BAD_REQUEST, "invalid_refresh_scope"));
     }
     Ok(())

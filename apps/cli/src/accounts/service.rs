@@ -1486,6 +1486,12 @@ mod tests {
                 )
                 .unwrap();
         }
+        tx.commit().unwrap();
+        let grouped = resolved_adapters(vault.clone(), Provider::Amp, &ids[0])
+            .await
+            .unwrap();
+        assert_eq!(grouped.len(), 2);
+        let mut tx = vault.begin().unwrap();
         tx.document.remove(&ids[0]).unwrap();
         tx.commit().unwrap();
         select_resolved(vault.clone(), ids[0].clone())

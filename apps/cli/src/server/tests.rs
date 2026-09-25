@@ -317,7 +317,7 @@ fn disabled_provider_account_refresh_does_not_replace_the_scheduled_snapshot() {
         0,
         &[Provider::Amp],
         &[],
-        Some("account-id"),
+        Some(&std::collections::HashSet::from(["account-id".into()])),
         report,
     ));
     let retained = snapshot.unwrap().1;
@@ -341,7 +341,7 @@ fn first_scoped_refresh_seeds_the_snapshot() {
         0,
         &[Provider::Amp],
         &[Provider::Amp, Provider::Codex],
-        Some("account-id"),
+        Some(&std::collections::HashSet::from(["account-id".into()])),
         report,
     ));
     assert!(snapshot.is_some());
@@ -349,7 +349,10 @@ fn first_scoped_refresh_seeds_the_snapshot() {
 
 #[test]
 fn scoped_refresh_replaces_snapshot_invalidated_by_oauth() {
-    for account in [None, Some("new-account")] {
+    for account in [
+        None,
+        Some(std::collections::HashSet::from(["new-account".into()])),
+    ] {
         let mut snapshot = Some((
             0,
             UsageReport {
@@ -375,7 +378,7 @@ fn scoped_refresh_replaces_snapshot_invalidated_by_oauth() {
             1,
             &[Provider::Codex],
             &[Provider::Amp, Provider::Codex],
-            account,
+            account.as_ref(),
             report,
         ));
         let (generation, report) = snapshot.unwrap();
@@ -1863,6 +1866,11 @@ async fn logical_account_and_source_crud_have_distinct_atomic_scopes() {
             .display_name,
         "Team account"
     );
+    assert!(
+        management::validate_refresh_account(&state, Provider::Amp, &first)
+            .await
+            .is_ok()
+    );
     let (_, Json(op)) = management::resolved_patch(
         State(state.clone()),
         Path(first.clone()),
@@ -2021,4 +2029,60 @@ async fn resolved_snapshot_without_saved_accounts_uses_no_vault() {
     assert_eq!(first.revision, second.revision);
     assert!(!first.host.capabilities["account_write_v2"].available);
     std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn group_refresh_replaces_all_selected_sources_and_preserves_other_accounts() {
+    let fixture: Value =
+        serde_json::from_str(include_str!("../../tests/fixtures/contracts/usage-v1.json")).unwrap();
+    let value = |id: &str| {
+        let mut value: crate::domain::ProviderUsage =
+            serde_json::from_value(fixture["providers"][0].clone()).unwrap();
+        value.provider = ProviderId("amp".into());
+        value.account_ref = Some(crate::domain::AccountRef {
+            id: id.into(),
+            label: id.into(),
+            origin: None,
+        });
+        value
+    };
+    let mut stored = Some((
+        0,
+        UsageReport {
+            schema_version: 1,
+            generated_at: time::OffsetDateTime::UNIX_EPOCH,
+            providers: vec![value("one"), value("two"), value("unrelated")],
+            failures: vec![],
+        },
+    ));
+    let report = UsageReport {
+        schema_version: 1,
+        generated_at: time::OffsetDateTime::UNIX_EPOCH,
+        providers: vec![value("one")],
+        failures: vec![ProviderFailure {
+            provider: ProviderId("amp".into()),
+            account_ref: value("two").account_ref,
+            code: ProviderError::Timeout,
+            message: "timeout".into(),
+        }],
+    };
+    assert!(merge_refresh_report(
+        &mut stored,
+        0,
+        &[Provider::Amp],
+        &[Provider::Amp],
+        Some(&std::collections::HashSet::from([
+            "one".into(),
+            "two".into()
+        ])),
+        report
+    ));
+    let report = stored.unwrap().1;
+    let ids: Vec<_> = report
+        .providers
+        .iter()
+        .map(|value| value.account_ref.as_ref().unwrap().id.as_str())
+        .collect();
+    assert_eq!(ids, ["unrelated", "one"]);
+    assert_eq!(report.failures[0].account_ref.as_ref().unwrap().id, "two");
 }

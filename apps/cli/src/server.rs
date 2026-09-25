@@ -599,14 +599,31 @@ async fn refresh(state: &ApiState, request: Option<RefreshRequest>) -> Result<Va
             crate::accounts::service::adapters(selected.clone(), false, timeout, account.as_deref())
                 .await
         } else if let Some(vault) = state.vault.clone() {
-            crate::accounts::service::adapters_in_vault(
-                selected.clone(),
-                include_owned,
-                timeout,
-                account.as_deref(),
-                vault,
-            )
-            .await
+            if let Some(id) = account.as_deref().filter(|id| *id != "local") {
+                crate::accounts::service::resolved_adapters(vault, selected[0], id)
+                    .await
+                    .map(|adapters| {
+                        adapters
+                            .into_iter()
+                            .filter(|adapter| {
+                                include_owned
+                                    || adapter.account_ref().is_none_or(|reference| {
+                                        reference.origin
+                                            != Some(crate::domain::AccountOrigin::Owned)
+                                    })
+                            })
+                            .collect()
+                    })
+            } else {
+                crate::accounts::service::adapters_in_vault(
+                    selected.clone(),
+                    include_owned,
+                    timeout,
+                    account.as_deref(),
+                    vault,
+                )
+                .await
+            }
         } else {
             Err(crate::accounts::AccountError::Storage)
         };
@@ -621,6 +638,19 @@ async fn refresh(state: &ApiState, request: Option<RefreshRequest>) -> Result<Va
         context: state.context.clone(),
     };
     let cache = crate::cache::UsageCache::platform(Duration::from_secs(config.cache_ttl_seconds));
+    let source_scope = account.as_ref().map(|id| {
+        let mut sources = adapters
+            .as_ref()
+            .map(|adapters| {
+                adapters
+                    .iter()
+                    .filter_map(|adapter| adapter.account_ref().map(|reference| reference.id))
+                    .collect::<std::collections::HashSet<_>>()
+            })
+            .unwrap_or_default();
+        sources.insert(id.clone());
+        sources
+    });
     let report = match adapters {
         Ok(providers) => {
             cache
@@ -678,7 +708,7 @@ async fn refresh(state: &ApiState, request: Option<RefreshRequest>) -> Result<Va
         generation,
         &selected,
         &enabled,
-        account.as_deref(),
+        source_scope.as_ref(),
         report,
     ) {
         tracing::info!(
@@ -697,7 +727,7 @@ fn merge_refresh_report(
     generation: u64,
     selected: &[Provider],
     enabled: &[Provider],
-    account: Option<&str>,
+    account: Option<&std::collections::HashSet<String>>,
     report: UsageReport,
 ) -> bool {
     if selected.iter().any(|provider| !enabled.contains(provider)) {
@@ -727,7 +757,8 @@ fn merge_refresh_report(
     });
     let matches = |provider: &ProviderId, reference: Option<&crate::domain::AccountRef>| {
         selected.iter().any(|p| p.id() == provider.0)
-            && account.is_none_or(|a| reference.is_some_and(|r| r.id == a))
+            && account
+                .is_none_or(|ids| reference.is_some_and(|reference| ids.contains(&reference.id)))
     };
     previous
         .providers
