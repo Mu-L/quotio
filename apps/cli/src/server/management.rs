@@ -610,11 +610,18 @@ async fn mutate(
 pub(super) struct SessionInput {
     provider: Provider,
     label: Option<String>,
-    #[serde(default = "relay")]
-    callback_mode: OAuthMode,
+    #[serde(default)]
+    callback_mode: Option<OAuthMode>,
 }
-fn relay() -> OAuthMode {
-    OAuthMode::Relay
+impl SessionInput {
+    fn effective_mode(&self) -> OAuthMode {
+        self.callback_mode.unwrap_or_else(|| {
+            match crate::providers::capabilities::capability(self.provider).oauth_workflow {
+                Some(crate::accounts::oauth::Workflow::BrowserCallback) => OAuthMode::Loopback,
+                _ => OAuthMode::Relay,
+            }
+        })
+    }
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -646,17 +653,14 @@ pub(super) async fn begin(
     if keys.next().is_some() {
         return Err(ApiError(StatusCode::BAD_REQUEST, "invalid_idempotency_key"));
     }
+    let mode = input.effective_mode();
     let session = match key {
         Some(key) => {
             manager
-                .begin_idempotent(input.provider, input.label, input.callback_mode, key)
+                .begin_idempotent(input.provider, input.label, mode, key)
                 .await
         }
-        None => {
-            manager
-                .begin_for(input.provider, input.label, input.callback_mode)
-                .await
-        }
+        None => manager.begin_for(input.provider, input.label, mode).await,
     }
     .map_err(account_error)?;
     Ok((StatusCode::CREATED, Json(session)))
@@ -776,6 +780,21 @@ pub(super) async fn validate_refresh_account(
 mod authorization_error_tests {
     use super::*;
     use crate::error::ProviderError;
+
+    #[test]
+    fn host_selects_callback_mode_from_the_declared_workflow() {
+        for (provider, expected) in [
+            ("codex", OAuthMode::Loopback),
+            ("claude", OAuthMode::Relay),
+            ("copilot", OAuthMode::Relay),
+        ] {
+            let input: SessionInput = serde_json::from_value(json!({"provider":provider})).unwrap();
+            assert!(input.effective_mode() == expected);
+        }
+        let explicit: SessionInput =
+            serde_json::from_value(json!({"provider":"codex", "callback_mode":"relay"})).unwrap();
+        assert!(explicit.effective_mode() == OAuthMode::Relay);
+    }
 
     #[test]
     fn successful_keychain_read_does_not_turn_invalid_login_into_permission_failure() {

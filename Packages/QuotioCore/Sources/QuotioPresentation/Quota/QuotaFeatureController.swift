@@ -262,7 +262,7 @@ public final class QuotaFeatureController {
     }
 
     func completeMonitorOAuthCode(_ code: String, provider: QuotaProvider) async {
-        guard modeManager.isMonitorMode, provider == .claude else { return }
+        guard modeManager.isMonitorMode else { return }
         await oauth.completeManualCode(code)
     }
 
@@ -438,6 +438,8 @@ struct QuotaOAuthState: Identifiable, Equatable {
     var state: String?
     var error: String?
     var authURL: String?
+    var requiresManualCode = false
+    var userCode: String?
 
     @MainActor
     init?(_ flowState: OAuthFlowState) {
@@ -455,6 +457,7 @@ struct QuotaOAuthState: Identifiable, Equatable {
             prompt = value
             status = .polling
         case .awaitingManualCode(let id, let value, let manualState):
+            requiresManualCode = true
             providerID = id
             prompt = value
             state = manualState
@@ -472,6 +475,7 @@ struct QuotaOAuthState: Identifiable, Equatable {
         guard let provider = QuotaProvider(rawValue: providerID.rawValue) else { return nil }
         self.provider = provider
         state = state ?? prompt?.userCode
+        userCode = prompt?.userCode
         authURL = prompt?.authorizationURL?.absoluteString
         if error == nil {
             error = prompt?.status?.localizedText

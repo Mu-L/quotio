@@ -122,12 +122,6 @@ public protocol OAuthHTTPTransport: Sendable {
     func send(_ request: OAuthHTTPRequest) async throws -> OAuthHTTPResponse
 }
 
-public protocol OAuthCallbackTransport: Sendable {
-    func start(preferredPort: UInt16?) async throws -> UInt16
-    func waitForCallback(timeout: Duration) async throws -> URL
-    func stop() async
-}
-
 public actor OAuthFlowController {
     private let authorizer: any OAuthAuthorizing
     private var activeAttempt: (id: OAuthAttemptID, request: OAuthAuthorizationRequest)?

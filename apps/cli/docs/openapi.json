@@ -3433,10 +3433,12 @@
             ]
           },
           "callback_mode": {
-            "type": "string",
+            "type": ["string", "null"],
+            "description": "When omitted or null, the host selects the callback mode from the provider workflow.",
             "enum": [
               "relay",
-              "loopback"
+              "loopback",
+              null
             ]
           }
         },

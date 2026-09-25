@@ -6,6 +6,17 @@ import XCTest
 
 @MainActor
 final class QuotaScreenModelsTests: XCTestCase {
+    func testManualAndDevicePromptsUseHostStateWithoutProviderRules() {
+        let manual = QuotaOAuthState(.awaitingManualCode(providerID: .init(rawValue: "codex"),
+            prompt: .init(authorizationURL: URL(string: "https://auth.example.test")), state: "private-session-id"))
+        XCTAssertEqual(manual?.requiresManualCode, true)
+        XCTAssertNil(manual?.userCode)
+        let device = QuotaOAuthState(.awaitingUser(providerID: .init(rawValue: "claude"),
+            prompt: .init(authorizationURL: URL(string: "https://auth.example.test"), userCode: "DISPLAY-CODE")))
+        XCTAssertEqual(device?.requiresManualCode, false)
+        XCTAssertEqual(device?.userCode, "DISPLAY-CODE")
+    }
+
     func testQuotaScreenModelBootstrapsAndRefreshesThroughCoordinator() async {
         let initial = Self.quota(20)
         let fresh = Self.quota(80)

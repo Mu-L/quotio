@@ -125,8 +125,7 @@ enum CompositionRoot {
 
         let monitorAuthorizer = QuotioCLIOAuthAuthorizer(
             backend: quotioBackend,
-            urlOpener: urlOpener,
-            callbackTransport: LoopbackOAuthCallbackTransport()
+            urlOpener: urlOpener
         )
         let localProxyAuthorizer = LocalProxyOAuthAuthorizer(
             runtime: { [proxyScreenModel] in

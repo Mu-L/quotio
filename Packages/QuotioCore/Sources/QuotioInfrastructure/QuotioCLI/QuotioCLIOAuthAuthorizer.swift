@@ -6,17 +6,14 @@ import QuotioDomain
 public actor QuotioCLIOAuthAuthorizer: OAuthAuthorizing {
     private let backend: QuotioCLIBackend
     private let urlOpener: any URLOpening
-    private let callbackTransport: any OAuthCallbackTransport
-    private var sessions: [OAuthAttemptID: String] = [:]
+    private var sessions: [OAuthAttemptID: QuotioCLIOAuthSession] = [:]
 
     public init(
         backend: QuotioCLIBackend,
-        urlOpener: any URLOpening,
-        callbackTransport: any OAuthCallbackTransport
+        urlOpener: any URLOpening
     ) {
         self.backend = backend
         self.urlOpener = urlOpener
-        self.callbackTransport = callbackTransport
     }
 
     public func begin(
@@ -25,17 +22,17 @@ public actor QuotioCLIOAuthAuthorizer: OAuthAuthorizing {
         progress: @escaping @Sendable (OAuthPrompt) async -> Void
     ) async throws -> OAuthAuthorizationOutcome {
         guard let provider = QuotaProvider(rawValue: request.providerID.rawValue),
-              [.codex, .claude, .copilot].contains(provider),
               let cliProvider = QuotioCLIProviderMap.cli(provider) else {
             throw OAuthFlowFailure.unsupportedProvider
         }
-        if provider == .codex {
-            _ = try await callbackTransport.start(preferredPort: 1455)
-        }
         do {
             let session = try await backend.beginOAuth(provider: cliProvider)
-            sessions[attemptID] = session.id
-            guard let url = URL(string: session.url) else { throw OAuthFlowFailure.invalidResponse }
+            sessions[attemptID] = session
+            try Task.checkCancellation()
+            guard session.provider == cliProvider, let url = URL(string: session.url),
+                  url.scheme == "https", url.host != nil, url.user == nil, url.password == nil else {
+                throw OAuthFlowFailure.invalidResponse
+            }
             let prompt = OAuthPrompt(authorizationURL: url, userCode: session.userCode)
             await progress(prompt)
             if request.automaticallyOpensBrowser, !(await urlOpener.open(url)) {
@@ -44,25 +41,16 @@ public actor QuotioCLIOAuthAuthorizer: OAuthAuthorizing {
             switch session.workflow {
             case "manual_code":
                 return .awaitingManualCode(prompt: prompt, state: session.id)
-            case "browser_callback":
-                let callback = try await callbackTransport.waitForCallback(timeout: .seconds(180))
-                _ = try await backend.completeOAuth(id: session.id, callbackURL: callback.absoluteString)
-                await callbackTransport.stop()
+            case "browser_callback", "device_code":
                 return .completed(try await completedAccount(sessionID: session.id, provider: provider))
-            case "device_code":
-                return .completed(try await completedAccount(
-                    sessionID: session.id,
-                    provider: provider,
-                    expiresAt: session.expiresAt
-                ))
             default:
                 throw OAuthFlowFailure.invalidResponse
             }
         } catch let failure as OAuthFlowFailure {
-            await callbackTransport.stop()
+            await cancel(attemptID: attemptID)
             throw failure
         } catch {
-            await callbackTransport.stop()
+            await cancel(attemptID: attemptID)
             throw OAuthFlowFailure.provider(Self.errorCode(error))
         }
     }
@@ -72,58 +60,42 @@ public actor QuotioCLIOAuthAuthorizer: OAuthAuthorizing {
         providerID: AccountProviderID,
         attemptID: OAuthAttemptID
     ) async throws -> Account {
-        guard providerID.rawValue == QuotaProvider.claude.rawValue,
-              let sessionID = sessions[attemptID] else {
+        guard let session = sessions[attemptID], session.workflow == "manual_code",
+              let provider = QuotaProvider(rawValue: providerID.rawValue),
+              QuotioCLIProviderMap.cli(provider) == session.provider else {
             throw OAuthFlowFailure.expired
         }
         do {
-            _ = try await backend.completeOAuth(id: sessionID, code: code)
-            return try await completedAccount(sessionID: sessionID, provider: .claude)
+            _ = try await backend.completeOAuth(id: session.id, code: code)
+            return try await completedAccount(sessionID: session.id, provider: provider)
         } catch {
             throw OAuthFlowFailure.provider(Self.errorCode(error))
         }
     }
 
     public func cancel(attemptID: OAuthAttemptID) async {
-        if let sessionID = sessions.removeValue(forKey: attemptID) {
-            await backend.cancelOAuth(id: sessionID)
+        if let session = sessions.removeValue(forKey: attemptID) {
+            let backend = backend
+            // Cleanup must still reach the host when the authorization task was cancelled.
+            await Task { await backend.cancelOAuth(id: session.id) }.value
         }
-        await callbackTransport.stop()
     }
 
-    private func completedAccount(
-        sessionID: String,
-        provider: QuotaProvider,
-        expiresAt: Int64? = nil
-    ) async throws -> Account {
-        let fallbackDeadline = ContinuousClock.now + .seconds(180)
+    private func completedAccount(sessionID: String, provider: QuotaProvider) async throws -> Account {
         var session = try await backend.oauthSession(id: sessionID)
         while ["waiting", "processing"].contains(session.status) {
-            let expired = expiresAt.map { Int64(Date().timeIntervalSince1970) >= $0 }
-                ?? (ContinuousClock.now >= fallbackDeadline)
-            guard !expired else { throw OAuthFlowFailure.expired }
+            try Task.checkCancellation()
             try await Task.sleep(for: .milliseconds(500))
             session = try await backend.oauthSession(id: sessionID)
         }
+        if session.status == "expired" { throw OAuthFlowFailure.expired }
         guard session.status == "completed", let accountID = session.accountId else {
             throw OAuthFlowFailure.provider(session.errorCode ?? session.status)
         }
-        sessions = sessions.filter { $0.value != sessionID }
-        if let account = await backend.accounts().first(where: { $0.id == accountID }) {
-            return account
-        }
-        return Account(
-            identity: AccountIdentity(
-                id: accountID,
-                providerID: AccountProviderID(rawValue: provider.rawValue),
-                accountKey: provider.rawValue
-            ),
-            displayName: provider.rawValue,
-            source: .quotioKeychain,
-            capabilities: [.disable, .delete],
-            status: .ready,
-            credentialMetadata: RedactedCredentialMetadata(kind: .oauth)
-        )
+        let account = try await backend.resolvedAccount(id: accountID)
+        guard account.providerID.rawValue == provider.rawValue else { throw OAuthFlowFailure.invalidResponse }
+        sessions = sessions.filter { $0.value.id != sessionID }
+        return account
     }
 
     private static func errorCode(_ error: Error) -> String {

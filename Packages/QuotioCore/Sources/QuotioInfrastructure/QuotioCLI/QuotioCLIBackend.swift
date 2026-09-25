@@ -304,6 +304,13 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         return result
     }
 
+    func resolvedAccount(id: String) async throws -> Account {
+        guard let client else { throw QuotioHostClientError.disconnected }
+        let value: QuotioHostSnapshot.Account = try await client.request(QuotioHostAccountTarget.account(id).path)
+        guard let account = Self.resolvedAccount(value) else { throw QuotioHostClientError.incompatible }
+        return account
+    }
+
     func renameResolvedAccount(id: String, userLabel: String?) async throws {
         guard let client else { throw QuotioHostClientError.disconnected }
         let body = try JSONSerialization.data(withJSONObject: ["user_label": userLabel.map { $0 as Any } ?? NSNull()])
@@ -453,7 +460,6 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating {
         guard let client else { throw QuotioHostClientError.disconnected }
         let body = try JSONSerialization.data(withJSONObject: [
             "provider": provider,
-            "callback_mode": "relay",
         ])
         return try await client.request(
             "v1/auth/sessions",

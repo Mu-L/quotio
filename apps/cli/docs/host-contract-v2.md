@@ -72,3 +72,7 @@ With `--no-saved-accounts`, snapshots do not access the protected vault. Default
 `quotio usage --format json` emits the same `Snapshot` shape as `/v2/snapshot`; text output formats its resolved names, IDs and selected metrics. Provider/account filters limit the returned accounts. `--account` resolves a logical account and collects its enabled sources, including after the original source was unlinked. The no-saved-account path performs no protected-vault read. Internal per-source cache records are not a public output format.
 
 `account_redirects` contains persisted logical-account redirects. Source IDs are a separate scope and must never be inferred as redirects; a reassigned source must not retarget an old account bookmark. Loaded usage requires a fetch timestamp. Duplicate metric IDs, invalid graph references and duplicate profile dates are rejected before rendering. Malformed collected data reports `invalid_snapshot`, not a credential-storage permission error.
+
+## Host-owned OAuth callbacks
+
+When `callback_mode` is omitted, Rust selects it from the provider workflow. Browser-callback flows use the host's loopback listener; device and manual-code flows remain session-driven. The frontend opens the supplied HTTPS URL, displays a supplied user code or manual-code form, and polls the session. Only the host declares expiry or completion. Cancelling an attempt requests host cancellation, including when the frontend task itself was cancelled. Completed accounts are read by logical ID; the frontend never synthesizes a name or account when that read fails.

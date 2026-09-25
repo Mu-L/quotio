@@ -278,34 +278,7 @@ final class AccountPersistenceTests: XCTestCase {
         XCTAssertNil(saved)
     }
 
-    func testLoopbackCallbackPreservesOriginPathCodeAndState() async throws {
-        let transport = LoopbackOAuthCallbackTransport()
-        let port = try await transport.start()
-        async let callback = transport.waitForCallback(timeout: .seconds(2))
 
-        let url = URL(string: "http://127.0.0.1:\(port)/auth/callback?code=test-code&state=test-state")!
-        _ = try await URLSession.shared.data(from: url)
-        let result = try await callback
-        let items = URLComponents(url: result, resolvingAgainstBaseURL: false)?.queryItems
-
-        XCTAssertEqual(result.scheme, "http")
-        XCTAssertEqual(result.host, "localhost")
-        XCTAssertEqual(result.port, Int(port))
-        XCTAssertEqual(result.path, "/auth/callback")
-        XCTAssertEqual(items?.first(where: { $0.name == "code" })?.value, "test-code")
-        XCTAssertEqual(items?.first(where: { $0.name == "state" })?.value, "test-state")
-    }
-
-    func testLoopbackCallbackTimesOut() async throws {
-        let transport = LoopbackOAuthCallbackTransport()
-        _ = try await transport.start()
-
-        await XCTAssertThrowsErrorAsync(
-            try await transport.waitForCallback(timeout: .milliseconds(30))
-        ) { error in
-            XCTAssertEqual(error as? OAuthFlowFailure, .expired)
-        }
-    }
 }
 
 private actor FakeProtectedCredentialStore: LegacyProtectedCredentialReading {

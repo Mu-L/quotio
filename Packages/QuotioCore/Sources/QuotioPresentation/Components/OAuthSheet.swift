@@ -80,11 +80,11 @@ struct OAuthSheet: View {
             }
 
             if let state = viewModel.oauthState, state.provider == provider {
-                OAuthStatusView(status: state.status, error: state.error, state: state.state, authURL: state.authURL, provider: provider)
+                OAuthStatusView(status: state.status, error: state.error, deviceCode: state.userCode, authURL: state.authURL, provider: provider)
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
 
-            if modeManager.isMonitorMode, provider == .claude, viewModel.oauthState?.status == .polling {
+            if modeManager.isMonitorMode, viewModel.oauthState?.requiresManualCode == true {
                 HStack(spacing: 8) {
                     TextField("oauth.authorizationCode".localized(), text: $manualOAuthCode)
                         .textFieldStyle(.roundedBorder)
@@ -171,7 +171,7 @@ private extension OAuthAuthorizationMethod {
 private struct OAuthStatusView: View {
     let status: QuotaOAuthState.OAuthStatus
     let error: String?
-    let state: String?
+    let deviceCode: String?
     let authURL: String?
     let provider: QuotaProvider
     @Environment(PasteboardScreenModel.self) private var pasteboard
@@ -219,8 +219,7 @@ private struct OAuthStatusView: View {
                             .foregroundStyle(provider.color)
                     }
 
-                    // For Copilot Device Code flow, show device code with copy button
-                    if (provider == .copilot || provider == .kiro), let deviceCode = state, !deviceCode.isEmpty {
+                    if let deviceCode, !deviceCode.isEmpty {
                         VStack(spacing: 8) {
                             Text("oauth.enterCodeInBrowser".localized())
                                 .font(.subheadline)
