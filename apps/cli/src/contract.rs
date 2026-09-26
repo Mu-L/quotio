@@ -121,6 +121,8 @@ pub struct Account {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Metric {
     pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
     pub display_name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
@@ -265,7 +267,14 @@ impl Snapshot {
             }
             let mut metrics = HashSet::new();
             for metric in &usage.metrics {
-                if !valid_id(&metric.id) || !metrics.insert(&metric.id) || !metric.quota.is_valid()
+                if !valid_id(&metric.id)
+                    || !metrics.insert(&metric.id)
+                    || !metric.quota.is_valid()
+                    || metric.group.as_ref().is_some_and(|group| {
+                        group.trim().is_empty()
+                            || group.len() > 512
+                            || group.chars().any(char::is_control)
+                    })
                 {
                     return Err("invalid_metric");
                 }

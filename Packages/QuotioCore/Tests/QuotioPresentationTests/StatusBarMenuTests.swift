@@ -7,6 +7,18 @@ import XCTest
 
 @MainActor
 final class StatusBarMenuSnapshotMapperTests: XCTestCase {
+    func testMetricGroupsPreserveHostOrderAndExcludeExtraUsage() {
+        let quota = ProviderQuota(models: [
+            QuotaMetric(name: "5 hours", percentage: 50, resetTime: "", group: "Standard"),
+            QuotaMetric(name: "Weekly", percentage: 60, resetTime: "", group: "Standard"),
+            QuotaMetric(name: "5 hours", percentage: 70, resetTime: "", group: "Core"),
+            QuotaMetric(name: "Extra usage", percentage: -1, resetTime: "", presentation: .amount(value: 0, unit: .credits, semantics: .balance))
+        ])
+        XCTAssertEqual(quota.metricGroups.map(\.name), ["Standard", "Core"])
+        XCTAssertEqual(quota.metricGroups.map { $0.models.count }, [2, 1])
+        XCTAssertEqual(quota.models.filter(\.isStandaloneMetric).count, 1)
+    }
+
     func testDisabledAccountsMatchOpaqueIDsExactly() {
         let disabled = Account.make(providerID: .init(rawValue: "codex"), accountKey: "Account-A", source: .nativeCredential, status: .disabled)
         let snapshot = StatusBarMenuSnapshotMapper.makeSnapshot(

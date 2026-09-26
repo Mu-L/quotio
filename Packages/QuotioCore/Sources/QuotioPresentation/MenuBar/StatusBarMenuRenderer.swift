@@ -594,24 +594,28 @@ private struct MenuAccountCardView: View {
     // MARK: - Quota Content
     
     private var quotaContentSection: some View {
-        let isCardStyle = displayStyle == .card
-        let meterModels = data.models.filter { !$0.isStandaloneMetric }.map {
-            ModelBadgeData(id: $0.id, name: $0.displayName, percentage: $0.percentage, resetTime: $0.resetTime)
-        }
-        let models = isCardStyle ? meterModels + data.models.filter(\.isStandaloneMetric).map {
-            ModelBadgeData(id: $0.id, name: $0.displayName, percentage: $0.percentage, resetTime: $0.resetTime, usage: $0.formattedUsage)
-        } : meterModels
-        let standaloneModels = isCardStyle ? [] : data.models.filter(\.isStandaloneMetric)
+        let groups = data.metricGroups
+        let standaloneModels = data.models.filter(\.isStandaloneMetric)
 
         return VStack(spacing: 8) {
-            if models.isEmpty && standaloneModels.isEmpty {
+            if groups.isEmpty && standaloneModels.isEmpty {
                 Text("dashboard.noQuotaData".localized())
                     .font(.caption)
                     .foregroundStyle(.tertiary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 8)
-            } else if !models.isEmpty {
-                quotaLayout(models: models)
+            }
+            ForEach(groups.indices, id: \.self) { index in
+                let group = groups[index]
+                if let name = group.name {
+                    HStack(spacing: 8) {
+                        Text(name).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        Rectangle().fill(.secondary.opacity(0.15)).frame(height: 1)
+                    }
+                }
+                quotaLayout(models: group.models.map {
+                    ModelBadgeData(id: $0.id, name: $0.displayName, percentage: $0.percentage, resetTime: $0.resetTime)
+                })
             }
 
             ForEach(standaloneModels) { model in

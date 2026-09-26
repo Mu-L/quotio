@@ -156,6 +156,7 @@ public enum QuotaMetricPresentation: Codable, Equatable, Sendable {
 }
 
 public struct QuotaMetric: Codable, Equatable, Identifiable, Sendable {
+    public let group: String?
     public let name: String
     public let backendID: String?
     public let percentage: Double
@@ -178,8 +179,10 @@ public struct QuotaMetric: Codable, Equatable, Identifiable, Sendable {
         used: Int? = nil,
         limit: Int? = nil,
         remaining: Int? = nil,
-        tooltip: String? = nil
+        tooltip: String? = nil,
+        group: String? = nil
     ) {
+        self.group = group
         self.name = name
         self.backendID = id
         self.percentage = percentage

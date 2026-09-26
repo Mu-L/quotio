@@ -6,6 +6,19 @@ import XCTest
 @testable import QuotioInfrastructure
 
 final class QuotioCLIBackendTests: XCTestCase {
+    func testHostMetricGroupsAreForwardedWithoutProviderRules() throws {
+        let fixture = try hostFixture { root in
+            var usage = root["usage"] as! [[String: Any]]
+            var metrics = usage[1]["metrics"] as! [[String: Any]]
+            metrics[0]["group"] = "Custom pool"
+            usage[1]["metrics"] = metrics
+            root["usage"] = usage
+        }
+        let host = try QuotioHostSnapshot.decode(Data(fixture.utf8))
+        let snapshot = QuotioHostPresentationMapper.resolvedSnapshot(host)
+        XCTAssertEqual(snapshot.quotas[.devin]?["devin-desktop-account"]?.models.first?.group, "Custom pool")
+    }
+
     func testRefreshAvailabilityComesFromTheHostCapability() throws {
         for allowed in [false, true] {
             let fixture = try hostFixture { root in

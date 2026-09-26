@@ -228,7 +228,9 @@ fn observation(
             .iter()
             .map(|window| Metric {
                 id: metric_id(window),
-                display_name: window.label.clone(),
+                group: metric_group(&value.provider.0, window).map(|(group, _)| group.into()),
+                display_name: metric_group(&value.provider.0, window)
+                    .map_or_else(|| window.label.clone(), |(_, name)| name.into()),
                 note: window.note.clone(),
                 quota: window.quota.clone(),
                 amounts: window.amounts.clone(),
@@ -243,6 +245,30 @@ fn observation(
             .or_else(|| value.diagnostics.first().map(|diagnostic| diagnostic.code))
             .map(issue),
     }
+}
+
+fn metric_group(
+    provider: &str,
+    window: &crate::domain::QuotaWindow,
+) -> Option<(&'static str, &'static str)> {
+    if provider != "factory" {
+        return None;
+    }
+    let id = window.metric_id.as_deref()?;
+    let (group, period) = if let Some(period) = id.strip_prefix("factory-standard-") {
+        ("Standard", period)
+    } else if let Some(period) = id.strip_prefix("factory-core-") {
+        ("Core", period)
+    } else {
+        return None;
+    };
+    let name = match period {
+        "five-hour" => "5 hours",
+        "weekly" => "Weekly",
+        "monthly" => "Monthly",
+        _ => return None,
+    };
+    Some((group, name))
 }
 
 /// Resolve source health and choose one usable observation without combining quota balances.
@@ -414,6 +440,28 @@ pub fn digest(snapshot: &Snapshot) -> Result<String, crate::accounts::AccountErr
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn factory_limits_have_host_groups_and_short_period_names() {
+        let report: serde_json::Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/contracts/usage-v1.json"))
+                .unwrap();
+        let mut parsed: crate::domain::QuotaWindow =
+            serde_json::from_value(report["providers"][0]["windows"][0].clone()).unwrap();
+        let window = &mut parsed;
+        for (pool, group) in [("standard", "Standard"), ("core", "Core")] {
+            for (period, name) in [
+                ("five-hour", "5 hours"),
+                ("weekly", "Weekly"),
+                ("monthly", "Monthly"),
+            ] {
+                window.metric_id = Some(format!("factory-{pool}-{period}"));
+                assert_eq!(metric_group("factory", window), Some((group, name)));
+                assert_eq!(metric_group("future", window), None);
+            }
+        }
+        window.metric_id = Some("factory-extra-balance".into());
+        assert_eq!(metric_group("factory", window), None);
+    }
     #[test]
     fn plan_labels_preserve_provider_specific_and_unknown_names() {
         for (provider, raw, expected) in [

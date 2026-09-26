@@ -98,6 +98,16 @@ public extension ProviderQuota {
     }
 
     var planDisplayName: String? { planType }
+
+    var metricGroups: [(name: String?, models: [QuotaMetric])] {
+        models.filter { !$0.isStandaloneMetric }.reduce(into: []) { groups, metric in
+            if let index = groups.firstIndex(where: { $0.name == metric.group }) {
+                groups[index].models.append(metric)
+            } else {
+                groups.append((metric.group, [metric]))
+            }
+        }
+    }
 }
 
 public extension QuotaSubscriptionInfo {

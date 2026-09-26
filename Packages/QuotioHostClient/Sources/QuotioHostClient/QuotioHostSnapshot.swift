@@ -70,6 +70,7 @@ public struct QuotioHostSnapshot: Decodable, Sendable {
     }
     public struct Metric: Decodable, Sendable {
         public let id: String
+        public let group: String?
         public let displayName: String
         public let note: String?
         public let quota: Quota
@@ -155,7 +156,9 @@ public struct QuotioHostSnapshot: Decodable, Sendable {
             if ["fresh", "stale"].contains(value.freshness), value.fetchedAt == nil { throw QuotioHostClientError.incompatible }
             guard accountIDs.contains(value.accountId), usageIDs.insert(value.accountId).inserted,
                   Set(value.metrics.map(\.id)).count == value.metrics.count,
-                  value.metrics.allSatisfy({ validID($0.id) }) else { throw QuotioHostClientError.incompatible }
+                  value.metrics.allSatisfy({ metric in
+                      validID(metric.id) && (metric.group.map { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.utf8.count <= 512 && $0.rangeOfCharacter(from: .controlCharacters) == nil } ?? true)
+                  }) else { throw QuotioHostClientError.incompatible }
             if let profile = value.codexProfile,
                Set(profile.dailyUsage.map(\.date)).count != profile.dailyUsage.count { throw QuotioHostClientError.incompatible }
         }
