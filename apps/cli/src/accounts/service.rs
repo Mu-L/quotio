@@ -866,16 +866,22 @@ impl ManagedProvider {
             return Err(AccountError::Busy);
         }
         let mut changed = false;
+        changed |= current.observe_name(&usage.account.label)?;
         if current.naming.is_some() {
-            changed = current.observe_name(&usage.account.label)?;
             usage.account.label = current.display_name().to_owned();
         }
-        if let (Some(resolved), Some(identity)) =
-            (&mut tx.document.resolved, &usage.account.verified)
-        {
-            changed |= resolved.observe(&self.id, identity)?;
+        if let Some(identity) = &usage.account.verified {
+            changed |= tx.document.resolved.is_none();
+            tx.document.enable_resolved_accounts()?;
+            changed |= tx
+                .document
+                .resolved
+                .as_mut()
+                .expect("initialized")
+                .observe(&self.id, identity)?;
         }
         if changed {
+            tx.document.version = tx.document.version.max(9);
             commit(tx).await?;
         }
         Ok(usage)
@@ -942,6 +948,7 @@ impl ProviderAdapter for ManagedProvider {
             };
             if let Some(naming) = &account.naming {
                 return Some(crate::cache::fingerprint(&[
+                    "resolved-identity-v2",
                     &account.id,
                     &account.identity,
                     &scope,
@@ -954,6 +961,7 @@ impl ProviderAdapter for ManagedProvider {
                 ]));
             }
             Some(crate::cache::fingerprint(&[
+                "resolved-identity-v2",
                 &account.id,
                 &account.identity,
                 &scope,
@@ -1980,7 +1988,15 @@ mod tests {
             let mut usage = MockProvider.fetch(&context).await.unwrap();
             usage.provider = ProviderId("amp".into());
             usage.account.label = "provider-user".into();
+            usage.account.verified = Some(crate::domain::VerifiedIdentity {
+                subject: "verified-user".into(),
+                tenant: Some("team".into()),
+            });
             let usage = adapter.verify_current(&credential, usage).await.unwrap();
+            assert!(
+                vault.begin().unwrap().document.resolved.is_some(),
+                "first refresh must persist identity without a prior account-list read"
+            );
             let expected = if origin == Some(super::super::LabelOrigin::Generated) {
                 "provider-user"
             } else {

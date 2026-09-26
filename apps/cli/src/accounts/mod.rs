@@ -252,6 +252,29 @@ impl Account {
 
     pub fn observe_name(&mut self, name: &str) -> Result<bool, AccountError> {
         let name = validate_observed_name(name)?;
+        // These exact labels came from our native source constructors, not an inferred email pattern.
+        let generated = match &self.credential {
+            Credential::DevinDesktopNative { source } => Some(match source.location {
+                sources::DevinDesktopLocation::CredentialsToml => {
+                    "Devin Desktop credentials.toml".to_owned()
+                }
+                sources::DevinDesktopLocation::StateDatabase => {
+                    "Devin Desktop state.vscdb".to_owned()
+                }
+            }),
+            Credential::CopilotNative { source }
+                if source.location != sources::CopilotLocation::GhKeychain =>
+            {
+                Some(format!("Copilot {}", &source.identity()?[..8]))
+            }
+            _ => None,
+        };
+        if self.naming.is_none() && generated.as_deref() == Some(self.label.as_str()) {
+            self.naming = Some(AccountNaming {
+                origin: LabelOrigin::Generated,
+                observed_name: None,
+            });
+        }
         let Some(naming) = &mut self.naming else {
             return Ok(false);
         };
@@ -652,4 +675,55 @@ pub(crate) fn random_string() -> Result<String, AccountError> {
         .fill(&mut bytes)
         .map_err(|_| AccountError::Storage)?;
     Ok(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes))
+}
+
+#[cfg(test)]
+mod naming_tests {
+    use super::*;
+    #[test]
+    fn native_generated_labels_adopt_profiles_but_explicit_labels_survive() {
+        let copilot = sources::CopilotNativeReference::system(
+            sources::CopilotLocation::Apps,
+            "github.com".into(),
+        )
+        .unwrap();
+        let fallback = format!("Copilot {}", &copilot.identity().unwrap()[..8]);
+        let cases = [
+            (
+                Provider::Catalog("copilot"),
+                Credential::CopilotNative { source: copilot },
+                fallback,
+            ),
+            (
+                Provider::Catalog("devin-desktop"),
+                Credential::DevinDesktopNative {
+                    source: sources::DevinDesktopNativeReference {
+                        location: sources::DevinDesktopLocation::CredentialsToml,
+                        path: "/tmp/credentials.toml".into(),
+                    },
+                },
+                "Devin Desktop credentials.toml".into(),
+            ),
+        ];
+        for (provider, credential, label) in cases {
+            for explicit in [false, true] {
+                let mut document = Document::default();
+                document
+                    .add(provider, &label, "identity".into(), credential.clone())
+                    .unwrap();
+                let account = &mut document.accounts[0];
+                if explicit {
+                    account.naming = Some(AccountNaming {
+                        origin: LabelOrigin::User,
+                        observed_name: None,
+                    });
+                }
+                account.observe_name("verified-user").unwrap();
+                assert_eq!(
+                    account.display_name(),
+                    if explicit { &label } else { "verified-user" }
+                );
+            }
+        }
+    }
 }
