@@ -138,6 +138,42 @@ async fn account_scoped_refresh_accepts_borrowed_proxy_account() {
             .await
             .is_ok()
     );
+    let mut usage = Provider::Mock
+        .adapter()
+        .fetch(&state.context)
+        .await
+        .unwrap();
+    usage.provider = ProviderId("claude".into());
+    usage.account_ref = Some(account);
+    *state.snapshot.write().await = Some((
+        0,
+        UsageReport {
+            schema_version: 1,
+            generated_at: state.context.clock.now(),
+            providers: vec![usage],
+            failures: vec![],
+        },
+    ));
+    let Json(snapshot) = resolved_snapshot(State(state.clone()))
+        .await
+        .unwrap_or_else(|_| panic!());
+    let refresh_guard = state.refresh_lock.lock().await;
+    let result = manual_refresh(
+        State(state.clone()),
+        ApiJson(RefreshRequest {
+            providers: vec![Provider::Catalog("claude")],
+            account_id: Some(snapshot.accounts[0].id.clone()),
+            force: true,
+            include_owned: true,
+            disabled_proxy_auth_files: vec![],
+        }),
+    )
+    .await;
+    assert!(matches!(result, Ok((StatusCode::ACCEPTED, _))));
+    for job in state.jobs.lock().unwrap().drain(..) {
+        job.abort();
+    }
+    drop(refresh_guard);
     std::fs::remove_dir_all(dir).unwrap();
 }
 
@@ -2088,6 +2124,63 @@ async fn resolved_snapshot_without_saved_accounts_uses_no_vault() {
     assert_eq!(first.host.id, second.host.id);
     assert_eq!(first.revision, second.revision);
     assert!(!first.host.capabilities["account_write_v2"].available);
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[tokio::test]
+async fn external_snapshot_account_can_refresh_without_duplicate_observations() {
+    let (state, dir, _) = fixture().await;
+    state.settings.write().await.values.enabled_providers = vec!["mock".into()];
+    refresh(&state, None).await.unwrap();
+    let Json(snapshot) = resolved_snapshot(State(state.clone()))
+        .await
+        .unwrap_or_else(|_| panic!());
+    let id = snapshot.accounts[0].id.clone();
+    assert!(id.starts_with("external-"));
+    // An unrelated source must survive a local account refresh.
+    let mut other = Provider::Mock
+        .adapter()
+        .fetch(&state.context)
+        .await
+        .unwrap();
+    other.account_ref = Some(crate::domain::AccountRef {
+        id: "other-source".into(),
+        label: "Other".into(),
+        origin: None,
+    });
+    state
+        .snapshot
+        .write()
+        .await
+        .as_mut()
+        .unwrap()
+        .1
+        .providers
+        .push(other);
+    for _ in 0..2 {
+        let (_, Json(operation)) = manual_refresh(
+            State(state.clone()),
+            ApiJson(RefreshRequest {
+                providers: vec![Provider::Mock],
+                account_id: Some(id.clone()),
+                force: true,
+                include_owned: true,
+                disabled_proxy_auth_files: vec![],
+            }),
+        )
+        .await
+        .unwrap_or_else(|_| panic!("snapshot account must be refreshable"));
+        assert_eq!(done(&state, &operation.id).await.error, None);
+        let report = state.snapshot.read().await;
+        let usages = &report.as_ref().unwrap().1.providers;
+        assert_eq!(usages.len(), 2);
+        assert_eq!(usages.iter().filter(|u| u.account_ref.is_none()).count(), 1);
+        assert!(usages.iter().any(|u| {
+            u.account_ref
+                .as_ref()
+                .is_some_and(|r| r.id == "other-source")
+        }));
+    }
     std::fs::remove_dir_all(dir).unwrap();
 }
 

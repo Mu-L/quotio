@@ -420,7 +420,19 @@ async fn manual_refresh(
     }
     request.providers.sort_by_key(|p| p.id());
     request.providers.dedup();
-    if let Some(id) = &request.account_id {
+    if let Some(id) = &mut request.account_id {
+        let snapshot = state.snapshot.read().await;
+        if let Some((generation, report)) = snapshot.as_ref()
+            && *generation == state.generation.load(Ordering::SeqCst)
+            && let Some(source) = crate::contract::snapshot::external_refresh_source(
+                report,
+                request.providers[0].id(),
+                id,
+            )
+        {
+            *id = source.into();
+        }
+        drop(snapshot);
         management::validate_refresh_account(&state, request.providers[0], id).await?;
     } else if request.providers.iter().any(|p| !enabled.contains(p)) {
         return Err(ApiError(StatusCode::BAD_REQUEST, "invalid_refresh_scope"));
@@ -700,8 +712,7 @@ fn merge_refresh_report(
     });
     let matches = |provider: &ProviderId, reference: Option<&crate::domain::AccountRef>| {
         selected.iter().any(|p| p.id() == provider.0)
-            && account
-                .is_none_or(|ids| reference.is_some_and(|reference| ids.contains(&reference.id)))
+            && account.is_none_or(|ids| ids.contains(reference.map_or("local", |r| r.id.as_str())))
     };
     previous
         .providers

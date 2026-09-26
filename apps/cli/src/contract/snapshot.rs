@@ -10,6 +10,21 @@ fn external_id(provider: &str, reference: Option<&AccountRef>) -> String {
     )
 }
 
+pub(crate) fn external_refresh_source<'a>(
+    report: &'a UsageReport,
+    provider: &str,
+    id: &str,
+) -> Option<&'a str> {
+    report.providers.iter().find_map(|usage| {
+        let reference = usage.account_ref.as_ref();
+        (usage.provider.0 == provider
+            && reference
+                .is_none_or(|r| r.id == "local" || r.origin == Some(AccountOrigin::BorrowedProxy))
+            && external_id(provider, reference) == id)
+            .then(|| reference.map_or("local", |r| r.id.as_str()))
+    })
+}
+
 fn reference_matches(provider: &str, reference: Option<&AccountRef>, source: &str) -> bool {
     reference.is_some_and(|reference| reference.id == source)
         || external_id(provider, reference) == source
