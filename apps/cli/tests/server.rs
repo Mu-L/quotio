@@ -196,10 +196,18 @@ async fn http_snapshots_security_and_process_shutdown() {
             .count(),
         1
     );
-    let expected = serde_json::to_value(quotio::providers::capabilities::ProviderList::new(&[
+    let mut expected = serde_json::to_value(quotio::providers::capabilities::ProviderList::new(&[
         quotio::cli::Provider::Mock,
     ]))
     .unwrap();
+    for provider in expected["providers"].as_array_mut().unwrap() {
+        for action in provider["actions"].as_array_mut().unwrap() {
+            if action["available"] == true {
+                action["available"] = false.into();
+                action["reason"] = "management_disabled".into();
+            }
+        }
+    }
     assert_eq!(catalog, expected);
     for (path, status) in [
         ("/v2/snapshot/codex", 404),
