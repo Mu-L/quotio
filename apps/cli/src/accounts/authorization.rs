@@ -36,6 +36,21 @@ pub(crate) fn target(input: &SourceInput) -> Result<(&'static str, Option<&str>)
     }
 }
 
+pub(crate) fn validate(input: &SourceInput) -> Result<(), AccountError> {
+    if matches!(
+        input,
+        SourceInput::FactoryNative {
+            location: FactoryLocation::V2LoginKeychain
+                | FactoryLocation::V2Keyring
+                | FactoryLocation::Legacy,
+            entry_key: None,
+        }
+    ) {
+        return Ok(());
+    }
+    target(input).map(|_| ())
+}
+
 pub(crate) async fn authorize(mut input: SourceInput) -> Result<SourceInput, AccountError> {
     if let SourceInput::CopilotNative {
         location: CopilotLocation::GhKeychain,
@@ -88,6 +103,13 @@ mod tests {
                 .is_err()
             );
         }
+        assert!(
+            validate(&SourceInput::FactoryNative {
+                location: FactoryLocation::V2Keyring,
+                entry_key: None
+            })
+            .is_ok()
+        );
     }
 
     #[test]

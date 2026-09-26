@@ -265,7 +265,7 @@ pub(super) async fn authorize(
 ) -> Result<(StatusCode, Json<Operation>), ApiError> {
     let input = serde_json::from_value(body.clone())
         .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "invalid_request"))?;
-    crate::accounts::authorization::target(&input).map_err(account_error)?;
+    crate::accounts::authorization::validate(&input).map_err(account_error)?;
     mutate(
         state,
         principal,
