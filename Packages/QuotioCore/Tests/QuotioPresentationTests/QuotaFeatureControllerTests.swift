@@ -230,7 +230,6 @@ final class QuotaFeatureControllerTests: XCTestCase {
             quota: quota,
             accounts: accounts,
             oauth: OAuthScreenModel(controller: OAuthFlowController(authorizer: QuotaFeatureOAuthAuthorizer())),
-            antigravityAccounts: AntigravityAccountScreenModel(switcher: QuotaFeatureAntigravitySwitcher()),
             modeManager: OperatingModeManager(repository: preferences),
             monitoringSettings: QuotaFeatureMonitoringSettings(),
             menuBarSettings: menuBar,
@@ -243,23 +242,6 @@ final class QuotaFeatureControllerTests: XCTestCase {
         )
         return (controller, accountService, quota, menuBar)
     }
-}
-
-private actor QuotaFeatureAntigravitySwitcher: AntigravityAccountSwitching {
-    func snapshots() -> AsyncStream<AntigravitySwitchSnapshot> {
-        AsyncStream { continuation in
-            continuation.yield(AntigravitySwitchSnapshot())
-            continuation.finish()
-        }
-    }
-
-    func snapshot() -> AntigravitySwitchSnapshot { AntigravitySwitchSnapshot() }
-    func isAvailable() -> Bool { false }
-    func isIDERunning() -> Bool { false }
-    func detectActiveAccount() -> AntigravityActiveAccount? { nil }
-    func switchAccount(email: String, authDirectory: String, restartIDE: Bool) {}
-    func switchAccount(authFilePath: String, restartIDE: Bool) {}
-    func cancelSwitch() {}
 }
 
 @MainActor

@@ -39,7 +39,6 @@ protocol AppRuntimeServices: AnyObject, Sendable {
 
     func prepareForLaunch()
     func applyAppearance()
-    func loadDirectAuthFiles() async
     func connectStatusBar()
     func setStatusBarStateChangeHandler(_ handler: (@MainActor () -> Void)?)
     func updateStatusBar()
@@ -47,12 +46,7 @@ protocol AppRuntimeServices: AnyObject, Sendable {
     func initializeFeatures() async
     func checkForUpdatesInBackground()
     func checkForUpdates()
-    func startUpdatePolling() async
-    func stopUpdatePolling() async
     func shutdownOAuth() async
-    func stopTunnel() async
-    func terminateProxyOnShutdown() async
-    func cleanupTunnelOrphans() async
 }
 
 @MainActor
@@ -61,9 +55,7 @@ final class AppRuntime {
     private var initializationTask: Task<Void, Never>?
     private var fullInitializationTask: Task<Void, Never>?
     private var shutdownTask: Task<Bool, Never>?
-    private var orphanCleanupTask: Task<Void, Never>?
     private var didPrepareForLaunch = false
-    private var didStartUpdatePolling = false
     private var didCompleteFullInitialization = false
 
     private(set) var hasInitialized = false
@@ -117,10 +109,6 @@ final class AppRuntime {
         guard !didPrepareForLaunch else { return }
         didPrepareForLaunch = true
         services.prepareForLaunch()
-
-        orphanCleanupTask = Task(priority: .utility) { [services] in
-            await services.cleanupTunnelOrphans()
-        }
     }
 
     func initializeIfNeeded() async {
@@ -128,11 +116,9 @@ final class AppRuntime {
 
         if let initializationTask {
             await initializationTask.value
-            await startUpdatePollingIfNeeded()
             return
         }
         guard !hasInitialized else {
-            await startUpdatePollingIfNeeded()
             return
         }
 
@@ -143,7 +129,6 @@ final class AppRuntime {
         initializationTask = task
         await task.value
         initializationTask = nil
-        await startUpdatePollingIfNeeded()
     }
 
     func completeOnboarding(mode: OperatingMode) async {
@@ -202,7 +187,6 @@ final class AppRuntime {
 
         let task = Task { @MainActor [weak self] in
             guard let self else { return }
-            await services.loadDirectAuthFiles()
             services.connectStatusBar()
             services.updateStatusBar()
             await services.initializeFeatures()
@@ -214,12 +198,6 @@ final class AppRuntime {
         didCompleteFullInitialization = true
     }
 
-    private func startUpdatePollingIfNeeded() async {
-        guard !didStartUpdatePolling else { return }
-        didStartUpdatePolling = true
-        await services.startUpdatePolling()
-    }
-
     private func handleStatusBarStateChange() {
         services.updateStatusBar()
         services.rebuildStatusBar()
@@ -227,22 +205,13 @@ final class AppRuntime {
 
     private func performShutdown(timeout: Duration) async -> Bool {
         services.setStatusBarStateChangeHandler(nil)
-        await services.stopUpdatePolling()
         initializationTask?.cancel()
         fullInitializationTask?.cancel()
-        orphanCleanupTask?.cancel()
 
         let (events, continuation) = AsyncStream<Bool>.makeStream()
         let services = services
-        let proxyCleanupTask = Task { @MainActor in
-            await services.terminateProxyOnShutdown()
-        }
         let cleanupTask = Task { @MainActor in
-            async let tunnel: Void = services.stopTunnel()
-            async let oauth: Void = services.shutdownOAuth()
-            await proxyCleanupTask.value
-            await tunnel
-            await oauth
+            await services.shutdownOAuth()
             guard !Task.isCancelled else { return }
             continuation.yield(true)
         }
@@ -261,10 +230,6 @@ final class AppRuntime {
         cleanupTask.cancel()
         timeoutTask.cancel()
 
-        if !completedCleanly {
-            await services.cleanupTunnelOrphans()
-        }
-        await proxyCleanupTask.value
         return completedCleanly
     }
 }

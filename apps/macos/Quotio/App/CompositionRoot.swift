@@ -207,7 +207,6 @@ enum CompositionRoot {
             quota: quotaScreenModel,
             accounts: accountsScreenModel,
             oauth: oauthScreenModel,
-            antigravityAccounts: antigravityAccountScreenModel,
             modeManager: modeManager,
             monitoringSettings: quotioBackend,
             menuBarSettings: menuBarSettings,
@@ -396,12 +395,6 @@ enum CompositionRoot {
             repository: UserDefaultsAppearancePreferencesRepository(),
             platform: applicationPlatform
         )
-        let proxyUpdatePolling = ProxyUpdatePollingController(
-            proxy: proxyController,
-            notifications: notificationController,
-            notificationRecord: UserDefaultsProxyUpdateNotificationRecord(),
-            sleeper: ContinuousSleeper()
-        )
         let settingsScreenModel = SettingsScreenModel(
             proxyRepository: proxyPreferences,
             tunnelRepository: tunnelPreferences,
@@ -458,7 +451,6 @@ enum CompositionRoot {
             telemetryController: telemetryController,
             applicationUpdateController: applicationUpdateController,
             applicationPlatform: applicationPlatform,
-            proxyUpdatePolling: proxyUpdatePolling,
             tunnel: tunnel,
             quotioServer: quotioServer,
             quotioBackend: quotioBackend,
@@ -517,7 +509,6 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
     private let telemetryController: TelemetryController
     private let applicationUpdateController: ApplicationUpdateController
     private let applicationPlatform: AppKitApplicationPlatformAdapter
-    private let proxyUpdatePolling: ProxyUpdatePollingController
     private let tunnel: TunnelScreenModel
     private let quotioServer: QuotioCLIServerProcess
     private let quotioBackend: QuotioCLIBackend
@@ -562,7 +553,6 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
         telemetryController: TelemetryController,
         applicationUpdateController: ApplicationUpdateController,
         applicationPlatform: AppKitApplicationPlatformAdapter,
-        proxyUpdatePolling: ProxyUpdatePollingController,
         tunnel: TunnelScreenModel,
         quotioServer: QuotioCLIServerProcess,
         quotioBackend: QuotioCLIBackend,
@@ -602,7 +592,6 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
         self.telemetryController = telemetryController
         self.applicationUpdateController = applicationUpdateController
         self.applicationPlatform = applicationPlatform
-        self.proxyUpdatePolling = proxyUpdatePolling
         self.tunnel = tunnel
         self.quotioServer = quotioServer
         self.quotioBackend = quotioBackend
@@ -619,10 +608,6 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
 
     func applyAppearance() {
         appearanceManager.applyAppearance()
-    }
-
-    func loadDirectAuthFiles() async {
-        await proxyManagement.loadDirectAuthFiles()
     }
 
     func connectStatusBar() {
@@ -714,13 +699,8 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
     func initializeFeatures() async {
         if await reconnectQuotioServer() {
             await credentialMigrationModel.migrate()
-        } else {
         }
-        await tunnel.refreshInstallation()
-        await proxyManagement.initialize()
-        await proxyManagement.loadDirectAuthFiles()
         await quotaController.initialize()
-        await warmupScreenModel.configure()
     }
 
     func checkForUpdatesInBackground() {
@@ -731,31 +711,10 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
         applicationUpdateController.checkForUpdates()
     }
 
-    func startUpdatePolling() async {
-        await proxyUpdatePolling.start()
-    }
-
-    func stopUpdatePolling() async {
-        await proxyUpdatePolling.stop()
-    }
-
     func shutdownOAuth() async {
-        await warmupScreenModel.shutdown()
         await quotaController.shutdown()
         await quotioBackend.disconnect()
         await quotioServer.stop()
-    }
-
-    func stopTunnel() async {
-        await tunnel.shutdown()
-    }
-
-    func terminateProxyOnShutdown() async {
-        await proxyManagement.shutdown()
-    }
-
-    func cleanupTunnelOrphans() async {
-        await tunnel.cleanupOrphans()
     }
 
     private var statusBarMenuSnapshot: StatusBarMenuSnapshot {

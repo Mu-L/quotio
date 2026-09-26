@@ -22,11 +22,9 @@ final class AppRuntimeTests: XCTestCase {
         XCTAssertTrue(runtime.hasInitialized)
         XCTAssertEqual(services.prepareForLaunchCount, 1)
         XCTAssertEqual(services.applyAppearanceCount, 1)
-        XCTAssertEqual(services.loadDirectAuthFilesCount, 1)
         XCTAssertEqual(services.connectStatusBarCount, 1)
         XCTAssertEqual(services.initializeFeaturesCount, 1)
         XCTAssertEqual(services.backgroundUpdateCheckCount, 1)
-        XCTAssertEqual(services.startUpdatePollingCount, 1)
     }
 
     func testOnboardingAllowsMonitoringInitializationExactlyOnce() async {
@@ -37,8 +35,6 @@ final class AppRuntimeTests: XCTestCase {
         await runtime.initializeIfNeeded()
 
         XCTAssertTrue(runtime.needsOnboarding)
-        XCTAssertEqual(services.loadDirectAuthFilesCount, 1)
-        XCTAssertEqual(services.startUpdatePollingCount, 1)
 
         async let firstCompletion: Void = runtime.completeOnboarding(mode: .localProxy)
         async let secondCompletion: Void = runtime.completeOnboarding(mode: .localProxy)
@@ -47,7 +43,6 @@ final class AppRuntimeTests: XCTestCase {
         XCTAssertFalse(runtime.needsOnboarding)
         XCTAssertEqual(services.modeManager.currentMode, .monitor)
         XCTAssertTrue(services.modeManager.hasCompletedOnboarding)
-        XCTAssertEqual(services.loadDirectAuthFilesCount, 1)
         XCTAssertEqual(services.initializeFeaturesCount, 1)
         XCTAssertEqual(services.backgroundUpdateCheckCount, 1)
     }
@@ -71,33 +66,25 @@ final class AppRuntimeTests: XCTestCase {
 
         XCTAssertTrue(completedCleanly)
         XCTAssertTrue(runtime.hasShutDown)
-        XCTAssertEqual(services.stopUpdatePollingCount, 1)
         XCTAssertEqual(services.shutdownOAuthCount, 1)
-        XCTAssertEqual(services.stopTunnelCount, 1)
-        XCTAssertEqual(services.proxyTerminationCount, 1)
     }
 
-    func testShutdownTimeoutRequestsOrphanCleanup() async {
+    func testShutdownRespectsTheHostCleanupTimeout() async {
         let services = FakeAppRuntimeServices()
-        services.tunnelStopDelay = .seconds(1)
+        services.shutdownDelay = .seconds(1)
         let runtime = AppRuntime(services: services)
 
         let completedCleanly = await runtime.shutdown(timeout: .milliseconds(10))
 
         XCTAssertFalse(completedCleanly)
-        XCTAssertEqual(services.orphanCleanupCount, 1)
     }
 
-    func testShutdownWaitsForProxyTerminationAfterSharedTimeout() async {
+    func testRepeatedShutdownStopsTheHostOnlyOnce() async {
         let services = FakeAppRuntimeServices()
-        services.proxyTerminationDelay = .milliseconds(50)
         let runtime = AppRuntime(services: services)
-
-        let completedCleanly = await runtime.shutdown(timeout: .milliseconds(10))
-
-        XCTAssertFalse(completedCleanly)
-        XCTAssertEqual(services.proxyTerminationCount, 1)
-        XCTAssertEqual(services.orphanCleanupCount, 1)
+        _ = await runtime.shutdown()
+        _ = await runtime.shutdown()
+        XCTAssertEqual(services.shutdownOAuthCount, 1)
     }
 }
 
@@ -146,26 +133,18 @@ private final class FakeAppRuntimeServices: AppRuntimeServices {
     var showInDock = true
     var canCheckForUpdates = true
     var initializationDelay = Duration.zero
-    var tunnelStopDelay = Duration.zero
-    var proxyTerminationDelay = Duration.zero
+    var shutdownDelay = Duration.zero
     var statusBarStateDidChangeHandler: (@MainActor () -> Void)?
 
     private(set) var prepareForLaunchCount = 0
     private(set) var applyAppearanceCount = 0
-    private(set) var loadDirectAuthFilesCount = 0
     private(set) var connectStatusBarCount = 0
     private(set) var updateStatusBarCount = 0
     private(set) var rebuildStatusBarCount = 0
     private(set) var initializeFeaturesCount = 0
     private(set) var backgroundUpdateCheckCount = 0
     private(set) var foregroundUpdateCheckCount = 0
-    private(set) var startUpdatePollingCount = 0
-    private(set) var stopUpdatePollingCount = 0
     private(set) var shutdownOAuthCount = 0
-    private(set) var stopTunnelCount = 0
-
-    private let proxyTerminations = LockedCounter()
-    private let orphanCleanups = LockedCounter()
 
     init() {
         let logRepository = AppRuntimeTestProxyLogRepository()
@@ -179,20 +158,12 @@ private final class FakeAppRuntimeServices: AppRuntimeServices {
         )
     }
 
-    nonisolated var proxyTerminationCount: Int { proxyTerminations.value }
-    nonisolated var orphanCleanupCount: Int { orphanCleanups.value }
-
     func prepareForLaunch() {
         prepareForLaunchCount += 1
     }
 
     func applyAppearance() {
         applyAppearanceCount += 1
-    }
-
-    func loadDirectAuthFiles() async {
-        loadDirectAuthFilesCount += 1
-        try? await Task.sleep(for: initializationDelay)
     }
 
     func connectStatusBar() {
@@ -213,6 +184,7 @@ private final class FakeAppRuntimeServices: AppRuntimeServices {
 
     func initializeFeatures() async {
         initializeFeaturesCount += 1
+        try? await Task.sleep(for: initializationDelay)
     }
 
     func checkForUpdatesInBackground() {
@@ -223,31 +195,11 @@ private final class FakeAppRuntimeServices: AppRuntimeServices {
         foregroundUpdateCheckCount += 1
     }
 
-    func startUpdatePolling() async {
-        startUpdatePollingCount += 1
-    }
-
-    func stopUpdatePolling() async {
-        stopUpdatePollingCount += 1
-    }
-
     func shutdownOAuth() async {
         shutdownOAuthCount += 1
+        try? await Task.sleep(for: shutdownDelay)
     }
 
-    func stopTunnel() async {
-        stopTunnelCount += 1
-        try? await Task.sleep(for: tunnelStopDelay)
-    }
-
-    func terminateProxyOnShutdown() async {
-        try? await Task.sleep(for: proxyTerminationDelay)
-        proxyTerminations.increment()
-    }
-
-    func cleanupTunnelOrphans() async {
-        orphanCleanups.increment()
-    }
 }
 
 private actor AppRuntimeTestProxyLogRepository: ProxyLogRepository {
@@ -314,20 +266,5 @@ private final class AppRuntimeTestPreferencesRepository:
 
     func setHideGettingStarted(_ hidden: Bool) {
         appShellPreferences.hideGettingStarted = hidden
-    }
-}
-
-private final class LockedCounter: @unchecked Sendable {
-    private let lock = NSLock()
-    private var storage = 0
-
-    var value: Int {
-        lock.withLock { storage }
-    }
-
-    func increment() {
-        lock.withLock {
-            storage += 1
-        }
     }
 }

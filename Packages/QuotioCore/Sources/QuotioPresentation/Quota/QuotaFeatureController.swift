@@ -27,7 +27,6 @@ public final class QuotaFeatureController {
     let quota: QuotaScreenModel
     let accounts: AccountsScreenModel
     let oauth: OAuthScreenModel
-    let antigravityAccounts: AntigravityAccountScreenModel
 
     @ObservationIgnored private let modeManager: OperatingModeManager
     @ObservationIgnored private let menuBarSettings: MenuBarSettingsManager
@@ -41,7 +40,6 @@ public final class QuotaFeatureController {
         quota: QuotaScreenModel,
         accounts: AccountsScreenModel,
         oauth: OAuthScreenModel,
-        antigravityAccounts: AntigravityAccountScreenModel,
         modeManager: OperatingModeManager,
         monitoringSettings: any MonitoringSettingsManaging,
         menuBarSettings: MenuBarSettingsManager,
@@ -53,7 +51,6 @@ public final class QuotaFeatureController {
         self.quota = quota
         self.accounts = accounts
         self.oauth = oauth
-        self.antigravityAccounts = antigravityAccounts
         self.modeManager = modeManager
         self.menuBarSettings = menuBarSettings
         self.notifications = notifications
@@ -82,7 +79,6 @@ public final class QuotaFeatureController {
     public func initialize() async {
         await reloadMonitoringSettings()
         await quota.bootstrap(mode: operatingMode)
-        await accounts.reloadAuthFiles()
         await reloadAccounts()
         startObservingHost()
     }
@@ -144,16 +140,12 @@ public final class QuotaFeatureController {
             mode: operatingMode,
             force: force
         )
-        await antigravityAccounts.detectActiveAccount()
         await finishRefresh()
     }
 
     public func refresh(provider: QuotaProvider, force: Bool = true) async {
         guard trackingPreferences.isEnabled(provider) else { return }
         await quota.refresh(provider: provider, mode: operatingMode, force: force)
-        if provider == .antigravity {
-            await antigravityAccounts.detectActiveAccount()
-        }
         await finishRefresh()
     }
 
