@@ -10,7 +10,6 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
         let providers: [String]
         let accountId: String?
         let force: Bool
-        let disabledProxyAuthFiles: [String]
     }
     private struct EnabledBody: Encodable { let enabled: Bool }
     private struct NativeSourceBody: Encodable {
@@ -28,7 +27,6 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
     private var continuations: [UUID: AsyncStream<QuotaSnapshot>.Continuation] = [:]
     private let logger: (any ApplicationLogging)?
     private let session: URLSession?
-    private let authFileState: (any ManagedAuthFileStateRepository)?
     private let localization: @MainActor @Sendable () -> (bundle: Bundle, locale: Locale)
     private var storageRequiresAuthorization = false
     private var discoveryState: QuotioHostDiscovery?
@@ -36,12 +34,10 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
     public init(
         session: URLSession? = nil,
         logger: (any ApplicationLogging)? = nil,
-        authFileState: (any ManagedAuthFileStateRepository)? = nil,
         localization: @escaping @MainActor @Sendable () -> (bundle: Bundle, locale: Locale) = { (.main, .current) }
     ) {
         self.session = session
         self.logger = logger
-        self.authFileState = authFileState
         self.localization = localization
     }
 
@@ -494,7 +490,6 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
         force: Bool,
         importedAccounts: Set<String>? = nil
     ) async {
-        removeDisabledProxyQuotas()
         guard let client, activeMode == mode else { return }
         let domainProviders = Set(providers.compactMap(QuotaProvider.init(rawValue:)))
         snapshot.refreshingProviders.formUnion(domainProviders)
@@ -503,8 +498,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
             let body = try JSONEncoder.quotioCLI.encode(RefreshBody(
                 providers: providers,
                 accountId: accountID,
-                force: force,
-                disabledProxyAuthFiles: (authFileState?.disabledAuthFileNames() ?? []).sorted()
+                force: force
             ))
             var operation: QuotioCLIOperation = try await client.request(
                 "v2/refresh",
@@ -616,37 +610,6 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
                     status: status(source.state), location: source.location, enabled: source.enabled, actions: Set(source.actions.filter(\.available).map(\.kind)), keychainAccount: source.keychainAccount)
             }
         )
-    }
-
-    private func disabledProxyAccountIDs() -> Set<String> {
-        Set((authFileState?.disabledAuthFileNames() ?? []).flatMap { name in
-            knownProviders.map(\.rawValue).map {
-                Self.sourceID(["cli_proxy_auth_file", $0, name])
-            }
-        })
-    }
-
-
-
-    private func removeDisabledProxyQuotas() {
-        let excludedIDs = disabledProxyAccountIDs()
-        guard !excludedIDs.isEmpty else { return }
-        reportedAccounts.removeAll { excludedIDs.contains($0.id) }
-        for (provider, accounts) in snapshot.accountIDs {
-            for (key, id) in accounts where excludedIDs.contains(id) {
-                removeQuota(for: QuotaAccountID(provider: provider, accountKey: key), mode: activeMode)
-            }
-        }
-    }
-
-    private static func sourceID(_ parts: [String]) -> String {
-        var data = Data()
-        for part in parts {
-            var length = UInt64(part.utf8.count).bigEndian
-            withUnsafeBytes(of: &length) { data.append(contentsOf: $0) }
-            data.append(contentsOf: part.utf8)
-        }
-        return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
     private func mutate(

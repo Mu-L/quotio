@@ -38,6 +38,8 @@ pub struct Config {
     pub enabled_providers: Vec<String>,
     #[serde(default)]
     pub disabled_providers: Vec<String>,
+    #[serde(default)]
+    pub disabled_proxy_auth_files: Vec<String>,
     #[serde(default = "default_automatic_discovery")]
     pub automatically_discover_logins: bool,
     /// Maximum cache age in seconds; zero refreshes every time.
@@ -67,6 +69,7 @@ impl Default for Config {
             notifications: None,
             enabled_providers: vec![],
             disabled_providers: vec![],
+            disabled_proxy_auth_files: vec![],
             automatically_discover_logins: default_automatic_discovery(),
             cache_ttl_seconds: default_cache_ttl(),
             refresh_interval: default_refresh_interval(),

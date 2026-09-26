@@ -315,7 +315,7 @@ async fn parent_pipe_bootstrap_authentication_and_eof_shutdown() {
     let pid = child.id().unwrap();
     let mut input = child.stdin.take().unwrap();
     input
-        .write_all(format!("{}\n", serde_json::json!({"token":token,"preferences":{"disabled_providers":["amp"],"automatically_discover_logins":false,"refresh_interval":0}})).as_bytes())
+        .write_all(format!("{}\n", serde_json::json!({"token":token,"preferences":{"disabled_proxy_auth_files":["disabled.json"],"disabled_providers":["amp"],"automatically_discover_logins":false,"refresh_interval":0}})).as_bytes())
         .await
         .unwrap();
     let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
@@ -331,6 +331,7 @@ async fn parent_pipe_bootstrap_authentication_and_eof_shutdown() {
     assert_eq!(migrated.refresh_interval, 0);
     assert!(!migrated.automatically_discover_logins);
     assert_eq!(migrated.disabled_providers, vec!["amp"]);
+    assert_eq!(migrated.disabled_proxy_auth_files, vec!["disabled.json"]);
     assert!(migrated.enabled_providers.is_empty());
     assert_eq!(record["api_version"], 2);
     assert_eq!(record["server_version"], env!("CARGO_PKG_VERSION"));

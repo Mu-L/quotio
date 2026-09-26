@@ -3350,6 +3350,11 @@
               "$ref": "#/components/schemas/ProviderId"
             }
           },
+          "disabled_proxy_auth_files": {
+            "type": "array",
+            "maxItems": 512,
+            "items": { "type": "string", "minLength": 1, "maxLength": 255 }
+          },
           "automatically_discover_logins": {
             "type": "boolean"
           },
@@ -3384,6 +3389,7 @@
           "revision",
           "enabled_providers",
           "disabled_providers",
+          "disabled_proxy_auth_files",
           "automatically_discover_logins",
           "cache_ttl_seconds",
           "refresh_interval",
@@ -3414,6 +3420,11 @@
             "items": {
               "$ref": "#/components/schemas/ProviderId"
             }
+          },
+          "disabled_proxy_auth_files": {
+            "type": ["array", "null"],
+            "maxItems": 512,
+            "items": { "type": "string", "minLength": 1, "maxLength": 255 }
           },
           "automatically_discover_logins": {
             "type": ["boolean", "null"]

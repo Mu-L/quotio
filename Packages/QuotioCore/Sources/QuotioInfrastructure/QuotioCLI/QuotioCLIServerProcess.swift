@@ -40,7 +40,7 @@ public final class QuotioCLIServerProcess {
     private let configurationURL: URL?
     private let accountDataDirectory: URL?
     private let proxyAuthDirectory: URL?
-    private let initialPreferences: @MainActor () -> (ProviderTrackingPreferences, RefreshPreferences)?
+    private let initialPreferences: @MainActor () -> (ProviderTrackingPreferences, RefreshPreferences, Set<String>)?
     private let executableDirectories: [URL]
     private let applicationSupportDirectoryName: String
     private let accountVaultNamespace: String
@@ -58,7 +58,7 @@ public final class QuotioCLIServerProcess {
         configurationURL: URL? = nil,
         accountDataDirectory: URL? = nil,
         proxyAuthDirectory: URL? = nil,
-        initialPreferences: @escaping @MainActor () -> (ProviderTrackingPreferences, RefreshPreferences)? = { nil },
+        initialPreferences: @escaping @MainActor () -> (ProviderTrackingPreferences, RefreshPreferences, Set<String>)? = { nil },
         executableDirectories: [URL] = [],
         applicationSupportDirectoryName: String = "app.bytrong.quotio",
         accountVaultNamespace: String = "quotio-macos",
@@ -148,9 +148,10 @@ public final class QuotioCLIServerProcess {
         do {
             try process.run()
             var handshake: [String: Any] = ["token": token]
-            if let (tracking, refresh) = initialPreferences() {
+            if let (tracking, refresh, disabledFiles) = initialPreferences() {
                 handshake["preferences"] = [
                     "disabled_providers": tracking.disabledProviders.map(\.rawValue).sorted(),
+                    "disabled_proxy_auth_files": disabledFiles.sorted(),
                     "automatically_discover_logins": tracking.automaticallyDiscoverLogins,
                     "refresh_interval": Int(refresh.cadence.intervalSeconds ?? 0),
                 ]

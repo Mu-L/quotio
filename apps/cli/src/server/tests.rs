@@ -326,6 +326,14 @@ async fn disabled_proxy_file_is_not_fetched_in_provider_or_account_scope() {
         .build()
         .unwrap();
     state.settings.write().await.values.enabled_providers = vec!["claude".into()];
+    state
+        .settings
+        .write()
+        .await
+        .values
+        .disabled_proxy_auth_files = vec!["claude.json".into()];
+    refresh(&state, None).await.unwrap();
+    assert_eq!(requests.load(Ordering::SeqCst), 0);
     // Seed cached usage so scoped exclusion must also remove an old result.
     *state.snapshot.write().await = Some((
         0,
@@ -353,7 +361,7 @@ async fn disabled_proxy_file_is_not_fetched_in_provider_or_account_scope() {
                 account_id,
                 force: true,
                 include_owned: false,
-                disabled_proxy_auth_files: vec!["claude.json".into()],
+                disabled_proxy_auth_files: vec![],
             }),
         )
         .await
@@ -374,6 +382,13 @@ async fn disabled_proxy_file_is_not_fetched_in_provider_or_account_scope() {
                 .all(|f| f.account_ref.as_ref().is_none_or(|r| r.id != id))
         );
     }
+    state
+        .settings
+        .write()
+        .await
+        .values
+        .disabled_proxy_auth_files
+        .clear();
     refresh(
         &state,
         Some(RefreshRequest {

@@ -755,7 +755,7 @@ async fn collect_usage(
     let generation = state.generation.load(Ordering::SeqCst);
     let config = state.settings.read().await.values.clone();
     let enabled = config.tracked_providers().map_err(|_| "invalid_settings")?;
-    let (selected, account, force, include_owned, disabled_proxy_auth_files) = match request {
+    let (selected, account, force, include_owned, mut disabled_proxy_auth_files) = match request {
         Some(r) => (
             r.providers,
             r.account_id,
@@ -765,6 +765,7 @@ async fn collect_usage(
         ),
         None => (enabled.clone(), None, false, true, Vec::new()),
     };
+    disabled_proxy_auth_files.extend(config.disabled_proxy_auth_files);
     if account.is_none() && selected.iter().any(|p| !enabled.contains(p)) {
         return Err("refresh_scope_changed");
     }

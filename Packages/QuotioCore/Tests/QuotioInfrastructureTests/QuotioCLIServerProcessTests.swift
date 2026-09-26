@@ -38,7 +38,7 @@ final class QuotioCLIServerProcessTests: XCTestCase {
             configurationURL: directory.appendingPathComponent("config.toml"),
             accountDataDirectory: directory.appendingPathComponent("accounts"),
             proxyAuthDirectory: proxyAuthDirectory,
-            initialPreferences: { (ProviderTrackingPreferences(disabledProviders: [.copilot], automaticallyDiscoverLogins: false), RefreshPreferences(cadence: .manual)) },
+            initialPreferences: { (ProviderTrackingPreferences(disabledProviders: [.copilot], automaticallyDiscoverLogins: false), RefreshPreferences(cadence: .manual), ["disabled.json"]) },
             executableDirectories: [directory.appendingPathComponent("bin")],
             accountVaultNamespace: "quotio-macos-test",
             proxyURL: { "http://proxy.example:8080" }
@@ -54,6 +54,7 @@ final class QuotioCLIServerProcessTests: XCTestCase {
         XCTAssertEqual(preferences["disabled_providers"] as? [String], ["copilot"])
         XCTAssertEqual(preferences["automatically_discover_logins"] as? Bool, false)
         XCTAssertEqual(preferences["refresh_interval"] as? Int, 0)
+        XCTAssertEqual(preferences["disabled_proxy_auth_files"] as? [String], ["disabled.json"])
         let launchedArguments = try String(contentsOf: arguments, encoding: .utf8)
         XCTAssertFalse(launchedArguments.contains("--refresh-interval"))
         XCTAssertFalse(launchedArguments.contains("--provider"))

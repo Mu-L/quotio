@@ -38,14 +38,13 @@ enum CompositionRoot {
         let providerTrackingRepository = UserDefaultsProviderTrackingPreferencesRepository()
         let quotioBackend = QuotioCLIBackend(
             logger: OSApplicationLogger(subsystem: AppIdentity.bundleIdentifier, category: "NativeQuota"),
-            authFileState: authFileState,
             localization: { (languageManager.bundle, languageManager.locale) }
         )
         let agentInstallationProbe = AgentBinaryInstallationProbe()
         let quotioServer = QuotioCLIServerProcess(
             proxyAuthDirectory: URL(fileURLWithPath: paths.authDirectoryPath, isDirectory: true),
             initialPreferences: {
-                (providerTrackingRepository.load(), UserDefaultsRefreshPreferencesRepository().load())
+                (providerTrackingRepository.load(), UserDefaultsRefreshPreferencesRepository().load(), authFileState.disabledAuthFileNames())
             },
             executableDirectories: [CLIAgent.codexCLI, .ampCLI]
                 .compactMap(agentInstallationProbe.path)

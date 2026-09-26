@@ -26,6 +26,7 @@ pub struct SettingsPatch {
     pub revision: String,
     pub enabled_providers: Option<Vec<Provider>>,
     pub disabled_providers: Option<Vec<Provider>>,
+    pub disabled_proxy_auth_files: Option<Vec<String>>,
     pub automatically_discover_logins: Option<bool>,
     pub cache_ttl_seconds: Option<u64>,
     pub refresh_interval: Option<u64>,
@@ -36,6 +37,7 @@ pub struct SettingsPatch {
 #[serde(deny_unknown_fields)]
 pub struct NativePreferences {
     pub disabled_providers: Vec<Provider>,
+    pub disabled_proxy_auth_files: Vec<String>,
     pub automatically_discover_logins: bool,
     pub refresh_interval: u64,
 }
@@ -123,6 +125,7 @@ impl SettingsStore {
         if [
             "enabled_providers",
             "disabled_providers",
+            "disabled_proxy_auth_files",
             "automatically_discover_logins",
             "refresh_interval",
         ]
@@ -144,6 +147,8 @@ impl SettingsStore {
             }),
             disabled_providers: (!fields.contains_key("disabled_providers"))
                 .then_some(preferences.disabled_providers),
+            disabled_proxy_auth_files: (!fields.contains_key("disabled_proxy_auth_files"))
+                .then_some(preferences.disabled_proxy_auth_files),
             automatically_discover_logins: (!fields.contains_key("automatically_discover_logins"))
                 .then_some(preferences.automatically_discover_logins),
             refresh_interval: (!fields.contains_key("refresh_interval"))
@@ -206,6 +211,9 @@ impl SettingsStore {
         if let Some(providers) = patch.disabled_providers {
             config.disabled_providers = providers.iter().map(|p| p.id().into()).collect();
         }
+        if let Some(files) = patch.disabled_proxy_auth_files {
+            config.disabled_proxy_auth_files = files;
+        }
         if let Some(value) = patch.automatically_discover_logins {
             config.automatically_discover_logins = value;
         }
@@ -250,6 +258,18 @@ fn validate(config: &Config) -> Result<(), SettingsError> {
     config
         .disabled_providers()
         .map_err(|_| SettingsError::Invalid)?;
+    if config.disabled_proxy_auth_files.len() > 512
+        || config.disabled_proxy_auth_files.iter().any(|name| {
+            name.is_empty()
+                || name.len() > 255
+                || name == "."
+                || name == ".."
+                || name.contains(['/', '\\'])
+                || name.chars().any(char::is_control)
+        })
+    {
+        return Err(SettingsError::Invalid);
+    }
     if config.refresh_interval > 86400 || !(1..=3600).contains(&config.provider_timeout) {
         return Err(SettingsError::Invalid);
     }
@@ -270,6 +290,7 @@ mod tests {
         let store = SettingsStore::new(path, Overrides::default());
         let preferences = || NativePreferences {
             disabled_providers: vec![Provider::Amp],
+            disabled_proxy_auth_files: vec!["disabled.json".into()],
             automatically_discover_logins: false,
             refresh_interval: 600,
         };
@@ -283,13 +304,36 @@ mod tests {
         let second = store
             .import_native_preferences(NativePreferences {
                 disabled_providers: vec![],
+                disabled_proxy_auth_files: vec![],
                 automatically_discover_logins: true,
                 refresh_interval: 30,
             })
             .unwrap();
         assert_eq!(first.revision, second.revision);
+        assert_eq!(
+            second.values.disabled_proxy_auth_files,
+            vec!["disabled.json"]
+        );
         assert_eq!(second.values.disabled_providers, vec!["amp"]);
         fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn rejects_invalid_disabled_source_names() {
+        let mut config = Config::default();
+        for name in [
+            "",
+            ".",
+            "..",
+            "../auth.json",
+            "dir/auth.json",
+            "dir\\auth.json",
+            "auth\n.json",
+        ] {
+            config.disabled_proxy_auth_files = vec![name.into()];
+            assert_eq!(validate(&config), Err(SettingsError::Invalid));
+        }
+        config.disabled_proxy_auth_files = vec!["account.json".into()];
+        assert_eq!(validate(&config), Ok(()));
     }
     #[test]
     fn persists_checks_revisions_and_rejects_overrides() {
@@ -303,6 +347,7 @@ mod tests {
             revision,
             enabled_providers: Some(vec![Provider::Mock]),
             disabled_providers: Some(vec![Provider::Amp]),
+            disabled_proxy_auth_files: None,
             automatically_discover_logins: Some(false),
             cache_ttl_seconds: Some(25),
             refresh_interval: Some(30),
