@@ -1402,7 +1402,7 @@ struct MenuBarSettingsSection: View {
                 let clamped = min(max(newValue, MenuBarSettingsManager.minMenuBarItems), MenuBarSettingsManager.maxMenuBarItems)
 
                 // Check if reducing max items would truncate current selection
-                if clamped < settings.menuBarMaxItems && settings.selectedItems.count > clamped {
+                if clamped < settings.menuBarMaxItems && settings.currentItems.count > clamped {
                     pendingMaxItems = clamped
                     showTruncationAlert = true
                 } else {
@@ -1472,7 +1472,7 @@ struct MenuBarSettingsSection: View {
             if let newMax = pendingMaxItems {
                 Text(String(
                     format: "menubar.truncation.message".localized(),
-                    settings.selectedItems.count,
+                    settings.currentItems.count,
                     newMax
                 ))
             }

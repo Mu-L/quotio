@@ -198,6 +198,9 @@ public struct MenuBarQuotaDisplayItem: Identifiable, Equatable {
 @MainActor
 @Observable
 public final class MenuBarSettingsManager {
+    public var currentHostID: String?
+    public var currentItems: [MenuBarQuotaItem] { selectedItems.filter { $0.hostID == currentHostID } }
+
     @ObservationIgnored private let repository: any MenuBarPreferencesRepository
     @ObservationIgnored private var didChangeHandler: (@MainActor (MenuBarPreferences) -> Void)?
 
@@ -276,12 +279,12 @@ public final class MenuBarSettingsManager {
     /// Warning shows when approaching the limit (at maxItems - 1)
     public var shouldWarnOnAdd: Bool {
         let threshold = max(menuBarMaxItems - 1, 1)
-        return selectedItems.count >= threshold && selectedItems.count < menuBarMaxItems
+        return currentItems.count >= threshold && currentItems.count < menuBarMaxItems
     }
 
     /// Check if selection has reached the maximum items
     public var isAtMaxItems: Bool {
-        selectedItems.count >= menuBarMaxItems
+        currentItems.count >= menuBarMaxItems
     }
 
     public var preferences: MenuBarPreferences {
@@ -331,7 +334,7 @@ public final class MenuBarSettingsManager {
     
     public func addItem(_ item: MenuBarQuotaItem) {
         guard !selectedItems.contains(item) else { return }
-        guard selectedItems.count < menuBarMaxItems else { return }
+        guard selectedItems.filter({ $0.hostID == item.hostID }).count < menuBarMaxItems else { return }
         if !showQuotaInMenuBar {
             showQuotaInMenuBar = true
         }
@@ -370,7 +373,7 @@ public final class MenuBarSettingsManager {
         let existingIds = Set(selectedItems.map(\.id))
         let newItems = availableItems.filter { !existingIds.contains($0.id) }
 
-        let remainingSlots = menuBarMaxItems - selectedItems.count
+        let remainingSlots = menuBarMaxItems - currentItems.count
         if remainingSlots > 0 {
             let itemsToAdd = Array(newItems.prefix(remainingSlots))
             selectedItems.append(contentsOf: itemsToAdd)
@@ -379,8 +382,9 @@ public final class MenuBarSettingsManager {
 
     @discardableResult
     private func enforceMaxItems() -> Bool {
-        guard selectedItems.count > menuBarMaxItems else { return false }
-        selectedItems = Array(selectedItems.prefix(menuBarMaxItems))
+        let limited = MenuBarQuotaItem.limited(selectedItems, perHost: menuBarMaxItems)
+        guard limited != selectedItems else { return false }
+        selectedItems = limited
         return true
     }
 

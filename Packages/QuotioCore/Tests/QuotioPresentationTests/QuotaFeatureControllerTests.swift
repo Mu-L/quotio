@@ -188,12 +188,23 @@ final class QuotaFeatureControllerTests: XCTestCase {
         await sameName.controller.shutdown()
     }
 
+    func testHostRedirectsNeverRetargetAnotherHostsPin() async {
+        let account = Account.make(providerID: .init(rawValue: "codex"), accountKey: "current", source: .nativeCredential)
+        let fixture = await makeFixture(account: account, provider: .codex, aliases: ["legacy":"current"], hostID: "host-a")
+        let foreign = MenuBarQuotaItem(provider: "codex", accountKey: "legacy", hostID: "host-b")
+        fixture.menuBar.selectedItems = [foreign, .init(provider: "codex", accountKey: "legacy")]
+        fixture.controller.synchronizeMenuBarSelection()
+        XCTAssertEqual(fixture.menuBar.selectedItems, [foreign, .init(provider: "codex", accountKey: "current", hostID: "host-a")])
+        await fixture.controller.shutdown()
+    }
+
     private func makeFixture(
         account: Account,
         provider: QuotaProvider,
         quotaAccountKey: String? = nil,
         aliases: [String: String] = [:],
         authFiles: [AuthFileDescriptor] = [],
+        hostID: String? = nil,
         lastUpdated: Date = Date(timeIntervalSince1970: 1_000),
         issues: [QuotaProvider: QuotaRefreshIssue] = [:]
     ) async -> (
@@ -209,6 +220,7 @@ final class QuotaFeatureControllerTests: XCTestCase {
         )
         let quota = QuotaScreenModel(coordinator: TestQuotaCoordinator(
             snapshot: QuotaSnapshot(
+                hostID: hostID,
                 quotas: [
                 provider: [
                     quotaAccountKey ?? account.accountKey: ProviderQuota(

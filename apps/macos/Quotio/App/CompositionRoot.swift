@@ -742,7 +742,8 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
         guard menuBarSettings.showQuotaInMenuBar else { return [] }
 
         return menuBarSettings.selectedItems.compactMap { selectedItem in
-            guard let provider = selectedItem.aiProvider,
+            guard selectedItem.hostID == quotaScreenModel.state.hostID,
+                  let provider = selectedItem.aiProvider,
                   quotaController.trackingPreferences.isEnabled(provider) else { return nil }
 
             var displayPercent: Double = -1

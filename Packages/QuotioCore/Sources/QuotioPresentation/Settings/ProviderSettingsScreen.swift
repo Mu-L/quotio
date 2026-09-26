@@ -252,7 +252,7 @@ struct ProviderSettingsScreen: View {
     }
 
     private func accountMenu(_ account: Account) -> some View {
-        let item = MenuBarQuotaItem(provider: provider.rawValue, accountKey: account.accountKey)
+        let item = MenuBarQuotaItem(provider: provider.rawValue, accountKey: account.accountKey, hostID: quota.state.hostID)
         return Menu {
             Toggle("settings.pinAccount".localized(), isOn: Binding(
                 get: { menuBar.isSelected(item) }, set: { _ in menuBar.toggleItem(item) }

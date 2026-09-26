@@ -11,6 +11,7 @@ public final class QuotaFeatureController {
         case autoOpen
     }
 
+    public var hostID: String? { quota.state.hostID }
     public private(set) var providers: [MonitoringProvider] = []
     public private(set) var monitoringSettings: MonitoringSettings?
     public private(set) var settingsError: String?
@@ -260,11 +261,15 @@ public final class QuotaFeatureController {
     }
 
     func synchronizeMenuBarSelection() {
+        menuBarSettings.currentHostID = hostID
         func canonicalItem(_ item: MenuBarQuotaItem) -> MenuBarQuotaItem {
-            guard let provider = QuotaProvider(rawValue: item.provider),
-                  let aliases = quota.state.accountAliases[provider] else { return item }
-            guard let canonical = aliases[item.accountKey] else { return item }
-            return MenuBarQuotaItem(provider: item.provider, accountKey: canonical)
+            guard item.hostID == nil || item.hostID == hostID,
+                  let provider = QuotaProvider(rawValue: item.provider) else { return item }
+            let canonical = quota.state.accountAliases[provider]?[item.accountKey] ?? item.accountKey
+            guard quota.providerQuotas[provider]?[canonical] != nil || accounts.accounts.contains(where: {
+                $0.providerID.rawValue == item.provider && $0.accountKey == canonical
+            }) else { return item }
+            return MenuBarQuotaItem(provider: item.provider, accountKey: canonical, hostID: hostID)
         }
 
         var selectedIDs = Set<String>()
@@ -275,15 +280,15 @@ public final class QuotaFeatureController {
             menuBarSettings.selectedItems = selected
         }
         var available = accounts.accounts.filter { !$0.isDisabled }.map {
-            MenuBarQuotaItem(provider: $0.providerID.rawValue, accountKey: $0.accountKey)
+            MenuBarQuotaItem(provider: $0.providerID.rawValue, accountKey: $0.accountKey, hostID: hostID)
         }
         let disabled = Set(accounts.accounts.filter(\.isDisabled).map {
-            MenuBarQuotaItem(provider: $0.providerID.rawValue, accountKey: $0.accountKey).id
+            MenuBarQuotaItem(provider: $0.providerID.rawValue, accountKey: $0.accountKey, hostID: hostID).id
         })
         var seen = Set(available.map(\.id))
         for (provider, quotas) in quota.providerQuotas {
             for key in quotas.keys.sorted() {
-                let item = MenuBarQuotaItem(provider: provider.rawValue, accountKey: key)
+                let item = MenuBarQuotaItem(provider: provider.rawValue, accountKey: key, hostID: hostID)
                 if !disabled.contains(item.id), seen.insert(item.id).inserted { available.append(item) }
             }
         }

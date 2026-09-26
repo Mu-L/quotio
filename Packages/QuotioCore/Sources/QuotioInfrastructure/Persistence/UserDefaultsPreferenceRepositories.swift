@@ -72,7 +72,7 @@ public final class UserDefaultsMenuBarPreferencesRepository: MenuBarPreferencesR
             showMenuBarIcon: defaults.bool(forKey: "showMenuBarIcon"),
             showQuotaInMenuBar: defaults.bool(forKey: "menuBarShowQuota"),
             menuBarMaxItems: maximum,
-            selectedItems: Array(selectedItems.prefix(maximum)),
+            selectedItems: MenuBarQuotaItem.limited(selectedItems, perHost: maximum),
             selectedProvider: selectedProvider.flatMap(QuotaProvider.init(rawValue:)),
             colorMode: MenuBarColorMode(rawValue: defaults.string(forKey: "menuBarColorMode") ?? "") ?? .colored,
             quotaDisplayMode: QuotaDisplayMode(rawValue: defaults.string(forKey: "quotaDisplayMode") ?? "") ?? .used,
@@ -98,7 +98,7 @@ public final class UserDefaultsMenuBarPreferencesRepository: MenuBarPreferencesR
         defaults.set(preferences.totalUsageMode.rawValue, forKey: "totalUsageMode")
         defaults.set(preferences.modelAggregationMode.rawValue, forKey: "modelAggregationMode")
         defaults.set(preferences.hasUserModifiedMenuBar, forKey: "hasUserModifiedMenuBar")
-        if let data = try? JSONEncoder().encode(Array(preferences.selectedItems.prefix(maximum))) {
+        if let data = try? JSONEncoder().encode(MenuBarQuotaItem.limited(preferences.selectedItems, perHost: maximum)) {
             defaults.set(["items": data, "provider": preferences.selectedProvider?.rawValue ?? ""], forKey: "menuBarProviderSelectionV2")
         }
     }
@@ -114,7 +114,7 @@ public final class UserDefaultsMenuBarPreferencesRepository: MenuBarPreferencesR
         guard let data, let decoded = try? JSONDecoder().decode([MenuBarQuotaItem].self, from: data) else { return [] }
         guard legacyIDs else { return decoded }
         return decoded.filter { $0.provider != "gemini-cli" }.map {
-            MenuBarQuotaItem(provider: canonicalLegacyMacProviderID($0.provider), accountKey: $0.accountKey)
+            MenuBarQuotaItem(provider: canonicalLegacyMacProviderID($0.provider), accountKey: $0.accountKey, hostID: $0.hostID)
         }
     }
 

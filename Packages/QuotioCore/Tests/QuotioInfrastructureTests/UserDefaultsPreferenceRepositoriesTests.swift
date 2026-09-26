@@ -4,6 +4,19 @@ import XCTest
 @testable import QuotioInfrastructure
 
 final class UserDefaultsPreferenceRepositoriesTests: XCTestCase {
+    func testMenuPinsRoundTripPerHostWithoutTruncatingAnotherHostsSelection() {
+        let repository = UserDefaultsMenuBarPreferencesRepository(defaults: defaults)
+        let pins = ["host-a", "host-b"].flatMap { host in
+            (0..<3).map { MenuBarQuotaItem(provider: "codex", accountKey: "account-\($0)", hostID: host) }
+        }
+        repository.save(MenuBarPreferences(menuBarMaxItems: 2, selectedItems: pins))
+        let restored = repository.load().selectedItems
+        XCTAssertEqual(restored.count, 4)
+        XCTAssertEqual(Set(restored.map(\.id)).count, 4)
+        XCTAssertEqual(restored.filter { $0.hostID == "host-a" }.count, 2)
+        XCTAssertEqual(restored.filter { $0.hostID == "host-b" }.count, 2)
+    }
+
     func testLocalProxyMigrationKeepsAutoStartAndAuthFiles() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

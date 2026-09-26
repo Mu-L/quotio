@@ -24,13 +24,13 @@ struct AppSettingsPage: View {
                         MenuBarSettingsSection()
                         Section("settings.pinnedAccounts".localized()) {
                             ForEach(accounts.accounts) { account in
-                                let item = MenuBarQuotaItem(provider: account.providerID.rawValue, accountKey: account.accountKey)
+                                let item = MenuBarQuotaItem(provider: account.providerID.rawValue, accountKey: account.accountKey, hostID: quota.hostID)
                                 Toggle(account.displayName.masked(if: menuBar.hideSensitiveInfo), isOn: Binding(
                                     get: { menuBar.isSelected(item) }, set: { _ in menuBar.toggleItem(item) }
                                 ))
                             }
                             ForEach(menuBar.selectedItems.filter { item in
-                                !accounts.accounts.contains { $0.providerID.rawValue == item.provider && $0.accountKey == item.accountKey }
+                                (item.hostID == nil || item.hostID == quota.hostID) && !accounts.accounts.contains { $0.providerID.rawValue == item.provider && $0.accountKey == item.accountKey }
                             }) { item in
                                 HStack {
                                     VStack(alignment: .leading) {

@@ -24,13 +24,25 @@ public struct OperatingModePreferences: Equatable, Sendable {
 public struct MenuBarQuotaItem: Codable, Identifiable, Hashable, Sendable {
     public let provider: String
     public let accountKey: String
+    public let hostID: String?
 
-    public init(provider: String, accountKey: String) {
+    public init(provider: String, accountKey: String, hostID: String? = nil) {
         self.provider = provider
         self.accountKey = accountKey
+        self.hostID = hostID
     }
 
-    public var id: String { "\(provider)_\(accountKey)" }
+    public var id: String { hostID.map { "\($0):\(provider):\(accountKey)" } ?? "\(provider)_\(accountKey)" }
+
+    public static func limited(_ items: [Self], perHost maximum: Int) -> [Self] {
+        var counts: [String: Int] = [:]
+        return items.filter { item in
+            let host = item.hostID ?? ""
+            guard counts[host, default: 0] < maximum else { return false }
+            counts[host, default: 0] += 1
+            return true
+        }
+    }
 }
 
 public enum MenuBarColorMode: String, Codable, CaseIterable, Identifiable, Sendable {
