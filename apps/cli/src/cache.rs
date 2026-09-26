@@ -67,6 +67,12 @@ pub struct UsageCache {
     directory: Option<PathBuf>,
     ttl: Duration,
 }
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ReadPolicy {
+    PreferCache,
+    ForceRefresh,
+    CacheOnly,
+}
 impl UsageCache {
     pub fn new(directory: PathBuf, ttl: Duration) -> Self {
         Self {
@@ -91,6 +97,31 @@ impl UsageCache {
         request: CollectRequest,
         force: bool,
     ) -> UsageReport {
+        self.collect_with_policy(
+            collector,
+            request,
+            if force {
+                ReadPolicy::ForceRefresh
+            } else {
+                ReadPolicy::PreferCache
+            },
+        )
+        .await
+    }
+
+    /// Restore observations only for the currently selected credential identities.
+    /// Missing, invalid or changed entries never trigger a provider fetch.
+    pub async fn restore(&self, collector: &Collector, request: CollectRequest) -> UsageReport {
+        self.collect_with_policy(collector, request, ReadPolicy::CacheOnly)
+            .await
+    }
+
+    async fn collect_with_policy(
+        &self,
+        collector: &Collector,
+        request: CollectRequest,
+        policy: ReadPolicy,
+    ) -> UsageReport {
         let mut tasks = JoinSet::new();
         let mut refs = Vec::new();
         let mut order = std::collections::HashMap::new();
@@ -102,7 +133,7 @@ impl UsageCache {
             let timeout = request.timeout;
             let handle = tasks.spawn(async move {
                 cache
-                    .one(context, adapter, timeout, cancellation, force)
+                    .one(context, adapter, timeout, cancellation, policy)
                     .await
             });
             order.insert(handle.id(), index);
@@ -160,7 +191,7 @@ impl UsageCache {
         adapter: Arc<dyn ProviderAdapter>,
         timeout: Duration,
         cancellation: crate::fetch::Cancellation,
-        force: bool,
+        policy: ReadPolicy,
     ) -> UsageReport {
         let deadline = tokio::time::Instant::now() + timeout;
         let prepare = async {
@@ -182,7 +213,7 @@ impl UsageCache {
                         tokio::time::sleep(Duration::from_millis(20)).await
                     }
                     _ => {
-                        diagnostic("could not open usage cache; fetching usage");
+                        diagnostic("could not open usage cache");
                         return None;
                     }
                 }
@@ -191,7 +222,7 @@ impl UsageCache {
         let prepared = tokio::select! {
             biased;
             _ = cancellation.cancelled() => None,
-            result = tokio::time::timeout_at(deadline, prepare) => result.unwrap_or_else(|_| { diagnostic("usage cache identity or lock timed out; fetching usage"); None }),
+            result = tokio::time::timeout_at(deadline, prepare) => result.unwrap_or_else(|_| { diagnostic("usage cache identity or lock timed out"); None }),
         };
         let (identity, entry) = match prepared {
             Some((id, entry)) => (Some(id), Some(entry)),
@@ -209,12 +240,12 @@ impl UsageCache {
                         && adapter.cacheable(usage)
                 }),
                 _ => {
-                    diagnostic("could not read usage cache; fetching usage");
+                    diagnostic("could not read usage cache");
                     None
                 }
             };
             if snapshot.is_none() && entry.path.exists() {
-                diagnostic("invalid usage cache; fetching usage");
+                diagnostic("invalid usage cache");
             }
         }
         // Recheck after waiting for another process and before serving a snapshot.
@@ -223,7 +254,26 @@ impl UsageCache {
         if !same_identity {
             snapshot = None;
         }
-        if !force
+        if policy == ReadPolicy::CacheOnly {
+            let providers = snapshot
+                .into_iter()
+                .map(|mut usage| {
+                    usage.account_ref = adapter.account_ref();
+                    if !self.fresh(&usage, context.clock.now()) {
+                        usage.reset_credits = None;
+                        usage.codex_reset_credits = None;
+                    }
+                    usage
+                })
+                .collect();
+            return UsageReport {
+                schema_version: 1,
+                generated_at: context.clock.now(),
+                providers,
+                failures: vec![],
+            };
+        }
+        if policy == ReadPolicy::PreferCache
             && tokio::time::Instant::now() < deadline
             && snapshot
                 .as_ref()

@@ -164,6 +164,44 @@ impl Drop for Fixture {
 }
 
 #[tokio::test]
+async fn restore_survives_restart_without_fetching_or_reusing_another_login() {
+    let fixture = Fixture::new();
+    let adapter = Adapter::new("restored");
+    let first = fixture.collect(vec![adapter.clone()], true).await;
+    let fetched_at = first.providers[0].windows[0].fetched_at;
+    fixture.clock.0.fetch_add(600, Ordering::SeqCst);
+    let restarted = UsageCache::new(fixture.dir.clone(), Duration::from_secs(300));
+    let restore = || CollectRequest {
+        providers: vec![adapter.clone()],
+        timeout: Duration::from_secs(3),
+        cancellation: Cancellation::default(),
+    };
+    let restored = restarted.restore(&fixture.collector, restore()).await;
+    assert_eq!(restored.providers.len(), 1);
+    assert_eq!(restored.providers[0].windows[0].fetched_at, fetched_at);
+    assert_eq!(adapter.calls.load(Ordering::SeqCst), 1);
+    *adapter.login.lock().unwrap() = "different-login".into();
+    assert!(
+        restarted
+            .restore(&fixture.collector, restore())
+            .await
+            .providers
+            .is_empty()
+    );
+    assert_eq!(adapter.calls.load(Ordering::SeqCst), 1);
+    *adapter.login.lock().unwrap() = "restored".into();
+    std::fs::write(fixture.json(), b"invalid cache").unwrap();
+    assert!(
+        restarted
+            .restore(&fixture.collector, restore())
+            .await
+            .providers
+            .is_empty()
+    );
+    assert_eq!(adapter.calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
 async fn reset_credit_cache_preserves_age_isolates_accounts_and_drops_stale_balance() {
     let f = Fixture::new();
     let a = Adapter::new("a");
