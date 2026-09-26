@@ -95,6 +95,10 @@ Supplemental profile, subscription and reset-credit observations remain attached
 to the selected source. Expired reset credits are omitted even between refreshes.
 There is no reset-credit redemption route.
 
+Actions and host capabilities reflect the running server's access mode and
+account-storage availability. Read-only hosts advertise no mutation or refresh
+actions. Clients must honor `available` and retain the supplied reason code.
+
 `usage.summary` supplies session-only and combined totals (lowest and average),
 plus an optional two-metric display pair. Clients choose a display preference and
 format these values; they must not regroup provider metrics or recompute totals.

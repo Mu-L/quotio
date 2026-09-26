@@ -137,6 +137,72 @@ impl ApiState {
         jobs.push(tokio::spawn(work).abort_handle());
         Ok(())
     }
+    fn account_write_restriction(&self) -> Option<&'static str> {
+        if !self.manage {
+            Some("management_disabled")
+        } else if self.no_saved_accounts {
+            Some("no_saved_accounts")
+        } else if self.vault.is_none() {
+            Some("account_storage_disabled")
+        } else {
+            None
+        }
+    }
+
+    fn restrict_host(&self, host: &mut crate::contract::Host) {
+        let reason = self.account_write_restriction();
+        host.capabilities.insert(
+            "account_write_v2".into(),
+            crate::contract::Availability {
+                available: reason.is_none(),
+                reason: reason.map(str::to_owned),
+            },
+        );
+        host.capabilities.insert(
+            "refresh".into(),
+            crate::contract::Availability {
+                available: self.manage,
+                reason: (!self.manage).then(|| "management_disabled".into()),
+            },
+        );
+    }
+
+    fn restrict_issue(&self, issue: &mut crate::contract::Issue) {
+        if let Some(action) = &mut issue.action {
+            let reason = if action.kind == "retry" {
+                (!self.manage).then_some("management_disabled")
+            } else {
+                self.account_write_restriction()
+            };
+            restrict_actions(std::slice::from_mut(action), reason);
+        }
+    }
+
+    fn restrict_account(&self, account: &mut crate::contract::Account) {
+        restrict_actions(&mut account.actions, self.account_write_restriction());
+        for source in &mut account.sources {
+            restrict_actions(&mut source.actions, self.account_write_restriction());
+            if let Some(issue) = &mut source.issue {
+                self.restrict_issue(issue);
+            }
+        }
+    }
+
+    fn restrict_snapshot(&self, snapshot: &mut crate::contract::Snapshot) {
+        self.restrict_host(&mut snapshot.host);
+        for account in &mut snapshot.accounts {
+            self.restrict_account(account);
+        }
+        for usage in &mut snapshot.usage {
+            if let Some(issue) = &mut usage.issue {
+                self.restrict_issue(issue);
+            }
+        }
+        for issue in snapshot.provider_issues.values_mut() {
+            self.restrict_issue(issue);
+        }
+    }
+
     async fn invalidate(&self) {
         self.generation.fetch_add(1, Ordering::SeqCst);
         self.snapshot.write().await.take();
@@ -171,6 +237,15 @@ impl ApiState {
         self.wake.notify_one();
     }
 }
+fn restrict_actions(actions: &mut [crate::contract::Action], reason: Option<&str>) {
+    if let Some(reason) = reason {
+        for action in actions.iter_mut().filter(|action| action.available) {
+            action.available = false;
+            action.reason = Some(reason.into());
+        }
+    }
+}
+
 fn timestamp(now: time::OffsetDateTime) -> String {
     now.format(&time::format_description::well_known::Rfc3339)
         .unwrap_or_default()
@@ -251,13 +326,17 @@ async fn providers(
         .values
         .tracked_providers()
         .unwrap_or_default();
-    Json(crate::providers::capabilities::ProviderList::new(&enabled))
+    let mut list = crate::providers::capabilities::ProviderList::new(&enabled);
+    for provider in &mut list.providers {
+        restrict_actions(&mut provider.actions, state.account_write_restriction());
+    }
+    Json(list)
 }
 async fn provider(State(state): State<Arc<ApiState>>, Path(id): Path<String>) -> Response {
     let Some(p) = Provider::value_variants().iter().find(|p| p.id() == id) else {
         return error(StatusCode::NOT_FOUND, "provider_not_found");
     };
-    Json(provider_value(
+    let mut descriptor = provider_value(
         *p,
         &state
             .settings
@@ -266,8 +345,9 @@ async fn provider(State(state): State<Arc<ApiState>>, Path(id): Path<String>) ->
             .values
             .tracked_providers()
             .unwrap_or_default(),
-    ))
-    .into_response()
+    );
+    restrict_actions(&mut descriptor.actions, state.account_write_restriction());
+    Json(descriptor).into_response()
 }
 async fn resolved_snapshot(
     State(state): State<Arc<ApiState>>,
@@ -305,7 +385,10 @@ async fn resolved_snapshot(
         ))?;
         return crate::accounts::api::resolved_snapshot(vault, report, now, ttl)
             .await
-            .map(Json)
+            .map(|mut snapshot| {
+                state.restrict_snapshot(&mut snapshot);
+                Json(snapshot)
+            })
             .map_err(|error| {
                 ApiError(
                     StatusCode::SERVICE_UNAVAILABLE,
@@ -336,6 +419,7 @@ async fn resolved_snapshot(
     );
     let mut snapshot = crate::contract::snapshot::project(accounts, &report, now, ttl)
         .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "invalid_snapshot"))?;
+    state.restrict_snapshot(&mut snapshot);
     let digest = crate::contract::snapshot::digest(&snapshot)
         .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "invalid_snapshot"))?;
     if previous

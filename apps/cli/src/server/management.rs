@@ -67,12 +67,16 @@ fn account_error(error: AccountError) -> ApiError {
 pub(super) async fn resolved_accounts(
     State(state): State<Arc<ApiState>>,
 ) -> Result<Json<crate::contract::AccountList>, ApiError> {
-    Ok(Json(
+    let mut accounts =
         tokio::time::timeout(Duration::from_secs(10), api::resolved_list(vault(&state)?))
             .await
             .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "account_busy"))?
-            .map_err(account_error)?,
-    ))
+            .map_err(account_error)?;
+    state.restrict_host(&mut accounts.host);
+    for account in &mut accounts.accounts {
+        state.restrict_account(account);
+    }
+    Ok(Json(accounts))
 }
 
 pub(super) async fn resolved_create(
@@ -97,15 +101,15 @@ pub(super) async fn resolved_account(
     State(state): State<Arc<ApiState>>,
     Path(id): Path<String>,
 ) -> Result<Json<crate::contract::Account>, ApiError> {
-    Ok(Json(
-        tokio::time::timeout(
-            Duration::from_secs(10),
-            api::resolved_get(vault(&state)?, id),
-        )
-        .await
-        .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "account_busy"))?
-        .map_err(account_error)?,
-    ))
+    let mut account = tokio::time::timeout(
+        Duration::from_secs(10),
+        api::resolved_get(vault(&state)?, id),
+    )
+    .await
+    .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "account_busy"))?
+    .map_err(account_error)?;
+    state.restrict_account(&mut account);
+    Ok(Json(account))
 }
 
 pub(super) async fn resolved_patch(

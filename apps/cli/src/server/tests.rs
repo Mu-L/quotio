@@ -82,6 +82,70 @@ pub(super) async fn fixture() -> (Arc<ApiState>, std::path::PathBuf, String) {
 }
 
 #[tokio::test]
+async fn read_only_hosts_do_not_advertise_mutation_or_refresh_actions() {
+    let (mut state, dir, id) = fixture().await;
+    let writable = Arc::get_mut(&mut state).unwrap();
+    writable.manage = false;
+    writable.no_saved_accounts = false;
+    let Json(catalog) = providers(State(state.clone())).await;
+    assert!(
+        catalog
+            .providers
+            .iter()
+            .flat_map(|p| &p.actions)
+            .all(|action| !action.available)
+    );
+    let Json(list) = management::resolved_accounts(State(state.clone()))
+        .await
+        .unwrap_or_else(|_| panic!());
+    assert!(!list.host.capabilities["account_write_v2"].available);
+    assert!(!list.host.capabilities["refresh"].available);
+    let Json(account) = management::resolved_account(State(state.clone()), Path(id.clone()))
+        .await
+        .unwrap_or_else(|_| panic!());
+    assert!(account.actions.iter().all(|action| !action.available));
+    assert!(
+        account
+            .sources
+            .iter()
+            .flat_map(|s| &s.actions)
+            .all(|action| !action.available)
+    );
+    *state.snapshot.write().await = Some((
+        0,
+        UsageReport {
+            schema_version: 1,
+            generated_at: state.context.clock.now(),
+            providers: vec![],
+            failures: vec![ProviderFailure {
+                provider: ProviderId("amp".into()),
+                account_ref: Some(crate::domain::AccountRef {
+                    id,
+                    label: "fixture".into(),
+                    origin: Some(crate::domain::AccountOrigin::Owned),
+                }),
+                code: ProviderError::Transient,
+                message: "temporary failure".into(),
+            }],
+        },
+    ));
+    let Json(snapshot) = resolved_snapshot(State(state.clone()))
+        .await
+        .unwrap_or_else(|_| panic!());
+    assert!(!snapshot.host.capabilities["refresh"].available);
+    let retry = snapshot.usage[0]
+        .issue
+        .as_ref()
+        .unwrap()
+        .action
+        .as_ref()
+        .unwrap();
+    assert!(!retry.available);
+    assert_eq!(retry.reason.as_deref(), Some("management_disabled"));
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[tokio::test]
 async fn account_scoped_refresh_does_not_require_scheduled_provider() {
     let (state, dir, id) = fixture().await;
     assert!(
@@ -1792,9 +1856,13 @@ async fn resolved_account_read_contract_is_automatic_shared_and_durable() {
         .json()
         .await
         .unwrap();
-    let expected = crate::accounts::api::resolved_list(state.vault.clone().unwrap())
+    let mut expected = crate::accounts::api::resolved_list(state.vault.clone().unwrap())
         .await
         .unwrap();
+    state.restrict_host(&mut expected.host);
+    for account in &mut expected.accounts {
+        state.restrict_account(account);
+    }
     assert_eq!(actual, serde_json::to_value(&expected).unwrap());
     assert_eq!(actual["accounts"][0]["display_name"], "old label");
     assert!(!actual.to_string().contains("synthetic-vault-secret"));
