@@ -206,6 +206,20 @@ Revoke with `DELETE /v2/clients/{id}`. This blocks later requests and is safe to
 repeat. Client listing never returns tokens or hashes. Client management requires
 the saved-account vault and is unavailable with `--no-saved-accounts`.
 
+## Local approval
+
+A host exposed with `--public-url` does not accept OS approval requests or Codex
+browser sign-in through HTTP. Complete those actions on the host itself. The API
+returns `host_interaction_required`, and provider actions reflect that restriction.
+Device-code and manual-code workflows remain available where the provider supports
+them. Delegated clients never receive OS approval authority.
+
+OAuth sessions, operation IDs, retry keys and opaque discovery references belong
+to the requesting client. The owner may inspect client operations and sessions.
+Revocation cancels pending client OAuth sessions. Before committing account,
+settings or OAuth changes, the host checks that the client still has permission.
+Already-started reads may finish.
+
 ## Native parent bootstrap
 
 `serve --manage --parent-pipe --listen 127.0.0.1:0` uses an inherited Unix stdin pipe.

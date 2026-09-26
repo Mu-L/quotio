@@ -16,6 +16,7 @@ pub(super) struct Principal {
     pub id: String,
     pub owner: bool,
     pub manage: bool,
+    pub host_user: bool,
 }
 
 impl Principal {
@@ -34,6 +35,7 @@ pub(super) fn owner() -> axum::Extension<Principal> {
         id: "owner".into(),
         owner: true,
         manage: true,
+        host_user: true,
     })
 }
 
@@ -56,6 +58,7 @@ fn public_read(path: &str) -> bool {
 
 pub struct Policy {
     pub manage: bool,
+    host_user: bool,
     hosts: Vec<String>,
     origins: Vec<String>,
     token: Option<hmac::Key>,
@@ -104,6 +107,7 @@ impl Policy {
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
             manage,
+            host_user: public_url.is_none(),
             hosts,
             origins,
             token,
@@ -158,6 +162,11 @@ fn authorized(request: &Request, key: Option<&hmac::Key>) -> bool {
 }
 pub fn error(status: StatusCode, code: &'static str) -> Response {
     let mut body = json!({"error":code});
+    if code == "host_interaction_required" {
+        body["message"] = json!(
+            "Complete this action on the host. Remote clients cannot approve operating-system access or host-local browser sign-in."
+        );
+    }
     if code == "credential_storage_unavailable" {
         body["message"] = json!(
             "Allow Quotio access to its account vault on the Mac server, then retry. Remote requests cannot display Keychain authorization prompts."
@@ -215,6 +224,7 @@ pub async fn guard(
                     .into(),
                     owner: policy.token.is_some(),
                     manage: policy.manage,
+                    host_user: policy.manage && policy.token.is_some() && policy.host_user,
                 }))
             } else {
                 let candidate = one(request.headers(), "authorization")
@@ -234,6 +244,7 @@ pub async fn guard(
                                     id: client.id,
                                     owner: false,
                                     manage: false,
+                                    host_user: false,
                                 })),
                                 _ => Err("authentication_unavailable"),
                             }

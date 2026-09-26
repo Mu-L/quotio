@@ -13,6 +13,7 @@ struct AccountStorageAccessSection: View {
                 Label("settings.vaultAccess.title".localized(), systemImage: "lock")
                 Text("settings.vaultAccess.reason".localized()).foregroundStyle(.secondary)
                 Button("settings.authorize".localized()) { showExplanation = true }
+                    .disabled(!quota.canAuthorizeNative)
             }
             .sheet(isPresented: $showExplanation) {
                 VStack(alignment: .leading, spacing: 16) {
@@ -41,7 +42,7 @@ struct AccountStorageAccessSection: View {
                         }
                         .buttonStyle(.borderedProminent)
                         .keyboardShortcut(.defaultAction)
-                        .disabled(isSubmitting || accounts.authorizingStorage)
+                        .disabled(!quota.canAuthorizeNative || isSubmitting || accounts.authorizingStorage)
                     }
                 }
                 .padding(24)

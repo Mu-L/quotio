@@ -70,7 +70,14 @@ pub(super) async fn start(
     let id = operation.id.clone();
     let pending_key = key.clone();
     if let Err(error) = state.spawn(async move {
-        let result = scan(&work, vault, &request.providers, request.restore_removed).await;
+        let result = scan(
+            &work,
+            vault,
+            &request.providers,
+            request.restore_removed,
+            Some(&principal),
+        )
+        .await;
         work.operations.lock().await.finish(&id, result);
         work.pending.lock().await.remove(&key);
     }) {
@@ -90,8 +97,13 @@ async fn scan(
     vault: crate::accounts::vault::Vault,
     providers: &[Provider],
     restore_removed: bool,
+    principal: Option<&security::Principal>,
 ) -> Result<Value, &'static str> {
     let _scan = state.native_scan_lock.lock().await;
+    let _guard = match principal {
+        Some(principal) => Some(state.client_mutation_guard(principal).await?),
+        None => None,
+    };
     let report = host::scan(
         vault,
         state.discovery.clone(),
@@ -119,7 +131,7 @@ pub(super) async fn scheduled(state: &ApiState) -> Result<(), &'static str> {
     };
     let providers = config.tracked_providers().map_err(|_| "invalid_settings")?;
     if !providers.is_empty() {
-        scan(state, vault, &providers, false).await?;
+        scan(state, vault, &providers, false, None).await?;
     }
     Ok(())
 }

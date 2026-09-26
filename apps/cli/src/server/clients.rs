@@ -48,6 +48,12 @@ pub(super) async fn create(
     ApiJson(input): ApiJson<clients::Create>,
 ) -> Result<(StatusCode, Json<clients::Created>), ApiError> {
     owner(&principal)?;
+    if input.scope != clients::Scope::Read {
+        return Err(ApiError(
+            StatusCode::BAD_REQUEST,
+            "unsupported_client_scope",
+        ));
+    }
     if !state.manage {
         return Err(ApiError(StatusCode::METHOD_NOT_ALLOWED, "read_only"));
     }
@@ -72,6 +78,12 @@ pub(super) async fn revoke(
     let _guard = crate::accounts::service::mutation_guard(&state.commit_guard)
         .await
         .map_err(failure)?;
-    clients::revoke(vault(&state)?, id).await.map_err(failure)?;
+    clients::revoke(vault(&state)?, id.clone())
+        .await
+        .map_err(failure)?;
+    drop(_guard);
+    if let Some(manager) = &state.oauth {
+        manager.cancel_owner(&id).await;
+    }
     Ok(StatusCode::NO_CONTENT)
 }

@@ -147,6 +147,55 @@ async fn read_only_hosts_do_not_advertise_mutation_or_refresh_actions() {
 }
 
 #[tokio::test]
+async fn revocation_blocks_a_previously_authorized_queued_account_write() {
+    let (mut state, dir, account_id) = fixture().await;
+    Arc::get_mut(&mut state).unwrap().no_saved_accounts = false;
+    let vault = state.vault.clone().unwrap();
+    let issued = accounts::clients::create(
+        vault.clone(),
+        accounts::clients::Create {
+            label: "Manager".into(),
+            scope: accounts::clients::Scope::Manage,
+            expires_in_seconds: 3600,
+        },
+        state.context.clock.now(),
+    )
+    .await
+    .unwrap();
+    let guard = state.commit_guard.lock().await;
+    let (_, Json(operation)) = management::resolved_patch(
+        State(state.clone()),
+        Extension(security::Principal {
+            id: issued.client.id.clone(),
+            owner: false,
+            manage: true,
+            host_user: false,
+        }),
+        Path(account_id.clone()),
+        key("queued-change"),
+        ApiJson(json!({"user_label":"Must not be saved"})),
+    )
+    .await
+    .unwrap_or_else(|_| panic!());
+    accounts::clients::revoke(vault.clone(), issued.client.id)
+        .await
+        .unwrap();
+    drop(guard);
+    assert_eq!(
+        done(&state, &operation.id).await.error,
+        Some("client_revoked")
+    );
+    assert_eq!(
+        accounts::service::get(vault, account_id)
+            .await
+            .unwrap()
+            .label,
+        "old label"
+    );
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[tokio::test]
 async fn account_scoped_refresh_does_not_require_scheduled_provider() {
     let (state, dir, id) = fixture().await;
     assert!(
@@ -2579,6 +2628,17 @@ async fn delegated_read_clients_are_revocable_and_cannot_reach_private_or_write_
     let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     let client = reqwest::Client::builder().no_proxy().build().unwrap();
     let base = format!("http://{address}");
+    assert_eq!(
+        client
+            .post(format!("{base}/v2/clients"))
+            .bearer_auth(root)
+            .json(&json!({"label":"Not enabled","scope":"manage"}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        400
+    );
     let response = client
         .post(format!("{base}/v2/clients"))
         .bearer_auth(root)
@@ -2698,6 +2758,75 @@ async fn delegated_read_clients_are_revocable_and_cannot_reach_private_or_write_
         .unwrap();
     assert_eq!(revoked.status(), 401);
     assert_eq!(revoked.headers()["cache-control"], "no-store");
+    server.abort();
+    let _ = server.await;
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[tokio::test]
+async fn public_hosts_require_local_approval_for_native_access_and_browser_sign_in() {
+    let (mut state, dir, _) = fixture().await;
+    Arc::get_mut(&mut state).unwrap().no_saved_accounts = false;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let token = "synthetic-public-host-token-123456789";
+    let app = router(
+        state,
+        Arc::new(
+            security::Policy::new(
+                address,
+                true,
+                Some("https://host.example"),
+                &[],
+                Some(token.into()),
+            )
+            .unwrap(),
+        ),
+    );
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let client = reqwest::Client::builder().no_proxy().build().unwrap();
+    let base = format!("http://{address}");
+    for (path, body) in [
+        ("/v2/account-vault/authorize", json!({})),
+        ("/v2/sources/authorize", json!({})),
+        ("/v2/auth/sessions", json!({"provider":"codex"})),
+    ] {
+        let response = client
+            .post(format!("{base}{path}"))
+            .bearer_auth(token)
+            .json(&body)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 403);
+        assert_eq!(
+            response.json::<Value>().await.unwrap()["error"],
+            "host_interaction_required"
+        );
+    }
+    let catalog: Value = client
+        .get(format!("{base}/v2/providers"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let codex = catalog["providers"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|provider| provider["id"] == "codex")
+        .unwrap();
+    assert!(
+        codex["actions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|action| action["kind"] == "start_oauth")
+            .all(|action| action["available"] == false)
+    );
     server.abort();
     let _ = server.await;
     std::fs::remove_dir_all(dir).unwrap();

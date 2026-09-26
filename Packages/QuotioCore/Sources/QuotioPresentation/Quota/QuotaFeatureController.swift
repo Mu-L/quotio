@@ -12,6 +12,9 @@ public final class QuotaFeatureController {
     }
 
     public var hostID: String? { quota.state.hostID }
+    public var canManageSettings: Bool { quota.state.canManageSettings }
+    public var canAuthorizeNative: Bool { providers.contains { $0.actions.contains("authorize_native") } }
+    public var canDiscoverNative: Bool { providers.contains { $0.actions.contains("discover_native") } }
     public private(set) var providers: [MonitoringProvider] = []
     public private(set) var monitoringSettings: MonitoringSettings?
     public private(set) var settingsError: String?
@@ -93,7 +96,7 @@ public final class QuotaFeatureController {
     }
 
     private func updateSettings(_ change: (inout MonitoringSettings) -> Void) async {
-        guard !isUpdatingSettings, var settings = monitoringSettings else { return }
+        guard canManageSettings, !isUpdatingSettings, var settings = monitoringSettings else { return }
         change(&settings)
         settingsRequestID = UUID()
         isUpdatingSettings = true

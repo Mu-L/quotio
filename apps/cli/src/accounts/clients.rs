@@ -15,6 +15,7 @@ fn default_lifetime() -> u64 {
 pub(crate) enum Scope {
     #[default]
     Read,
+    Manage,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -69,6 +70,24 @@ pub(crate) fn valid(document: &Document) -> bool {
                 && (record.expires_at - record.created_at).whole_seconds() <= MAX_LIFETIME as i64
         })
 }
+pub(crate) fn has_manage_grants(document: &Document) -> bool {
+    document
+        .client_grants
+        .values()
+        .any(|record| record.scope == Scope::Manage)
+}
+
+pub(crate) async fn can_manage(
+    vault: Vault,
+    id: &str,
+    now: OffsetDateTime,
+) -> Result<bool, AccountError> {
+    let tx = super::service::begin(vault).await?;
+    Ok(tx.document.client_grants.get(id).is_some_and(|record| {
+        record.scope == Scope::Manage && now >= record.created_at && now < record.expires_at
+    }))
+}
+
 fn digest(host: &str, token: &str) -> String {
     crate::cache::fingerprint(&["quotio-host-client", host, token])
 }

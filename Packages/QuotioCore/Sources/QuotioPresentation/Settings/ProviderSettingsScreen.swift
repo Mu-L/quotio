@@ -44,7 +44,7 @@ struct ProviderSettingsScreen: View {
                         Toggle("settings.track".localized(), isOn: Binding(get: { tracked }, set: { enabled in
                             Task { await controller.setProviderEnabled(enabled, provider: provider) }
                         }))
-                        .disabled(controller.monitoringSettings == nil || controller.isUpdatingSettings)
+                        .disabled(!controller.canManageSettings || controller.monitoringSettings == nil || controller.isUpdatingSettings)
                         .toggleStyle(.switch)
                         .fixedSize()
                     }
@@ -61,7 +61,7 @@ struct ProviderSettingsScreen: View {
                         Section {
                             Text(source.explanationLocalizationKey.localized())
                             Button("settings.authorize".localized()) { permission = source }
-                                .disabled(descriptor?.actions.contains("discover_native") != true)
+                                .disabled(descriptor?.actions.contains("authorize_native") != true)
                         }
                     }
                     if let issue = state.latestIssue, issue.reason != nil {

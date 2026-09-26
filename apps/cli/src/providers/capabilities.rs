@@ -34,6 +34,17 @@ impl ProviderDescriptor {
                 InteractionLocation::Client,
             ),
             (
+                "authorize_native",
+                matches!(
+                    provider,
+                    Provider::Factory
+                        | Provider::Antigravity
+                        | Provider::Catalog("claude" | "copilot")
+                ),
+                storage && cfg!(target_os = "macos"),
+                InteractionLocation::HostUser,
+            ),
+            (
                 "discover_native",
                 capabilities.auth.contains(&AuthMethod::Native),
                 storage

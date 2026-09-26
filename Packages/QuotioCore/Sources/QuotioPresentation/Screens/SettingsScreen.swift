@@ -719,7 +719,7 @@ struct RefreshCadenceSettingsSection: View {
                 }
             }
             
-            .disabled(viewModel.monitoringSettings == nil || viewModel.isUpdatingSettings)
+            .disabled(!viewModel.canManageSettings || viewModel.monitoringSettings == nil || viewModel.isUpdatingSettings)
             if let error = viewModel.settingsError { Text(error).foregroundStyle(.red) }
             if viewModel.monitoringSettings?.refreshInterval == 0 {
                 Button {

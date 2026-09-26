@@ -198,6 +198,17 @@ final class QuotaFeatureControllerTests: XCTestCase {
         await fixture.controller.shutdown()
     }
 
+    func testReadOnlyHostDoesNotChangeMonitoringSettings() async {
+        let account = Account.make(providerID: .init(rawValue: "codex"), accountKey: "account", source: .nativeCredential)
+        let fixture = await makeFixture(account: account, provider: .codex, canManageSettings: false)
+        await fixture.controller.initialize()
+        let before = fixture.controller.monitoringSettings
+        await fixture.controller.setRefreshInterval(0)
+        await fixture.controller.setProviderEnabled(false, provider: .codex)
+        XCTAssertEqual(fixture.controller.monitoringSettings, before)
+        await fixture.controller.shutdown()
+    }
+
     private func makeFixture(
         account: Account,
         provider: QuotaProvider,
@@ -205,6 +216,7 @@ final class QuotaFeatureControllerTests: XCTestCase {
         aliases: [String: String] = [:],
         authFiles: [AuthFileDescriptor] = [],
         hostID: String? = nil,
+        canManageSettings: Bool = true,
         lastUpdated: Date = Date(timeIntervalSince1970: 1_000),
         issues: [QuotaProvider: QuotaRefreshIssue] = [:]
     ) async -> (
@@ -221,6 +233,7 @@ final class QuotaFeatureControllerTests: XCTestCase {
         let quota = QuotaScreenModel(coordinator: TestQuotaCoordinator(
             snapshot: QuotaSnapshot(
                 hostID: hostID,
+                canManageSettings: canManageSettings,
                 quotas: [
                 provider: [
                     quotaAccountKey ?? account.accountKey: ProviderQuota(

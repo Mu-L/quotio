@@ -343,7 +343,7 @@ pub(crate) async fn mutation_guard(
         .await
         .map_err(|_| AccountError::Busy)
 }
-async fn begin(vault: Vault) -> Result<Transaction, AccountError> {
+pub(crate) async fn begin(vault: Vault) -> Result<Transaction, AccountError> {
     begin_with_timeout(vault, std::time::Duration::from_secs(10)).await
 }
 async fn begin_with_timeout(

@@ -138,6 +138,28 @@ impl ApiState {
         jobs.push(tokio::spawn(work).abort_handle());
         Ok(())
     }
+    async fn client_mutation_guard(
+        &self,
+        principal: &security::Principal,
+    ) -> Result<tokio::sync::MutexGuard<'_, ()>, &'static str> {
+        if let Some(reason) = self.management_restriction(principal) {
+            return Err(reason);
+        }
+        let guard = crate::accounts::service::mutation_guard(&self.commit_guard)
+            .await
+            .map_err(|e| management::account_code(&e))?;
+        if !principal.owner {
+            let vault = self.vault.clone().ok_or("account_storage_disabled")?;
+            if !crate::accounts::clients::can_manage(vault, &principal.id, self.context.clock.now())
+                .await
+                .map_err(|e| management::account_code(&e))?
+            {
+                return Err("client_revoked");
+            }
+        }
+        Ok(guard)
+    }
+
     fn management_restriction(&self, principal: &security::Principal) -> Option<&'static str> {
         if !self.manage {
             Some("management_disabled")
@@ -160,6 +182,27 @@ impl ApiState {
         }
     }
 
+    fn restrict_provider(
+        &self,
+        provider: &mut crate::providers::capabilities::ProviderDescriptor,
+        principal: &security::Principal,
+    ) {
+        restrict_actions(
+            &mut provider.actions,
+            self.account_write_restriction(principal),
+        );
+        for action in &mut provider.actions {
+            if action.available
+                && !principal.host_user
+                && (action.kind == "authorize_native"
+                    || (action.kind == "start_oauth" && provider.id == Provider::Codex))
+            {
+                action.available = false;
+                action.reason = Some("host_interaction_required".into());
+            }
+        }
+    }
+
     fn restrict_host(&self, host: &mut crate::contract::Host, principal: &security::Principal) {
         let reason = self.account_write_restriction(principal);
         host.capabilities.insert(
@@ -176,11 +219,28 @@ impl ApiState {
                 reason: self.management_restriction(principal).map(str::to_owned),
             },
         );
+        host.capabilities.insert(
+            "settings_write".into(),
+            crate::contract::Availability {
+                available: self.management_restriction(principal).is_none(),
+                reason: self.management_restriction(principal).map(str::to_owned),
+            },
+        );
+        let native = reason.is_none() && principal.host_user && cfg!(target_os = "macos");
+        host.capabilities.insert(
+            "native_authorization".into(),
+            crate::contract::Availability {
+                available: native,
+                reason: (!native).then(|| reason.unwrap_or("host_interaction_required").into()),
+            },
+        );
     }
 
     fn restrict_issue(&self, issue: &mut crate::contract::Issue, principal: &security::Principal) {
         if let Some(action) = &mut issue.action {
-            let reason = if action.kind == "retry" {
+            let reason = if action.kind == "authorize" && !principal.host_user {
+                Some("host_interaction_required")
+            } else if action.kind == "retry" {
                 self.management_restriction(principal)
             } else {
                 self.account_write_restriction(principal)
@@ -269,6 +329,20 @@ fn restrict_actions(actions: &mut [crate::contract::Action], reason: Option<&str
             action.reason = Some(reason.into());
         }
     }
+}
+
+fn client_access_error(code: &'static str) -> ApiError {
+    ApiError(
+        if matches!(
+            code,
+            "client_revoked" | "insufficient_scope" | "management_disabled"
+        ) {
+            StatusCode::FORBIDDEN
+        } else {
+            StatusCode::SERVICE_UNAVAILABLE
+        },
+        code,
+    )
 }
 
 fn timestamp(now: time::OffsetDateTime) -> String {
@@ -364,10 +438,7 @@ async fn providers(
         .unwrap_or_default();
     let mut list = crate::providers::capabilities::ProviderList::new(&enabled);
     for provider in &mut list.providers {
-        restrict_actions(
-            &mut provider.actions,
-            state.account_write_restriction(&principal),
-        );
+        state.restrict_provider(provider, &principal);
     }
     Json(list)
 }
@@ -389,10 +460,7 @@ async fn provider(
             .tracked_providers()
             .unwrap_or_default(),
     );
-    restrict_actions(
-        &mut descriptor.actions,
-        state.account_write_restriction(&principal),
-    );
+    state.restrict_provider(&mut descriptor, &principal);
     Json(descriptor).into_response()
 }
 async fn resolved_snapshot(
@@ -513,16 +581,17 @@ fn settings_error(e: SettingsError) -> ApiError {
 }
 async fn patch_settings(
     State(state): State<Arc<ApiState>>,
+    Extension(principal): Extension<security::Principal>,
     ApiJson(patch): ApiJson<SettingsPatch>,
 ) -> Result<Json<SettingsView>, ApiError> {
     // Once started, a config transaction completes even if the HTTP client leaves.
     let (send, receive) = tokio::sync::oneshot::channel();
     let work = state.clone();
     state.spawn(async move {
-        let _guard = match crate::accounts::service::mutation_guard(&work.commit_guard).await {
+        let _guard = match work.client_mutation_guard(&principal).await {
             Ok(guard) => guard,
-            Err(_) => {
-                let _ = send.send(Err(SettingsError::Busy));
+            Err(code) => {
+                let _ = send.send(Err(client_access_error(code)));
                 return;
             }
         };
@@ -534,13 +603,12 @@ async fn patch_settings(
             *work.settings.write().await = view.clone();
             work.invalidate().await;
         }
-        let _ = send.send(result);
+        let _ = send.send(result.map_err(settings_error));
     })?;
     receive
         .await
         .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "internal_error"))?
         .map(Json)
-        .map_err(settings_error)
 }
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]

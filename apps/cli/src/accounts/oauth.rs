@@ -732,6 +732,17 @@ impl OAuthSessionManager {
         }
         Ok(Self::dto(id.into(), session))
     }
+    pub(crate) async fn cancel_owner(&self, owner: &str) {
+        let mut sessions = self.sessions.lock().await;
+        for session in sessions.sessions.values_mut() {
+            if session.owner.as_deref() == Some(owner) && session.status == SessionStatus::Waiting {
+                session.status = SessionStatus::Cancelled;
+                session.authorization = None;
+                session.cancel.notify_one();
+            }
+        }
+    }
+
     pub async fn cancel(&self, id: &str) -> Result<SessionDto, AccountError> {
         let mut sessions = self.sessions.lock().await;
         Self::prune(&mut sessions);
@@ -843,6 +854,22 @@ impl OAuthSessionManager {
             };
             let label = service::default_label(label.as_deref(), &credential)?;
             let _guard = service::mutation_guard(&self.commit_guard).await?;
+            let owner = self
+                .sessions
+                .lock()
+                .await
+                .sessions
+                .get(id)
+                .ok_or(AccountError::NotFound)?
+                .owner
+                .clone();
+            if let Some(owner) = owner
+                && !super::clients::can_manage(self.vault.clone(), &owner, self.context.clock.now())
+                    .await?
+            {
+                return Err(AccountError::Cancelled);
+            }
+
             let account_id = service::add_persisted(
                 self.vault.clone(),
                 provider,
@@ -1138,6 +1165,51 @@ mod session_tests {
             Arc::new(tokio::sync::Mutex::new(())),
             Arc::new(AtomicU64::new(0)),
         )
+    }
+
+    #[tokio::test]
+    async fn revoked_client_cannot_persist_an_exchanged_oauth_credential() {
+        let admin = manager();
+        let issued = super::super::clients::create(
+            admin.vault.clone(),
+            super::super::clients::Create {
+                label: "Manager".into(),
+                scope: super::super::clients::Scope::Manage,
+                expires_in_seconds: 3600,
+            },
+            admin.context.clock.now(),
+        )
+        .await
+        .unwrap();
+        let scoped = admin.for_owner(Some(issued.client.id.clone()));
+        let session = scoped
+            .begin_for(
+                crate::cli::Provider::Catalog("claude"),
+                None,
+                OAuthMode::Relay,
+            )
+            .await
+            .unwrap();
+        scoped.claim(&session.id).await.unwrap();
+        super::super::clients::revoke(admin.vault.clone(), issued.client.id)
+            .await
+            .unwrap();
+        let result = scoped
+            .finish(
+                &session.id,
+                Ok(Credential::ClaudeOAuth {
+                    access_token: "synthetic-access".into(),
+                    refresh_token: "synthetic-refresh".into(),
+                    account_id: "synthetic-user".into(),
+                    email: "fixture@example.test".into(),
+                    expires_at: admin.context.clock.now().unix_timestamp() + 3600,
+                    refresh_pending: false,
+                }),
+                None,
+            )
+            .await;
+        assert!(matches!(result, Err(AccountError::Cancelled)));
+        assert!(admin.vault.begin().unwrap().document.accounts.is_empty());
     }
 
     #[tokio::test]

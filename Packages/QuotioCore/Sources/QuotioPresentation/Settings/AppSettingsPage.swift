@@ -82,14 +82,14 @@ struct AppSettingsPage: View {
                                 get: { quota.trackingPreferences.automaticallyDiscoverLogins },
                                 set: { enabled in Task { await quota.setAutomaticDiscovery(enabled) } }
                             ))
-                            .disabled(quota.monitoringSettings == nil || quota.isUpdatingSettings)
+                            .disabled(!quota.canManageSettings || quota.monitoringSettings == nil || quota.isUpdatingSettings)
                             Button("settings.scanAll".localized()) {
                                 Task {
                                     await accounts.scanAllNativeAccounts()
                                     await quota.refreshAll(force: true)
                                 }
                             }
-                            .disabled(accounts.isScanningAll || accounts.discoveringProvider != nil)
+                            .disabled(!quota.canDiscoverNative || accounts.isScanningAll || accounts.discoveringProvider != nil)
                             if accounts.isScanningAll { ProgressView().controlSize(.small) }
                         }
                     }

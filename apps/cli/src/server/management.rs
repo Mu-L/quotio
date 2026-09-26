@@ -208,6 +208,9 @@ pub(super) async fn migrate(
     headers: HeaderMap,
     ApiJson(body): ApiJson<Value>,
 ) -> Result<(StatusCode, Json<Operation>), ApiError> {
+    if !principal.owner {
+        return Err(ApiError(StatusCode::FORBIDDEN, "owner_required"));
+    }
     let input = serde_json::from_value(body.clone())
         .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "invalid_request"))?;
     mutate(
@@ -263,6 +266,9 @@ pub(super) async fn authorize(
     headers: HeaderMap,
     ApiJson(body): ApiJson<Value>,
 ) -> Result<(StatusCode, Json<Operation>), ApiError> {
+    if !principal.host_user {
+        return Err(ApiError(StatusCode::FORBIDDEN, "host_interaction_required"));
+    }
     let input = serde_json::from_value(body.clone())
         .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "invalid_request"))?;
     crate::accounts::authorization::validate(&input).map_err(account_error)?;
@@ -284,6 +290,9 @@ pub(super) async fn authorize_vault(
     headers: HeaderMap,
     ApiJson(body): ApiJson<Value>,
 ) -> Result<(StatusCode, Json<Operation>), ApiError> {
+    if !principal.host_user {
+        return Err(ApiError(StatusCode::FORBIDDEN, "host_interaction_required"));
+    }
     if body != json!({}) {
         return Err(ApiError(StatusCode::BAD_REQUEST, "invalid_request"));
     }
@@ -388,9 +397,7 @@ async fn mutate(
                 }
                 match mutation {
                     Mutation::ResolvedUpdate(id, patch) => {
-                        let _guard = crate::accounts::service::mutation_guard(&work.commit_guard)
-                            .await
-                            .map_err(|e| account_code(&e))?;
+                        let _guard = work.client_mutation_guard(&principal).await?;
                         let id = api::resolved_update_once(vault, id, patch, intent)
                             .await
                             .map_err(|e| account_code(&e))?;
@@ -398,9 +405,7 @@ async fn mutate(
                         Ok(json!({"account_id":id}))
                     }
                     Mutation::ResolvedRemove(id) => {
-                        let _guard = crate::accounts::service::mutation_guard(&work.commit_guard)
-                            .await
-                            .map_err(|e| account_code(&e))?;
+                        let _guard = work.client_mutation_guard(&principal).await?;
                         let sources = api::resolved_get(vault.clone(), id.clone())
                             .await
                             .map_err(|e| account_code(&e))?
@@ -424,9 +429,7 @@ async fn mutate(
                             ),
                             None => None,
                         };
-                        let _guard = crate::accounts::service::mutation_guard(&work.commit_guard)
-                            .await
-                            .map_err(|e| account_code(&e))?;
+                        let _guard = work.client_mutation_guard(&principal).await?;
                         let id = api::source_update_once(vault, id, patch, intent)
                             .await
                             .map_err(|e| account_code(&e))?;
@@ -437,9 +440,7 @@ async fn mutate(
                     Mutation::Migrate(input) => {
                         let (prepared, enabled) = api::migration::prepare(input, &work.context)
                             .map_err(|e| account_code(&e))?;
-                        let _guard = crate::accounts::service::mutation_guard(&work.commit_guard)
-                            .await
-                            .map_err(|e| account_code(&e))?;
+                        let _guard = work.client_mutation_guard(&principal).await?;
                         let id = api::migration::save_once(vault, prepared, enabled, intent)
                             .await
                             .map_err(|e| account_code(&e))?;
@@ -465,9 +466,7 @@ async fn mutate(
                             }
                         }
                         .map_err(|e| account_code(&e))?;
-                        let _guard = crate::accounts::service::mutation_guard(&work.commit_guard)
-                            .await
-                            .map_err(|e| account_code(&e))?;
+                        let _guard = work.client_mutation_guard(&principal).await?;
                         let account_id = api::resolved_save_once(vault, prepared, intent)
                             .await
                             .map_err(|e| account_code(&e))?;
@@ -506,9 +505,7 @@ async fn mutate(
                                 account_code(&e)
                             }
                         })?;
-                        let _guard = crate::accounts::service::mutation_guard(&work.commit_guard)
-                            .await
-                            .map_err(|e| account_code(&e))?;
+                        let _guard = work.client_mutation_guard(&principal).await?;
                         let account_id = api::register_source_once(vault, prepared, intent)
                             .await
                             .map_err(|e| account_code(&e))?;
@@ -578,6 +575,9 @@ pub(super) async fn begin(
     headers: HeaderMap,
     ApiJson(input): ApiJson<SessionInput>,
 ) -> Result<(StatusCode, Json<SessionDto>), ApiError> {
+    if input.provider == Provider::Codex && !principal.host_user {
+        return Err(ApiError(StatusCode::FORBIDDEN, "host_interaction_required"));
+    }
     let manager = oauth_manager(&state, &principal)?;
     let mut keys = headers.get_all("idempotency-key").iter();
     let key = keys
