@@ -43,12 +43,12 @@ final class LocalizationBundleTests: XCTestCase {
         }
     }
 
-    func testLocalizedPlanAndEndpointLabelsUseSelectedLanguage() {
+    func testHostPlanNameIsPreservedWhileEndpointLabelsUseSelectedLanguage() {
         let languageManager = LanguageManager(repository: InMemoryLanguagePreferencesRepository(language: .vietnamese))
         defer { languageManager.setLanguage(storedLanguage) }
 
         withExtendedLifetime(languageManager) {
-            XCTAssertEqual(ProviderQuota(planType: "openrouter-free").planDisplayName, "Gói miễn phí")
+            XCTAssertEqual(ProviderQuota(planType: "Free Tier").planDisplayName, "Free Tier")
             XCTAssertEqual(GLMEndpoint.zai.displayName, "Z.ai Toàn cầu")
         }
     }
