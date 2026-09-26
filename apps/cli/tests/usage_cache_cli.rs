@@ -112,10 +112,16 @@ fn cli_reuses_disk_cache_force_refreshes_and_switching_login_fails_closed() {
     assert!(!switched["provider_issues"].as_object().unwrap().is_empty());
 }
 #[tokio::test]
-async fn rest_refresh_reuses_the_cli_cache() {
+async fn manual_host_start_restores_stale_cli_cache_without_fetching() {
     let f = Fixture::new();
     assert!(f.usage(false).status.success());
     assert_eq!(f.calls(), 1);
+    std::fs::write(
+        f.0.join("config.toml"),
+        "enabled_providers = ['codex']\ncache_ttl_seconds = 0\n",
+    )
+    .unwrap();
+    std::fs::write(f.0.join("fail"), "").unwrap();
     let mut cmd = tokio::process::Command::from(f.command());
     let mut child = cmd
         .args([
@@ -123,6 +129,8 @@ async fn rest_refresh_reuses_the_cli_cache() {
             "--listen",
             "127.0.0.1:0",
             "--no-saved-accounts",
+            "--refresh-interval",
+            "0",
             "--config",
         ])
         .arg(f.0.join("config.toml"))
@@ -153,6 +161,8 @@ async fn rest_refresh_reuses_the_cli_cache() {
                     .as_array()
                     .is_some_and(|usage| usage.len() == 1)
                 {
+                    assert_eq!(value["usage"][0]["freshness"], "stale");
+                    assert_eq!(value["accounts"][0]["display_name"], "first@example.test");
                     break;
                 }
             }

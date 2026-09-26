@@ -100,6 +100,9 @@ plus an optional two-metric display pair. Clients choose a display preference an
 format these values; they must not regroup provider metrics or recompute totals.
 A null percentage means unknown, not zero or unlimited.
 
+A restarted host restores cached observations for matching credential identities,
+including when automatic refresh is disabled. Restoration performs no provider
+fetch and preserves observation timestamps, so expired quota remains `stale`.
 A new host can publish registered accounts with `not_loaded` quota before its
 first refresh. Provider failures do not hide healthy accounts. Invalid snapshots
 and unavailable protected storage return errors rather than an empty account list.

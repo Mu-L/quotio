@@ -489,6 +489,14 @@ async fn operation(State(state): State<Arc<ApiState>>, Path(id): Path<String>) -
     }
 }
 async fn refresh(state: &ApiState, request: Option<RefreshRequest>) -> Result<Value, &'static str> {
+    collect_usage(state, request, false).await
+}
+
+async fn collect_usage(
+    state: &ApiState,
+    request: Option<RefreshRequest>,
+    cache_only: bool,
+) -> Result<Value, &'static str> {
     let _refresh = state.refresh_lock.lock().await;
     if !state.no_saved_accounts
         && let Some(vault) = state.vault.clone()
@@ -520,7 +528,9 @@ async fn refresh(state: &ApiState, request: Option<RefreshRequest>) -> Result<Va
     if account.is_none() && selected.iter().any(|p| !enabled.contains(p)) {
         return Err("refresh_scope_changed");
     }
-    state.status.lock().await.refreshing = true;
+    if !cache_only {
+        state.status.lock().await.refreshing = true;
+    }
     let timeout = Duration::from_secs(config.provider_timeout);
     let borrowed = state
         .proxy_auth_directory
@@ -608,17 +618,16 @@ async fn refresh(state: &ApiState, request: Option<RefreshRequest>) -> Result<Va
     });
     let report = match adapters {
         Ok(providers) => {
-            cache
-                .collect(
-                    &collector,
-                    CollectRequest {
-                        providers,
-                        timeout,
-                        cancellation: Cancellation::default(),
-                    },
-                    force,
-                )
-                .await
+            let request = CollectRequest {
+                providers,
+                timeout,
+                cancellation: Cancellation::default(),
+            };
+            if cache_only {
+                cache.restore(&collector, request).await
+            } else {
+                cache.collect(&collector, request, force).await
+            }
         }
         Err(error) if account.is_some() => {
             state.status.lock().await.refreshing = false;
@@ -650,7 +659,9 @@ async fn refresh(state: &ApiState, request: Option<RefreshRequest>) -> Result<Va
     };
     let mut status = state.status.lock().await;
     status.refreshing = false;
-    status.last_completed_at = Some(timestamp(report.generated_at));
+    if !cache_only {
+        status.last_completed_at = Some(timestamp(report.generated_at));
+    }
     drop(status);
     if generation != state.generation.load(Ordering::SeqCst) {
         state.wake.notify_one();
@@ -875,6 +886,10 @@ pub async fn run(args: ServeArgs) -> Result<(), ServerError> {
         loop {
             if let Err(code) = native::scheduled(&worker_state).await {
                 tracing::warn!(code, "scheduled discovery failed");
+            }
+            let needs_restore = worker_state.snapshot.read().await.is_none();
+            if needs_restore && let Err(code) = collect_usage(&worker_state, None, true).await {
+                tracing::warn!(code, "cached quota restoration failed");
             }
             if worker_state.settings.read().await.values.refresh_interval == 0 {
                 wait_for_next_refresh(&worker_state).await;
