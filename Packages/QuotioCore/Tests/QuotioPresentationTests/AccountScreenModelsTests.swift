@@ -6,33 +6,19 @@ import XCTest
 
 @MainActor
 final class AccountScreenModelsTests: XCTestCase {
-    func testAccountsModelOwnsAccountAndAuthFileState() async {
+    func testAccountsModelDisplaysHostAccounts() async {
         let account = Account.make(
             providerID: AccountProviderID(rawValue: "codex"),
             accountKey: "person@example.com",
             source: .nativeCredential
         )
-        let descriptor = AuthFileDescriptor(
-            id: "auth-file",
-            providerID: AccountProviderID(rawValue: "codex"),
-            email: "person@example.com",
-            login: nil,
-            expired: nil,
-            accountType: "plus",
-            filePath: "/tmp/codex.json",
-            source: .cliProxyApi,
-            filename: "codex.json"
-        )
         let model = AccountsScreenModel(
-            accountService: AccountScreenModelService(accounts: [account]),
-            authFileRepository: AccountScreenModelAuthFiles(files: [descriptor])
+            accountService: AccountScreenModelService(accounts: [account])
         )
 
         await model.reloadAccounts()
-        await model.reloadAuthFiles()
 
         XCTAssertEqual(model.accounts, [account])
-        XCTAssertEqual(model.authFiles, [descriptor])
         XCTAssertFalse(String(describing: model).contains("accessToken"))
     }
 
@@ -44,8 +30,7 @@ final class AccountScreenModelsTests: XCTestCase {
         )
         let service = AccountScreenModelService(accounts: [], permissions: [permission])
         let model = AccountsScreenModel(
-            accountService: service,
-            authFileRepository: AccountScreenModelAuthFiles(files: [])
+            accountService: service
         )
 
         await model.registerDetectedNativeAccounts()
@@ -78,8 +63,7 @@ final class AccountScreenModelsTests: XCTestCase {
 
     func testAccountsModelReloadPreservesEmptyHostResult() async {
         let model = AccountsScreenModel(
-            accountService: AccountScreenModelService(accounts: []),
-            authFileRepository: AccountScreenModelAuthFiles(files: [])
+            accountService: AccountScreenModelService(accounts: [])
         )
 
         await model.reloadAccounts()
@@ -95,8 +79,7 @@ final class AccountScreenModelsTests: XCTestCase {
             credentialReference: "keychain", capabilities: [.disable, .delete], status: .disabled
         )
         let service = AccountScreenModelService(accounts: [owned])
-        let model = AccountsScreenModel(accountService: service,
-            authFileRepository: AccountScreenModelAuthFiles(files: []))
+        let model = AccountsScreenModel(accountService: service)
 
         await model.reloadAccounts()
 
@@ -128,8 +111,7 @@ final class AccountScreenModelsTests: XCTestCase {
         let other = Account.make(providerID: .init(rawValue: "claude"),
             accountKey: "same@example.com-pro", source: .nativeCredential)
         let model = AccountsScreenModel(
-            accountService: AccountScreenModelService(accounts: [legacy, owned, workspace, other]),
-            authFileRepository: AccountScreenModelAuthFiles(files: []))
+            accountService: AccountScreenModelService(accounts: [legacy, owned, workspace, other]))
 
         await model.reloadAccounts()
 
@@ -233,21 +215,6 @@ private actor AccountScreenModelService: AccountManaging {
         existingAccountID: String?,
         fields: [String: String] = [:]
     ) {}
-}
-
-private actor AccountScreenModelAuthFiles: AuthFileRepository {
-    private let files: [AuthFileDescriptor]
-
-    init(files: [AuthFileDescriptor]) {
-        self.files = files
-    }
-
-    func scanAllAuthFiles() -> [AuthFileDescriptor] { files }
-    func readCredential(from file: AuthFileDescriptor) -> AuthFileCredential? { nil }
-    func uploadAuthFile(name: String, content: Data) {}
-    func readAuthFileForImport(from url: URL) -> Data { Data() }
-    func writeDownloadedAuthFile(_ content: Data, to url: URL) {}
-    func downloadAuthFile(name: String) -> Data { Data() }
 }
 
 private actor ImmediateOAuthAuthorizer: OAuthAuthorizing {

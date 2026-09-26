@@ -159,14 +159,9 @@ final class QuotaFeatureControllerTests: XCTestCase {
         await fixture.controller.shutdown()
     }
 
-    func testLegacyFilesCannotCreateMenuPinsOrEraseUnresolvedSelections() async {
+    func testHostAccountsDoNotEraseUnresolvedSelections() async {
         let account = Account.make(providerID: AccountProviderID(rawValue: "claude"), accountKey: "Personal", source: .quotioKeychain)
-        let disabled = AuthFileDescriptor(
-            id: "proxy", providerID: AccountProviderID(rawValue: "claude"), email: "Work",
-            login: nil, expired: nil, accountType: nil, filePath: "/test/claude-work.json",
-            source: .cliProxyApi, filename: "claude-work.json"
-        )
-        let fixture = await makeFixture(account: account, provider: .claude, authFiles: [disabled])
+        let fixture = await makeFixture(account: account, provider: .claude)
         fixture.menuBar.selectedItems = []
         fixture.controller.synchronizeMenuBarSelection()
         XCTAssertFalse(fixture.menuBar.selectedItems.contains { $0.accountKey == "Work" })
@@ -177,7 +172,7 @@ final class QuotaFeatureControllerTests: XCTestCase {
 
         let sameName = await makeFixture(
             account: Account.make(providerID: AccountProviderID(rawValue: "claude"), accountKey: "Work", source: .quotioKeychain),
-            provider: .claude, authFiles: [disabled]
+            provider: .claude
         )
         sameName.menuBar.selectedItems = [MenuBarQuotaItem(provider: "claude", accountKey: "Work")]
         sameName.controller.synchronizeMenuBarSelection()
@@ -212,7 +207,6 @@ final class QuotaFeatureControllerTests: XCTestCase {
         provider: QuotaProvider,
         quotaAccountKey: String? = nil,
         aliases: [String: String] = [:],
-        authFiles: [AuthFileDescriptor] = [],
         hostID: String? = nil,
         canManageSettings: Bool = true,
         lastUpdated: Date = Date(timeIntervalSince1970: 1_000),
@@ -225,8 +219,7 @@ final class QuotaFeatureControllerTests: XCTestCase {
     ) {
         let accountService = QuotaFeatureAccountService(accounts: [account])
         let accounts = AccountsScreenModel(
-            accountService: accountService,
-            authFileRepository: QuotaFeatureAuthFileRepository(files: authFiles)
+            accountService: accountService
         )
         let quota = QuotaScreenModel(coordinator: TestQuotaCoordinator(
             snapshot: QuotaSnapshot(
@@ -245,7 +238,6 @@ final class QuotaFeatureControllerTests: XCTestCase {
         ))
         await quota.bootstrap(mode: .monitor)
         await accounts.reloadAccounts()
-        await accounts.reloadAuthFiles()
         let preferences = QuotaFeaturePreferencesRepository()
         let menuBar = MenuBarSettingsManager(repository: preferences)
         let controller = QuotaFeatureController(
@@ -322,17 +314,6 @@ private actor QuotaFeatureAccountService: AccountManaging {
     func deletedAccountIDs() -> [String] { recordedDeletedAccountIDs }
     func events() -> [String] { recordedEvents }
     func clearEvents() { recordedEvents = [] }
-}
-
-private actor QuotaFeatureAuthFileRepository: AuthFileRepository {
-    let files: [AuthFileDescriptor]
-    init(files: [AuthFileDescriptor] = []) { self.files = files }
-    func scanAllAuthFiles() -> [AuthFileDescriptor] { files }
-    func readCredential(from file: AuthFileDescriptor) -> AuthFileCredential? { nil }
-    func uploadAuthFile(name: String, content: Data) {}
-    func readAuthFileForImport(from url: URL) -> Data { Data() }
-    func writeDownloadedAuthFile(_ content: Data, to url: URL) {}
-    func downloadAuthFile(name: String) -> Data { Data() }
 }
 
 private actor QuotaFeatureOAuthAuthorizer: OAuthAuthorizing {

@@ -33,7 +33,6 @@ enum CompositionRoot {
             }
         )
         let paths = FileProxyConfigurationRepository.defaultPaths()
-        let authFileRepository = FileAuthFileRepository()
         let authFileState = UserDefaultsManagedAuthFileStateRepository()
         let providerTrackingRepository = UserDefaultsProviderTrackingPreferencesRepository()
         let quotioBackend = QuotioCLIBackend(
@@ -67,8 +66,7 @@ enum CompositionRoot {
             }
         }
         let accountsScreenModel = AccountsScreenModel(
-            accountService: quotioBackend,
-            authFileRepository: authFileRepository
+            accountService: quotioBackend
         )
 
         let monitorAuthorizer = QuotioCLIOAuthAuthorizer(

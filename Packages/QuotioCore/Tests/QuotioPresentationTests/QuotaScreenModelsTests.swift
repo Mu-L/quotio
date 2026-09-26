@@ -52,8 +52,7 @@ final class QuotaScreenModelsTests: XCTestCase {
         ]))
         let quota = QuotaScreenModel(coordinator: coordinator)
         let accounts = AccountsScreenModel(
-            accountService: EmptyAccountManager(),
-            authFileRepository: EmptyAuthFileRepository()
+            accountService: EmptyAccountManager()
         )
         let dashboard = DashboardScreenModel(quota: quota, accounts: accounts)
 
@@ -66,8 +65,7 @@ final class QuotaScreenModelsTests: XCTestCase {
     func testDashboardDoesNotReportFullQuotaWithoutAnyReadings() {
         let quota = QuotaScreenModel(coordinator: TestQuotaCoordinator())
         let accounts = AccountsScreenModel(
-            accountService: EmptyAccountManager(),
-            authFileRepository: EmptyAuthFileRepository()
+            accountService: EmptyAccountManager()
         )
         XCTAssertNil(DashboardScreenModel(quota: quota, accounts: accounts).lowestQuotaPercentage)
     }
@@ -75,8 +73,7 @@ final class QuotaScreenModelsTests: XCTestCase {
     func testDashboardModelHidesDisabledAccounts() {
         let quota = QuotaScreenModel(coordinator: TestQuotaCoordinator())
         let accounts = AccountsScreenModel(
-            accountService: EmptyAccountManager(),
-            authFileRepository: EmptyAuthFileRepository()
+            accountService: EmptyAccountManager()
         )
         accounts.replaceAccounts([
             Account.make(
@@ -151,14 +148,4 @@ private actor EmptyAccountManager: AccountManaging {
     ) throws {}
     func setDisabled(_ disabled: Bool, accountID: String) {}
     func delete(accountID: String) throws {}
-}
-
-private actor EmptyAuthFileRepository: AuthFileRepository {
-    func scanAllAuthFiles() -> [AuthFileDescriptor] { [] }
-    func readCredential(from descriptor: AuthFileDescriptor) -> AuthFileCredential? { nil }
-    func readAuthFileForImport(from url: URL) throws -> Data { Data() }
-    func uploadAuthFile(name: String, content: Data) throws {}
-    func downloadAuthFile(name: String) throws -> Data { Data() }
-    func writeDownloadedAuthFile(_ content: Data, to url: URL) throws {}
-    func deleteAuthFile(name: String) throws {}
 }

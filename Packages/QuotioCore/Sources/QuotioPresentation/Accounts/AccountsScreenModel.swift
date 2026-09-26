@@ -7,7 +7,6 @@ import QuotioDomain
 @Observable
 public final class AccountsScreenModel {
     public private(set) var accounts: [Account] = []
-    public private(set) var authFiles: [AuthFileDescriptor] = []
     public private(set) var nativeSourcePermissions: [NativeSourcePermission] = []
     public private(set) var authorizedNativeSources: [NativeSourcePermission] = []
     public private(set) var isScanningAll = false
@@ -21,14 +20,11 @@ public final class AccountsScreenModel {
     public private(set) var failure: AccountServiceFailure?
 
     @ObservationIgnored private let accountService: any AccountManaging
-    @ObservationIgnored private let authFileRepository: any AuthFileRepository
 
     public init(
-        accountService: any AccountManaging,
-        authFileRepository: any AuthFileRepository
+        accountService: any AccountManaging
     ) {
         self.accountService = accountService
-        self.authFileRepository = authFileRepository
     }
 
     public func reloadAccounts() async {
@@ -100,10 +96,6 @@ public final class AccountsScreenModel {
         failedDiscoveryProviders = state.failedProviders
     }
 
-    public func reloadAuthFiles() async {
-        authFiles = await authFileRepository.scanAllAuthFiles()
-    }
-
     public func replaceAccounts(_ accounts: [Account]) {
         self.accounts = accounts
     }
@@ -163,22 +155,4 @@ public final class AccountsScreenModel {
         }
     }
 
-    public func importAuthFile(from url: URL) async throws {
-        let content = try await authFileRepository.readAuthFileForImport(from: url)
-        try await authFileRepository.uploadAuthFile(name: url.lastPathComponent, content: content)
-        await reloadAuthFiles()
-    }
-
-    public func readAuthFileForImport(from url: URL) async throws -> Data {
-        try await authFileRepository.readAuthFileForImport(from: url)
-    }
-
-    public func writeDownloadedAuthFile(_ content: Data, to url: URL) async throws {
-        try await authFileRepository.writeDownloadedAuthFile(content, to: url)
-    }
-
-    public func exportAuthFile(name: String, to url: URL) async throws {
-        let content = try await authFileRepository.downloadAuthFile(name: name)
-        try await authFileRepository.writeDownloadedAuthFile(content, to: url)
-    }
 }

@@ -21,6 +21,9 @@ public final class ProxyManagementScreenModel {
     public var managementAPI: (any ProxyManagementAPI)? { managementClient }
     var isManagementAPIAvailable: Bool { managementClient != nil }
 
+    @ObservationIgnored private let authFileRepository: any AuthFileRepository
+    public private(set) var directAuthFiles: [AuthFileDescriptor] = []
+
     @ObservationIgnored private let authWorkaround: any AntigravityAuthFileWorkaroundApplying
     @ObservationIgnored private let notifications: any NotificationRequesting
     @ObservationIgnored private let refreshSettings: RefreshSettingsManager
@@ -41,6 +44,7 @@ public final class ProxyManagementScreenModel {
         tunnel: TunnelScreenModel,
         agentSetup: AgentSetupScreenModel,
         authWorkaround: any AntigravityAuthFileWorkaroundApplying,
+        authFileRepository: any AuthFileRepository,
         notifications: any NotificationRequesting,
         refreshSettings: RefreshSettingsManager,
         tunnelPreferences: any TunnelPreferencesRepository,
@@ -53,6 +57,7 @@ public final class ProxyManagementScreenModel {
         self.oauth = oauth
         self.tunnel = tunnel
         self.agentSetup = agentSetup
+        self.authFileRepository = authFileRepository
         self.authWorkaround = authWorkaround
         self.notifications = notifications
         self.refreshSettings = refreshSettings
@@ -70,7 +75,6 @@ public final class ProxyManagementScreenModel {
         refreshTask?.cancel()
     }
 
-    public var directAuthFiles: [AuthFileDescriptor] { accounts.authFiles }
 
     var authFilesByProvider: [QuotaProvider: [ManagedAuthFile]] {
         Dictionary(grouping: authFiles.compactMap { file in
@@ -213,7 +217,7 @@ public final class ProxyManagementScreenModel {
     }
 
     public func loadDirectAuthFiles() async {
-        await accounts.reloadAuthFiles()
+        directAuthFiles = await authFileRepository.scanAllAuthFiles()
     }
 
     func deleteAuthFile(_ file: ManagedAuthFile) async {
@@ -233,20 +237,23 @@ public final class ProxyManagementScreenModel {
 
     func importAuthFile(from url: URL) async throws {
         if let client = managementClient {
-            let content = try await accounts.readAuthFileForImport(from: url)
+            let content = try await authFileRepository.readAuthFileForImport(from: url)
             try await client.uploadAuthFile(name: url.lastPathComponent, content: content)
             await refreshData()
         } else {
-            try await accounts.importAuthFile(from: url)
+            let content = try await authFileRepository.readAuthFileForImport(from: url)
+            try await authFileRepository.uploadAuthFile(name: url.lastPathComponent, content: content)
+            await loadDirectAuthFiles()
         }
     }
 
     func exportAuthFile(name: String, to url: URL) async throws {
         if let client = managementClient {
             let content = try await client.downloadAuthFile(name: name)
-            try await accounts.writeDownloadedAuthFile(content, to: url)
+            try await authFileRepository.writeDownloadedAuthFile(content, to: url)
         } else {
-            try await accounts.exportAuthFile(name: name, to: url)
+            let content = try await authFileRepository.downloadAuthFile(name: name)
+            try await authFileRepository.writeDownloadedAuthFile(content, to: url)
         }
     }
 
@@ -276,7 +283,7 @@ public final class ProxyManagementScreenModel {
         isLoading = true
         defer { isLoading = false }
         do {
-            let data = try await accounts.readAuthFileForImport(from: url)
+            let data = try await authFileRepository.readAuthFileForImport(from: url)
             try await client.uploadVertexServiceAccount(data: data)
             await refreshData()
             errorMessage = nil
