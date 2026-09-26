@@ -1,3 +1,4 @@
+use crate::{accounts::vault::Vault, providers::Clock};
 use axum::{
     Json,
     extract::Request,
@@ -10,12 +11,46 @@ use serde_json::json;
 use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::Semaphore;
 
+#[derive(Clone)]
+pub(super) struct Principal {
+    pub id: String,
+    pub owner: bool,
+    pub manage: bool,
+}
+
+#[cfg(test)]
+pub(super) fn owner() -> axum::Extension<Principal> {
+    axum::Extension(Principal {
+        id: "owner".into(),
+        owner: true,
+        manage: true,
+    })
+}
+
+fn public_read(path: &str) -> bool {
+    matches!(
+        path,
+        "/health"
+            | "/openapi.json"
+            | "/v2/snapshot"
+            | "/v2/status"
+            | "/v2/providers"
+            | "/v2/accounts"
+            | "/v2/settings"
+            | "/v2/discovery"
+    ) || ["/v2/providers/", "/v2/accounts/"].iter().any(|prefix| {
+        path.strip_prefix(prefix)
+            .is_some_and(|id| !id.is_empty() && !id.contains('/'))
+    })
+}
+
 pub struct Policy {
     pub manage: bool,
     hosts: Vec<String>,
     origins: Vec<String>,
     token: Option<hmac::Key>,
     requests: Semaphore,
+    authentication: Semaphore,
 }
 impl Policy {
     pub fn new(
@@ -63,6 +98,7 @@ impl Policy {
             origins,
             token,
             requests: Semaphore::new(16),
+            authentication: Semaphore::new(4),
         })
     }
 }
@@ -119,9 +155,11 @@ pub fn error(status: StatusCode, code: &'static str) -> Response {
     }
     (status, Json(body)).into_response()
 }
+type AuthorizationState = (Arc<Policy>, Option<Vault>, Arc<dyn Clock>);
+
 pub async fn guard(
-    axum::extract::State(policy): axum::extract::State<Arc<Policy>>,
-    request: Request,
+    axum::extract::State((policy, vault, clock)): axum::extract::State<AuthorizationState>,
+    mut request: Request,
     next: Next,
 ) -> Response {
     let origin = one(request.headers(), "origin")
@@ -155,19 +193,81 @@ pub async fn guard(
         } else {
             StatusCode::NO_CONTENT.into_response()
         }
-    } else if !authorized(&request, policy.token.as_ref()) {
-        let mut r = error(StatusCode::UNAUTHORIZED, "unauthorized");
-        r.headers_mut()
-            .insert(header::WWW_AUTHENTICATE, "Bearer".parse().unwrap());
-        r
-    } else if !matches!(*request.method(), Method::GET | Method::HEAD) && !policy.manage {
-        error(StatusCode::METHOD_NOT_ALLOWED, "read_only")
-    } else if request.uri().query().is_some() {
-        error(StatusCode::BAD_REQUEST, "unsupported_query")
-    } else if let Ok(_permit) = policy.requests.try_acquire() {
-        next.run(request).await
     } else {
-        error(StatusCode::SERVICE_UNAVAILABLE, "server_busy")
+        let principal: Result<Option<Principal>, &'static str> =
+            if authorized(&request, policy.token.as_ref()) {
+                Ok(Some(Principal {
+                    id: if policy.token.is_some() {
+                        "owner"
+                    } else {
+                        "anonymous"
+                    }
+                    .into(),
+                    owner: policy.token.is_some(),
+                    manage: policy.manage,
+                }))
+            } else {
+                let candidate = one(request.headers(), "authorization")
+                    .and_then(|value| value.strip_prefix("Bearer "))
+                    .filter(|value| value.starts_with("qclient.") && value.len() <= 4096)
+                    .map(str::to_owned);
+                match (vault, candidate) {
+                    (Some(vault), Some(token)) => {
+                        if let Ok(_permit) = policy.authentication.try_acquire() {
+                            match tokio::time::timeout(
+                                std::time::Duration::from_secs(10),
+                                crate::accounts::clients::authenticate(vault, token, clock.now()),
+                            )
+                            .await
+                            {
+                                Ok(Ok(client)) => Ok(client.map(|client| Principal {
+                                    id: client.id,
+                                    owner: false,
+                                    manage: false,
+                                })),
+                                _ => Err("authentication_unavailable"),
+                            }
+                        } else {
+                            Err("server_busy")
+                        }
+                    }
+                    _ => Ok(None),
+                }
+            };
+        match principal {
+            Err(code) => error(StatusCode::SERVICE_UNAVAILABLE, code),
+            Ok(None) => {
+                let mut response = error(StatusCode::UNAUTHORIZED, "unauthorized");
+                response
+                    .headers_mut()
+                    .insert(header::WWW_AUTHENTICATE, "Bearer".parse().unwrap());
+                response
+            }
+            Ok(Some(_))
+                if !matches!(*request.method(), Method::GET | Method::HEAD) && !policy.manage =>
+            {
+                error(StatusCode::METHOD_NOT_ALLOWED, "read_only")
+            }
+            Ok(Some(principal))
+                if policy.token.is_some()
+                    && !principal.owner
+                    && (!matches!(*request.method(), Method::GET | Method::HEAD)
+                        || !public_read(request.uri().path())) =>
+            {
+                error(StatusCode::FORBIDDEN, "insufficient_scope")
+            }
+            Ok(Some(_)) if request.uri().query().is_some() => {
+                error(StatusCode::BAD_REQUEST, "unsupported_query")
+            }
+            Ok(Some(principal)) => {
+                if let Ok(_permit) = policy.requests.try_acquire() {
+                    request.extensions_mut().insert(principal);
+                    next.run(request).await
+                } else {
+                    error(StatusCode::SERVICE_UNAVAILABLE, "server_busy")
+                }
+            }
+        }
     };
     if (response.status().is_client_error() || response.status().is_server_error())
         && !response

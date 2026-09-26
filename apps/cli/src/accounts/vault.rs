@@ -336,7 +336,9 @@ impl Vault {
                 }
                 let doc: Document =
                     serde_json::from_slice(&bytes).map_err(|_| AccountError::Corrupt)?;
-                if !matches!(doc.version, 1..=16)
+                if !matches!(doc.version, 1..=17)
+                    || (doc.version < 17 && !doc.client_grants.is_empty())
+                    || !super::clients::valid(&doc)
                     || (doc.version < 16 && has_factory_selectors(&doc))
                     || (doc.version < 15
                         && (doc
@@ -530,6 +532,12 @@ impl Transaction {
         }
         if has_factory_selectors(&self.document) {
             self.document.version = self.document.version.max(16);
+        }
+        if !super::clients::valid(&self.document) {
+            return Err(AccountError::Input);
+        }
+        if !self.document.client_grants.is_empty() {
+            self.document.version = self.document.version.max(17);
         }
         let bytes = serde_json::to_vec(&self.document).map_err(|_| AccountError::Corrupt)?;
         if bytes.len() > 1024 * 1024 {

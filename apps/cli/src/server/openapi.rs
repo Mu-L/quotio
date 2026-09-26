@@ -58,6 +58,8 @@ mod tests {
             "/openapi.json",
             "/health",
             "/v2/status",
+            "/v2/clients",
+            "/v2/clients/{id}",
             "/v2/providers",
             "/v2/providers/{id}",
             "/v2/snapshot",

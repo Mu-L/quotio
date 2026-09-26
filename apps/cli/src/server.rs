@@ -1,5 +1,6 @@
 //! HTTP management and snapshot transport; provider work uses the shared usage cache.
 mod bootstrap;
+mod clients;
 #[cfg(test)]
 mod discovery_tests;
 mod management;
@@ -19,7 +20,7 @@ use crate::{
     settings::{Overrides, SettingsError, SettingsPatch, SettingsStore, SettingsView},
 };
 use axum::{
-    Json, Router,
+    Extension, Json, Router,
     extract::{FromRequest, Path, Request, State},
     http::StatusCode,
     middleware,
@@ -137,9 +138,19 @@ impl ApiState {
         jobs.push(tokio::spawn(work).abort_handle());
         Ok(())
     }
-    fn account_write_restriction(&self) -> Option<&'static str> {
+    fn management_restriction(&self, principal: &security::Principal) -> Option<&'static str> {
         if !self.manage {
             Some("management_disabled")
+        } else if !principal.manage {
+            Some("insufficient_scope")
+        } else {
+            None
+        }
+    }
+
+    fn account_write_restriction(&self, principal: &security::Principal) -> Option<&'static str> {
+        if let Some(reason) = self.management_restriction(principal) {
+            Some(reason)
         } else if self.no_saved_accounts {
             Some("no_saved_accounts")
         } else if self.vault.is_none() {
@@ -149,8 +160,8 @@ impl ApiState {
         }
     }
 
-    fn restrict_host(&self, host: &mut crate::contract::Host) {
-        let reason = self.account_write_restriction();
+    fn restrict_host(&self, host: &mut crate::contract::Host, principal: &security::Principal) {
+        let reason = self.account_write_restriction(principal);
         host.capabilities.insert(
             "account_write_v2".into(),
             crate::contract::Availability {
@@ -161,45 +172,59 @@ impl ApiState {
         host.capabilities.insert(
             "refresh".into(),
             crate::contract::Availability {
-                available: self.manage,
-                reason: (!self.manage).then(|| "management_disabled".into()),
+                available: self.management_restriction(principal).is_none(),
+                reason: self.management_restriction(principal).map(str::to_owned),
             },
         );
     }
 
-    fn restrict_issue(&self, issue: &mut crate::contract::Issue) {
+    fn restrict_issue(&self, issue: &mut crate::contract::Issue, principal: &security::Principal) {
         if let Some(action) = &mut issue.action {
             let reason = if action.kind == "retry" {
-                (!self.manage).then_some("management_disabled")
+                self.management_restriction(principal)
             } else {
-                self.account_write_restriction()
+                self.account_write_restriction(principal)
             };
             restrict_actions(std::slice::from_mut(action), reason);
         }
     }
 
-    fn restrict_account(&self, account: &mut crate::contract::Account) {
-        restrict_actions(&mut account.actions, self.account_write_restriction());
+    fn restrict_account(
+        &self,
+        account: &mut crate::contract::Account,
+        principal: &security::Principal,
+    ) {
+        restrict_actions(
+            &mut account.actions,
+            self.account_write_restriction(principal),
+        );
         for source in &mut account.sources {
-            restrict_actions(&mut source.actions, self.account_write_restriction());
+            restrict_actions(
+                &mut source.actions,
+                self.account_write_restriction(principal),
+            );
             if let Some(issue) = &mut source.issue {
-                self.restrict_issue(issue);
+                self.restrict_issue(issue, principal);
             }
         }
     }
 
-    fn restrict_snapshot(&self, snapshot: &mut crate::contract::Snapshot) {
-        self.restrict_host(&mut snapshot.host);
+    fn restrict_snapshot(
+        &self,
+        snapshot: &mut crate::contract::Snapshot,
+        principal: &security::Principal,
+    ) {
+        self.restrict_host(&mut snapshot.host, principal);
         for account in &mut snapshot.accounts {
-            self.restrict_account(account);
+            self.restrict_account(account, principal);
         }
         for usage in &mut snapshot.usage {
             if let Some(issue) = &mut usage.issue {
-                self.restrict_issue(issue);
+                self.restrict_issue(issue, principal);
             }
         }
         for issue in snapshot.provider_issues.values_mut() {
-            self.restrict_issue(issue);
+            self.restrict_issue(issue, principal);
         }
     }
 
@@ -251,7 +276,14 @@ fn timestamp(now: time::OffsetDateTime) -> String {
         .unwrap_or_default()
 }
 fn router(state: Arc<ApiState>, policy: Arc<security::Policy>) -> Router {
+    let access = (
+        policy,
+        state.vault.clone().filter(|_| !state.no_saved_accounts),
+        state.context.clock.clone(),
+    );
     Router::new()
+        .route("/v2/clients", get(clients::list).post(clients::create))
+        .route("/v2/clients/{id}", axum::routing::delete(clients::revoke))
         .route("/openapi.json", get(openapi::document))
         .route("/health", get(health))
         .route("/v2/snapshot", get(resolved_snapshot))
@@ -295,7 +327,7 @@ fn router(state: Arc<ApiState>, policy: Arc<security::Policy>) -> Router {
         .route("/v2/operations/{id}", get(operation))
         .fallback(|| async { error(StatusCode::NOT_FOUND, "not_found") })
         .layer(axum::extract::DefaultBodyLimit::max(65536))
-        .layer(middleware::from_fn_with_state(policy, security::guard))
+        .layer(middleware::from_fn_with_state(access, security::guard))
         .with_state(state)
 }
 async fn health(State(state): State<Arc<ApiState>>) -> Json<Value> {
@@ -303,11 +335,14 @@ async fn health(State(state): State<Arc<ApiState>>) -> Json<Value> {
         json!({"status":"ok","ready":state.snapshot.read().await.as_ref().is_some_and(|(generation,_)|*generation==state.generation.load(Ordering::SeqCst))}),
     )
 }
-async fn status(State(state): State<Arc<ApiState>>) -> Json<Value> {
+async fn status(
+    State(state): State<Arc<ApiState>>,
+    Extension(principal): Extension<security::Principal>,
+) -> Json<Value> {
     let settings = state.settings.read().await;
     let status = state.status.lock().await;
     Json(
-        json!({"schema_version":2,"ready":state.snapshot.read().await.as_ref().is_some_and(|(g,_)|*g==state.generation.load(Ordering::SeqCst)),"refreshing":status.refreshing,"last_completed_at":status.last_completed_at,"next_refresh_at":status.next_refresh_at,"settings_revision":settings.revision,"access_mode":if state.manage {"manage"} else {"read_only"},"account_storage_enabled":state.vault.is_some(),"api_version":2,"server_version":env!("CARGO_PKG_VERSION")}),
+        json!({"schema_version":2,"ready":state.snapshot.read().await.as_ref().is_some_and(|(g,_)|*g==state.generation.load(Ordering::SeqCst)),"refreshing":status.refreshing,"last_completed_at":status.last_completed_at,"next_refresh_at":status.next_refresh_at,"settings_revision":settings.revision,"client_id":principal.id,"access_mode":if state.manage && principal.manage {"manage"} else {"read_only"},"account_storage_enabled":state.vault.is_some(),"api_version":2,"server_version":env!("CARGO_PKG_VERSION")}),
     )
 }
 fn provider_value(
@@ -318,6 +353,7 @@ fn provider_value(
 }
 async fn providers(
     State(state): State<Arc<ApiState>>,
+    Extension(principal): Extension<security::Principal>,
 ) -> Json<crate::providers::capabilities::ProviderList> {
     let enabled = state
         .settings
@@ -328,11 +364,18 @@ async fn providers(
         .unwrap_or_default();
     let mut list = crate::providers::capabilities::ProviderList::new(&enabled);
     for provider in &mut list.providers {
-        restrict_actions(&mut provider.actions, state.account_write_restriction());
+        restrict_actions(
+            &mut provider.actions,
+            state.account_write_restriction(&principal),
+        );
     }
     Json(list)
 }
-async fn provider(State(state): State<Arc<ApiState>>, Path(id): Path<String>) -> Response {
+async fn provider(
+    State(state): State<Arc<ApiState>>,
+    Path(id): Path<String>,
+    Extension(principal): Extension<security::Principal>,
+) -> Response {
     let Some(p) = Provider::value_variants().iter().find(|p| p.id() == id) else {
         return error(StatusCode::NOT_FOUND, "provider_not_found");
     };
@@ -346,11 +389,15 @@ async fn provider(State(state): State<Arc<ApiState>>, Path(id): Path<String>) ->
             .tracked_providers()
             .unwrap_or_default(),
     );
-    restrict_actions(&mut descriptor.actions, state.account_write_restriction());
+    restrict_actions(
+        &mut descriptor.actions,
+        state.account_write_restriction(&principal),
+    );
     Json(descriptor).into_response()
 }
 async fn resolved_snapshot(
     State(state): State<Arc<ApiState>>,
+    Extension(principal): Extension<security::Principal>,
 ) -> Result<Json<crate::contract::Snapshot>, ApiError> {
     let _guard = crate::accounts::service::mutation_guard(&state.commit_guard)
         .await
@@ -386,7 +433,7 @@ async fn resolved_snapshot(
         return crate::accounts::api::resolved_snapshot(vault, report, now, ttl)
             .await
             .map(|mut snapshot| {
-                state.restrict_snapshot(&mut snapshot);
+                state.restrict_snapshot(&mut snapshot, &principal);
                 Json(snapshot)
             })
             .map_err(|error| {
@@ -419,7 +466,7 @@ async fn resolved_snapshot(
     );
     let mut snapshot = crate::contract::snapshot::project(accounts, &report, now, ttl)
         .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "invalid_snapshot"))?;
-    state.restrict_snapshot(&mut snapshot);
+    state.restrict_snapshot(&mut snapshot, &principal);
     let digest = crate::contract::snapshot::digest(&snapshot)
         .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "invalid_snapshot"))?;
     if previous

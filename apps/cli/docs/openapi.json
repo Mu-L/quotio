@@ -10,6 +10,136 @@
     }
   ],
   "paths": {
+    "/v2/clients/{id}": {
+      "delete": {
+        "summary": "Revoke a client credential (owner only)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "204": {
+            "description": "Revoked or already absent"
+          }
+        }
+      }
+    },
+    "/v2/clients": {
+      "get": {
+        "summary": "List client credentials (owner only)",
+        "description": "Reads the shared resolved account model. Protected metadata is initialized atomically on first access; repeated reads do not change IDs or revision. No native provider credential scan or provider HTTP request is performed.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      },
+      "post": {
+        "summary": "Issue a read-only client credential (owner only)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientCreated"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientCreate"
+              }
+            }
+          }
+        },
+        "description": "The secret is returned once. Do not automatically retry issuance; revoke a lost credential and issue a new one."
+      }
+    },
     "/v2/discovery": {
       "get": {
         "summary": "Read host native discovery state",
@@ -1780,6 +1910,105 @@
       }
     },
     "schemas": {
+      "ClientList": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version",
+          "clients"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": 2
+          },
+          "clients": {
+            "type": "array",
+            "maxItems": 64,
+            "items": {
+              "$ref": "#/components/schemas/ClientInfo"
+            }
+          }
+        }
+      },
+      "ClientCreated": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version",
+          "host_id",
+          "client",
+          "token"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": 2
+          },
+          "host_id": {
+            "type": "string"
+          },
+          "client": {
+            "$ref": "#/components/schemas/ClientInfo"
+          },
+          "token": {
+            "type": "string",
+            "description": "Returned only once. Never stored in plaintext.",
+            "pattern": "^qclient\\.[A-Za-z0-9_-]{43}\\.[A-Za-z0-9_-]{43}$"
+          }
+        }
+      },
+      "ClientInfo": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "label",
+          "scope",
+          "expires_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "read"
+            ]
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ClientCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "label"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "scope": {
+            "enum": [
+              "read"
+            ],
+            "default": "read"
+          },
+          "expires_in_seconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 31536000,
+            "default": 2592000
+          }
+        }
+      },
       "V2SummaryTotals": {"type": "object", "required": ["lowest", "average"], "properties": {"lowest": {"type": ["number", "null"], "minimum": 0, "maximum": 100}, "average": {"type": ["number", "null"], "minimum": 0, "maximum": 100}}},
       "V2SummaryMetric": {"type": "object", "required": ["display_name", "remaining_percent"], "properties": {"display_name": {"type": "string", "minLength": 1, "maxLength": 512}, "remaining_percent": {"type": ["number", "null"], "minimum": 0, "maximum": 100}}},
       "V2UsageSummary": {"type": "object", "required": ["session_only", "combined", "pair"], "properties": {"session_only": {"$ref": "#/components/schemas/V2SummaryTotals"}, "combined": {"$ref": "#/components/schemas/V2SummaryTotals"}, "pair": {"type": "array", "items": {"$ref": "#/components/schemas/V2SummaryMetric"}, "maxItems": 2}}},
@@ -2052,6 +2281,7 @@
       "Status": {
         "type": "object",
         "properties": {
+          "client_id": {"type": "string"},
           "schema_version": {
             "const": 2
           },

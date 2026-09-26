@@ -51,7 +51,9 @@ schemas.
 | Request | Purpose |
 | --- | --- |
 | `GET /health` | Listener and refresh readiness |
-| `GET /v2/status` | Scheduler state, API version, access mode and settings revision |
+| `GET /v2/status` | Scheduler state, API version, client ID, access mode and settings revision |
+| `GET/POST /v2/clients` | Owner-only list or issuance of client credentials |
+| `DELETE /v2/clients/{id}` | Owner-only credential revocation |
 | `GET /v2/snapshot` | Resolved accounts, source health, quota, issues and revision |
 | `GET /v2/providers` or `/v2/providers/{id}` | Provider names, available actions and input metadata |
 | `GET /v2/accounts` or `/v2/accounts/{id}` | Resolved logical account metadata |
@@ -174,6 +176,35 @@ configured by `--public-url`. Host headers must match the listener or that confi
 origin; forwarded headers do not establish trust. Browser origins must be explicitly
 listed with `--allow-origin`. Responses use `Cache-Control: no-store` and do not
 expose credentials in logs or errors.
+
+## Client credentials
+
+Keep the owner token (`QUOTIO_SERVER_TOKEN` or the native bootstrap token) on the
+host. On a management-enabled host, use it to issue a separate credential with
+`POST /v2/clients`:
+
+```json
+{"label":"Phone","scope":"read","expires_in_seconds":2592000}
+```
+
+The response includes `host_id`, client metadata and a `token`. Save that token
+securely: the host returns it only once. If the response is lost, list the clients,
+revoke the lost credential, and issue a new one. Do not automatically retry issuance.
+
+A `read` client can read snapshots, provider/account metadata, settings, discovery
+status and health. It cannot change settings or accounts, request a refresh, issue
+credentials, or inspect OAuth sessions and operations. Returned capabilities reflect
+those limits. `GET /v2/status` reports the caller's `client_id` and access mode.
+
+Credentials expire after 30 days by default. The owner can choose 1 second through
+365 days when issuing one. Each vault supports up to 64 unexpired clients. The
+protected vault stores only a hash bound to its host ID. Expired, revoked, altered,
+or wrong-host credentials receive `401`. An unavailable credential store returns
+`503`, allowing the client to retry without discarding its credential.
+
+Revoke with `DELETE /v2/clients/{id}`. This blocks later requests and is safe to
+repeat. Client listing never returns tokens or hashes. Client management requires
+the saved-account vault and is unavailable with `--no-saved-accounts`.
 
 ## Native parent bootstrap
 

@@ -87,7 +87,7 @@ async fn read_only_hosts_do_not_advertise_mutation_or_refresh_actions() {
     let writable = Arc::get_mut(&mut state).unwrap();
     writable.manage = false;
     writable.no_saved_accounts = false;
-    let Json(catalog) = providers(State(state.clone())).await;
+    let Json(catalog) = providers(State(state.clone()), security::owner()).await;
     assert!(
         catalog
             .providers
@@ -95,14 +95,15 @@ async fn read_only_hosts_do_not_advertise_mutation_or_refresh_actions() {
             .flat_map(|p| &p.actions)
             .all(|action| !action.available)
     );
-    let Json(list) = management::resolved_accounts(State(state.clone()))
+    let Json(list) = management::resolved_accounts(State(state.clone()), security::owner())
         .await
         .unwrap_or_else(|_| panic!());
     assert!(!list.host.capabilities["account_write_v2"].available);
     assert!(!list.host.capabilities["refresh"].available);
-    let Json(account) = management::resolved_account(State(state.clone()), Path(id.clone()))
-        .await
-        .unwrap_or_else(|_| panic!());
+    let Json(account) =
+        management::resolved_account(State(state.clone()), Path(id.clone()), security::owner())
+            .await
+            .unwrap_or_else(|_| panic!());
     assert!(account.actions.iter().all(|action| !action.available));
     assert!(
         account
@@ -129,7 +130,7 @@ async fn read_only_hosts_do_not_advertise_mutation_or_refresh_actions() {
             }],
         },
     ));
-    let Json(snapshot) = resolved_snapshot(State(state.clone()))
+    let Json(snapshot) = resolved_snapshot(State(state.clone()), security::owner())
         .await
         .unwrap_or_else(|_| panic!());
     assert!(!snapshot.host.capabilities["refresh"].available);
@@ -219,7 +220,7 @@ async fn account_scoped_refresh_accepts_borrowed_proxy_account() {
             failures: vec![],
         },
     ));
-    let Json(snapshot) = resolved_snapshot(State(state.clone()))
+    let Json(snapshot) = resolved_snapshot(State(state.clone()), security::owner())
         .await
         .unwrap_or_else(|_| panic!());
     let refresh_guard = state.refresh_lock.lock().await;
@@ -962,7 +963,7 @@ async fn read_only_reset_credit_snapshots_expire_without_changing_quota() {
     for (seconds, present) in [(0, true), (1, false)] {
         Arc::get_mut(&mut state).unwrap().context.clock =
             Arc::new(FixedClock(now + time::Duration::seconds(seconds)));
-        let Json(value) = resolved_snapshot(State(state.clone()))
+        let Json(value) = resolved_snapshot(State(state.clone()), security::owner())
             .await
             .unwrap_or_else(|_| panic!());
         assert_eq!(value.usage[0].reset_credits.is_some(), present);
@@ -997,7 +998,7 @@ async fn antigravity_owned_intake_is_explicit_and_idempotent() {
     .await
     .unwrap_or_else(|_| panic!());
     assert_eq!(retry.id, op.id);
-    let Json(account_list) = management::resolved_accounts(State(state.clone()))
+    let Json(account_list) = management::resolved_accounts(State(state.clone()), security::owner())
         .await
         .unwrap_or_else(|_| panic!());
     let accounts = serde_json::to_value(account_list).unwrap();
@@ -1044,7 +1045,7 @@ async fn kiro_owned_intake_is_explicit_and_idempotent() {
     .await
     .unwrap_or_else(|_| panic!());
     assert_eq!(retry.id, op.id);
-    let Json(account_list) = management::resolved_accounts(State(state.clone()))
+    let Json(account_list) = management::resolved_accounts(State(state.clone()), security::owner())
         .await
         .unwrap_or_else(|_| panic!());
     let accounts = serde_json::to_value(account_list).unwrap();
@@ -1091,7 +1092,7 @@ async fn factory_owned_intake_is_explicit_and_idempotent() {
     .await
     .unwrap_or_else(|_| panic!());
     assert_eq!(retry.id, op.id);
-    let Json(account_list) = management::resolved_accounts(State(state.clone()))
+    let Json(account_list) = management::resolved_accounts(State(state.clone()), security::owner())
         .await
         .unwrap_or_else(|_| panic!());
     let accounts = serde_json::to_value(account_list).unwrap();
@@ -1146,7 +1147,7 @@ async fn grok_owned_intake_is_explicit_secret_free_and_idempotent() {
     .await
     .unwrap_or_else(|_| panic!());
     assert_eq!(retry.id, op.id);
-    let Json(account_list) = management::resolved_accounts(State(state.clone()))
+    let Json(account_list) = management::resolved_accounts(State(state.clone()), security::owner())
         .await
         .unwrap_or_else(|_| panic!());
     let accounts = serde_json::to_value(account_list).unwrap();
@@ -1227,7 +1228,7 @@ async fn account_edits_preserve_unrelated_quota_and_do_not_promote_invalidated_r
     assert_eq!(done(&state, &op.id).await.status, "completed");
     assert!(state.restore_pending.load(Ordering::SeqCst));
     state.restore_pending.store(false, Ordering::SeqCst);
-    let Json(frame) = resolved_snapshot(State(state.clone()))
+    let Json(frame) = resolved_snapshot(State(state.clone()), security::owner())
         .await
         .unwrap_or_else(|_| panic!());
     assert_eq!(
@@ -1271,7 +1272,7 @@ async fn account_edits_preserve_unrelated_quota_and_do_not_promote_invalidated_r
     assert_eq!(done(&state, &op.id).await.status, "completed");
     assert!(state.restore_pending.load(Ordering::SeqCst));
     state.restore_pending.store(false, Ordering::SeqCst);
-    let Json(frame) = resolved_snapshot(State(state.clone()))
+    let Json(frame) = resolved_snapshot(State(state.clone()), security::owner())
         .await
         .unwrap_or_else(|_| panic!());
     assert_eq!(frame.accounts.len(), 1);
@@ -1286,7 +1287,7 @@ async fn account_edits_preserve_unrelated_quota_and_do_not_promote_invalidated_r
 #[tokio::test]
 async fn account_http_services_are_secret_free_idempotent_and_fenced() {
     let (state, dir, id) = fixture().await;
-    let Json(account_list) = management::resolved_accounts(State(state.clone()))
+    let Json(account_list) = management::resolved_accounts(State(state.clone()), security::owner())
         .await
         .unwrap_or_else(|_| panic!());
     let accounts = serde_json::to_value(account_list).unwrap();
@@ -1339,7 +1340,7 @@ async fn account_http_services_are_secret_free_idempotent_and_fenced() {
             .unwrap_or_else(|_| panic!());
     assert_eq!(done(&state, &remove.id).await.status, "completed");
     assert!(matches!(
-        management::resolved_account(State(state.clone()), Path(id)).await,
+        management::resolved_account(State(state.clone()), Path(id), security::owner()).await,
         Err(ApiError(StatusCode::NOT_FOUND, _))
     ));
     // A late pre-delete refresh cannot be read even if its report arrives afterwards.
@@ -1352,7 +1353,7 @@ async fn account_http_services_are_secret_free_idempotent_and_fenced() {
             failures: vec![],
         },
     ));
-    let Json(snapshot) = resolved_snapshot(State(state.clone()))
+    let Json(snapshot) = resolved_snapshot(State(state.clone()), security::owner())
         .await
         .unwrap_or_else(|_| panic!());
     assert!(snapshot.usage.is_empty());
@@ -1410,7 +1411,7 @@ async fn blocked_mutation_guard_returns_bounded_errors() {
     let held = state.commit_guard.lock().await;
     tokio::time::pause();
     assert!(matches!(
-        resolved_snapshot(State(state.clone())).await,
+        resolved_snapshot(State(state.clone()), security::owner()).await,
         Err(ApiError(StatusCode::SERVICE_UNAVAILABLE, _))
     ));
     assert!(matches!(
@@ -1645,9 +1646,10 @@ async fn account_retry_survives_loss_of_in_memory_operations() {
     .unwrap_or_else(|_| panic!());
     assert_ne!(first.id, retry.id);
     assert_eq!(done(&state, &retry.id).await.status, "completed");
-    let Json(account) = management::resolved_account(State(state.clone()), Path(id.clone()))
-        .await
-        .unwrap_or_else(|_| panic!());
+    let Json(account) =
+        management::resolved_account(State(state.clone()), Path(id.clone()), security::owner())
+            .await
+            .unwrap_or_else(|_| panic!());
     assert_eq!(account.display_name, "later change");
     *state.operations.lock().await = Operations::default();
     let conflict = management::resolved_patch(
@@ -1859,9 +1861,9 @@ async fn resolved_account_read_contract_is_automatic_shared_and_durable() {
     let mut expected = crate::accounts::api::resolved_list(state.vault.clone().unwrap())
         .await
         .unwrap();
-    state.restrict_host(&mut expected.host);
+    state.restrict_host(&mut expected.host, &security::owner().0);
     for account in &mut expected.accounts {
-        state.restrict_account(account);
+        state.restrict_account(account, &security::owner().0);
     }
     assert_eq!(actual, serde_json::to_value(&expected).unwrap());
     assert_eq!(actual["accounts"][0]["display_name"], "old label");
@@ -2202,11 +2204,11 @@ async fn resolved_snapshots_keep_revisions_and_do_not_resurrect_unlinked_sources
             failures: vec![],
         },
     ));
-    let Json(first) = resolved_snapshot(State(state.clone()))
+    let Json(first) = resolved_snapshot(State(state.clone()), security::owner())
         .await
         .unwrap_or_else(|_| panic!());
     assert_eq!(first.usage[0].freshness, crate::contract::Freshness::Fresh);
-    let Json(repeated) = resolved_snapshot(State(state.clone()))
+    let Json(repeated) = resolved_snapshot(State(state.clone()), security::owner())
         .await
         .unwrap_or_else(|_| panic!());
     assert_eq!(first.revision, repeated.revision);
@@ -2237,7 +2239,7 @@ async fn resolved_snapshots_keep_revisions_and_do_not_resurrect_unlinked_sources
             .unwrap();
         tx.commit().unwrap();
     }
-    let Json(replaced) = resolved_snapshot(State(state.clone()))
+    let Json(replaced) = resolved_snapshot(State(state.clone()), security::owner())
         .await
         .unwrap_or_else(|_| panic!());
     assert!(replaced.usage[0].metrics.is_empty());
@@ -2249,7 +2251,7 @@ async fn resolved_snapshots_keep_revisions_and_do_not_resurrect_unlinked_sources
     accounts::service::remove_resolved(vault, replaced.accounts[0].id.clone())
         .await
         .unwrap();
-    let Json(deleted) = resolved_snapshot(State(state.clone()))
+    let Json(deleted) = resolved_snapshot(State(state.clone()), security::owner())
         .await
         .unwrap_or_else(|_| panic!());
     assert!(deleted.accounts.is_empty());
@@ -2279,10 +2281,10 @@ async fn resolved_snapshot_without_saved_accounts_uses_no_vault() {
             failures: vec![],
         },
     ));
-    let Json(first) = resolved_snapshot(State(state.clone()))
+    let Json(first) = resolved_snapshot(State(state.clone()), security::owner())
         .await
         .unwrap_or_else(|_| panic!());
-    let Json(second) = resolved_snapshot(State(state.clone()))
+    let Json(second) = resolved_snapshot(State(state.clone()), security::owner())
         .await
         .unwrap_or_else(|_| panic!());
     assert_eq!(first.accounts.len(), 1);
@@ -2298,7 +2300,7 @@ async fn external_snapshot_account_can_refresh_without_duplicate_observations() 
     let (state, dir, _) = fixture().await;
     state.settings.write().await.values.enabled_providers = vec!["mock".into()];
     refresh(&state, None).await.unwrap();
-    let Json(snapshot) = resolved_snapshot(State(state.clone()))
+    let Json(snapshot) = resolved_snapshot(State(state.clone()), security::owner())
         .await
         .unwrap_or_else(|_| panic!());
     let id = snapshot.accounts[0].id.clone();
@@ -2491,5 +2493,143 @@ async fn native_discovery_is_a_deduplicated_host_operation_with_a_shared_report(
             .mutation_receipts
             .is_empty()
     );
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[tokio::test]
+async fn delegated_read_clients_are_revocable_and_cannot_reach_private_or_write_routes() {
+    let (mut state, dir, _) = fixture().await;
+    Arc::get_mut(&mut state).unwrap().no_saved_accounts = false;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let root = "synthetic-client-owner-token-123456789";
+    let app = router(
+        state.clone(),
+        Arc::new(security::Policy::new(address, true, None, &[], Some(root.into())).unwrap()),
+    );
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let client = reqwest::Client::builder().no_proxy().build().unwrap();
+    let base = format!("http://{address}");
+    let response = client
+        .post(format!("{base}/v2/clients"))
+        .bearer_auth(root)
+        .json(&json!({"label":"Phone","scope":"read"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 201);
+    assert_eq!(response.headers()["cache-control"], "no-store");
+    let issued: Value = response.json().await.unwrap();
+    let document: Value = serde_json::from_str(include_str!("../../docs/openapi.json")).unwrap();
+    jsonschema::draft202012::new(
+        &json!({"$ref":"#/components/schemas/ClientCreated", "components":document["components"]}),
+    )
+    .unwrap()
+    .validate(&issued)
+    .unwrap();
+    let token = issued["token"].as_str().unwrap();
+    let id = issued["client"]["id"].as_str().unwrap();
+    let snapshot: Value = client
+        .get(format!("{base}/v2/snapshot"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(snapshot["host"]["id"], issued["host_id"]);
+    assert_eq!(
+        snapshot["host"]["capabilities"]["account_write_v2"]["available"],
+        false
+    );
+    assert_eq!(
+        snapshot["host"]["capabilities"]["refresh"]["available"],
+        false
+    );
+    assert!(
+        snapshot["accounts"][0]["actions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|action| action["available"] == false)
+    );
+    let status: Value = client
+        .get(format!("{base}/v2/status"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(status["client_id"], id);
+    assert_eq!(status["access_mode"], "read_only");
+    for path in [
+        "/v2/clients",
+        "/v2/auth/sessions/private",
+        "/v2/operations/private",
+    ] {
+        assert_eq!(
+            client
+                .get(format!("{base}{path}"))
+                .bearer_auth(token)
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            403
+        );
+    }
+    for path in [
+        "/v2/refresh",
+        "/v2/accounts",
+        "/v2/sources/authorize",
+        "/v2/clients",
+    ] {
+        assert_eq!(
+            client
+                .post(format!("{base}{path}"))
+                .bearer_auth(token)
+                .json(&json!({}))
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            403
+        );
+    }
+    let listed: Value = client
+        .get(format!("{base}/v2/clients"))
+        .bearer_auth(root)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(listed["clients"][0]["id"], id);
+    assert!(!listed.to_string().contains(token));
+    assert!(listed["clients"][0].get("digest").is_none());
+    assert_eq!(
+        client
+            .delete(format!("{base}/v2/clients/{id}"))
+            .bearer_auth(root)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        204
+    );
+    let revoked = client
+        .get(format!("{base}/v2/snapshot"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(revoked.status(), 401);
+    assert_eq!(revoked.headers()["cache-control"], "no-store");
+    server.abort();
+    let _ = server.await;
     std::fs::remove_dir_all(dir).unwrap();
 }
