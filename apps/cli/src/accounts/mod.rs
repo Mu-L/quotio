@@ -252,7 +252,7 @@ impl Account {
 
     pub fn observe_name(&mut self, name: &str) -> Result<bool, AccountError> {
         let name = validate_observed_name(name)?;
-        // These exact labels came from our native source constructors, not an inferred email pattern.
+        // Recognize labels emitted by native source constructors; explicit user labels remain authoritative.
         let generated = match &self.credential {
             Credential::DevinDesktopNative { source } => Some(match source.location {
                 sources::DevinDesktopLocation::CredentialsToml => {
@@ -262,6 +262,19 @@ impl Account {
                     "Devin Desktop state.vscdb".to_owned()
                 }
             }),
+            Credential::GrokNative { .. }
+                if self
+                    .label
+                    .strip_prefix("grok native ")
+                    .is_some_and(|suffix| {
+                        suffix.len() == 8
+                            && suffix
+                                .bytes()
+                                .all(|byte| byte.is_ascii_alphanumeric() || b"-_".contains(&byte))
+                    }) =>
+            {
+                Some(self.label.clone())
+            }
             Credential::CopilotNative { source } => {
                 let current = format!("Copilot {}", &source.identity()?[..8]);
                 if source.location == sources::CopilotLocation::GhKeychain && self.label != current
@@ -696,6 +709,16 @@ mod naming_tests {
         .unwrap();
         let fallback = format!("Copilot {}", &copilot.identity().unwrap()[..8]);
         let cases = [
+            (
+                Provider::Catalog("grok"),
+                Credential::GrokNative {
+                    source: sources::GrokNativeReference {
+                        path: "/tmp/grok/auth.json".into(),
+                        entry_key: "https://auth.x.ai::fixture".into(),
+                    },
+                },
+                "grok native oZxUC-NU".into(),
+            ),
             (
                 Provider::Catalog("copilot"),
                 Credential::CopilotNative {
