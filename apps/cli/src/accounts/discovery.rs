@@ -86,7 +86,7 @@ type PreferencesReader = fn(QuotioDomain) -> Result<Vec<u8>, AccountError>;
 pub struct Registry {
     pub home: Option<PathBuf>,
     pub preferences: PreferencesReader,
-    entries: HashMap<String, (Instant, Reference)>,
+    entries: HashMap<String, (Instant, String, Reference)>,
 }
 impl Default for Registry {
     fn default() -> Self {
@@ -100,22 +100,38 @@ impl Default for Registry {
 impl Registry {
     #[cfg(test)]
     pub(crate) fn expire_all(&mut self) {
-        for (created, _) in self.entries.values_mut() {
+        for (created, _, _) in self.entries.values_mut() {
             *created = Instant::now() - TTL;
         }
     }
     pub fn get(&mut self, id: &str) -> Result<Reference, AccountError> {
+        self.get_for(id, "owner", true)
+    }
+    pub(crate) fn get_for(
+        &mut self,
+        id: &str,
+        owner: &str,
+        admin: bool,
+    ) -> Result<Reference, AccountError> {
         self.prune();
         self.entries
             .get(id)
-            .map(|(_, r)| r.clone())
+            .filter(|(_, issued_to, _)| admin || issued_to == owner)
+            .map(|(_, _, r)| r.clone())
             .ok_or(AccountError::NotFound)
     }
     fn prune(&mut self) {
         self.entries
-            .retain(|_, (created, _)| created.elapsed() < TTL);
+            .retain(|_, (created, _, _)| created.elapsed() < TTL);
     }
     pub fn inspect(&mut self, request: Request) -> Result<Value, AccountError> {
+        self.inspect_for("owner", request)
+    }
+    pub(crate) fn inspect_for(
+        &mut self,
+        owner: &str,
+        request: Request,
+    ) -> Result<Value, AccountError> {
         let Request {
             provider,
             kind,
@@ -264,15 +280,20 @@ impl Registry {
         }
         for (index, reference) in references.into_iter().enumerate() {
             let identity = reference.identity()?;
-            let existing = self.entries.iter().find_map(|(id, (_, existing))| {
-                (existing.identity().ok().as_ref() == Some(&identity)).then(|| id.clone())
-            });
+            let existing = self
+                .entries
+                .iter()
+                .find_map(|(id, (_, issued_to, existing))| {
+                    (issued_to == owner && existing.identity().ok().as_ref() == Some(&identity))
+                        .then(|| id.clone())
+                });
             let id = match existing {
                 Some(id) => id,
                 None if self.entries.len() < 256 => super::random_string()?,
                 None => return Err(AccountError::Busy),
             };
-            self.entries.insert(id.clone(), (Instant::now(), reference));
+            self.entries
+                .insert(id.clone(), (Instant::now(), owner.into(), reference));
             candidates.push(json!({"label":format!("Native entry {}", index + 1),"status":"available","source":{"kind":"discovered","discovery_ref":id}}));
         }
         Ok(
@@ -839,6 +860,33 @@ mod tests {
         ));
     }
     #[test]
+    fn references_are_reused_only_within_the_requesting_client() {
+        let mut registry = Registry {
+            preferences: |_| {
+                Ok(
+                    br#"[{"id":"11111111-1111-1111-1111-111111111111","type":"clinepass"}]"#
+                        .to_vec(),
+                )
+            },
+            ..Default::default()
+        };
+        let request = || {
+            serde_json::from_value(json!({"provider":"clinepass","kind":"quotio_custom_provider","domain":"production","inspect":true})).unwrap()
+        };
+        let first = registry.inspect_for("client-a", request()).unwrap();
+        let repeated = registry.inspect_for("client-a", request()).unwrap();
+        let other = registry.inspect_for("client-b", request()).unwrap();
+        let id = first["candidates"][0]["source"]["discovery_ref"]
+            .as_str()
+            .unwrap();
+        assert_eq!(first["candidates"], repeated["candidates"]);
+        assert_ne!(first["candidates"], other["candidates"]);
+        assert!(registry.get_for(id, "client-a", false).is_ok());
+        assert!(registry.get_for(id, "client-b", false).is_err());
+        assert!(registry.get_for(id, "owner", true).is_ok());
+    }
+
+    #[test]
     fn repeated_scans_reuse_live_references() {
         let mut registry = Registry {
             preferences: |_| {
@@ -874,20 +922,22 @@ mod tests {
             entry_key: "https://auth.x.ai::fixture".into(),
         });
         let mut registry = Registry::default();
-        registry
-            .entries
-            .insert("expired".into(), (Instant::now() - TTL, source.clone()));
+        registry.entries.insert(
+            "expired".into(),
+            (Instant::now() - TTL, "owner".into(), source.clone()),
+        );
         assert!(registry.get("expired").is_err());
         registry
             .entries
-            .insert("current".into(), (Instant::now(), source));
+            .insert("current".into(), (Instant::now(), "owner".into(), source));
         assert!(registry.get("current").is_ok());
         assert!(registry.get("unknown").is_err());
         let source = registry.get("current").unwrap();
         for i in 0..255 {
-            registry
-                .entries
-                .insert(i.to_string(), (Instant::now(), source.clone()));
+            registry.entries.insert(
+                i.to_string(),
+                (Instant::now(), "owner".into(), source.clone()),
+            );
         }
         registry.preferences = |_| {
             Ok(br#"[{"id":"11111111-1111-1111-1111-111111111111","type":"clinepass"}]"#.to_vec())

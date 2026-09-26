@@ -223,6 +223,7 @@ pub(super) async fn migrate(
 }
 pub(super) async fn discover(
     State(state): State<Arc<ApiState>>,
+    Extension(principal): Extension<security::Principal>,
     ApiJson(body): ApiJson<Value>,
 ) -> Result<Json<Value>, ApiError> {
     let input = serde_json::from_value(body)
@@ -237,7 +238,7 @@ pub(super) async fn discover(
                 .discovery
                 .try_lock()
                 .map_err(|_| AccountError::Busy)?
-                .inspect(input)
+                .inspect_for(&principal.id, input)
         }),
     )
     .await
@@ -492,7 +493,7 @@ async fn mutate(
                                     .discovery
                                     .try_lock()
                                     .map_err(|_| account_code(&AccountError::Busy))?
-                                    .get(&discovery_ref)
+                                    .get_for(&discovery_ref, &principal.id, principal.owner)
                                     .map_err(|e| account_code(&e))?;
                                 reference.resolve().await
                             }
