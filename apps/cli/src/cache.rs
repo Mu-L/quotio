@@ -242,25 +242,25 @@ impl UsageCache {
             let path = entry.path.clone();
             let cached = match tokio::task::spawn_blocking(move || read(&path)).await {
                 Ok(Ok(value)) => value.filter(|cached| {
-                    (cached.usage.is_some() || cached.last_failure.is_some())
-                        && cached.usage.as_ref().is_none_or(|usage| {
-                            usage.provider == adapter.id()
-                                && usage.account_ref.as_ref().map(|a| &a.id)
-                                    == adapter.account_ref().as_ref().map(|a| &a.id)
-                                && valid(usage)
-                                && adapter.cacheable(usage)
-                        })
+                    cached.usage.as_ref().is_none_or(|usage| {
+                        usage.provider == adapter.id()
+                            && usage.account_ref.as_ref().map(|a| &a.id)
+                                == adapter.account_ref().as_ref().map(|a| &a.id)
+                            && valid(usage)
+                            && adapter.cacheable(usage)
+                    })
                 }),
                 _ => {
                     diagnostic("could not read usage cache");
                     None
                 }
             };
+            let valid_entry = cached.is_some();
             if let Some(cached) = cached {
                 snapshot = cached.usage;
                 last_failure = cached.last_failure;
             }
-            if snapshot.is_none() && last_failure.is_none() && entry.path.exists() {
+            if !valid_entry && entry.path.exists() {
                 diagnostic("invalid usage cache");
             }
         }
@@ -337,6 +337,19 @@ impl UsageCache {
         if same_identity {
             let last_failure = if let Some(usage) = report.providers.first() {
                 if !adapter.cacheable(usage) || !valid(usage) {
+                    // A current plan-only response must supersede old quota windows.
+                    if let Some(entry) = entry {
+                        let empty = CachedObservation {
+                            usage: None,
+                            last_failure: None,
+                        };
+                        if !matches!(
+                            tokio::task::spawn_blocking(move || entry.write(&empty)).await,
+                            Ok(Ok(()))
+                        ) {
+                            diagnostic("could not clear superseded usage cache");
+                        }
+                    }
                     return report;
                 }
                 None

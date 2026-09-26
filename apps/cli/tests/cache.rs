@@ -39,6 +39,7 @@ struct Adapter {
     calls: AtomicUsize,
     fails: AtomicBool,
     partial: AtomicBool,
+    plan_only: AtomicBool,
     reset_credits: Mutex<Option<quotio::domain::ResetCredits>>,
 }
 impl Adapter {
@@ -52,6 +53,7 @@ impl Adapter {
             calls: AtomicUsize::new(0),
             fails: AtomicBool::new(false),
             partial: AtomicBool::new(false),
+            plan_only: AtomicBool::new(false),
             reset_credits: Mutex::new(None),
         })
     }
@@ -96,6 +98,10 @@ impl ProviderAdapter for Adapter {
                 });
             }
             usage.account.id = self.login.lock().unwrap().clone();
+            if self.plan_only.load(Ordering::SeqCst) {
+                usage.windows.clear();
+                usage.account.plan = Some("Plan without quota".into());
+            }
             for window in &mut usage.windows {
                 window.fetched_at = context.clock.now();
             }
@@ -161,6 +167,31 @@ impl Drop for Fixture {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.dir);
     }
+}
+
+#[tokio::test]
+async fn plan_only_success_supersedes_previously_cached_quota() {
+    let fixture = Fixture::new();
+    let adapter = Adapter::new("plan-only");
+    fixture.collect(vec![adapter.clone()], true).await;
+    adapter.plan_only.store(true, Ordering::SeqCst);
+    let current = fixture.collect(vec![adapter.clone()], true).await;
+    assert!(current.failures.is_empty());
+    assert!(current.providers[0].windows.is_empty());
+    let restored = fixture
+        .cache
+        .restore(
+            &fixture.collector,
+            CollectRequest {
+                providers: vec![adapter.clone()],
+                timeout: Duration::from_secs(3),
+                cancellation: Cancellation::default(),
+            },
+        )
+        .await;
+    assert!(restored.providers.is_empty());
+    assert!(restored.failures.is_empty());
+    assert_eq!(adapter.calls.load(Ordering::SeqCst), 2);
 }
 
 #[tokio::test]
