@@ -6,6 +6,14 @@ import XCTest
 /// must never be converted into a fake display value (100 - (-1) = 101%).
 @MainActor
 final class QuotaDisplayModeTests: XCTestCase {
+    func testMetricNamesPreserveHostTextEvenWhenTheyMatchLegacyIDs() {
+        for name in ["gemini-3-pro", "codex-future-tier", "factory-standard-weekly", "Future model 3"] {
+            let metric = QuotaMetric(name: name, percentage: -1, resetTime: "")
+            XCTAssertEqual(metric.displayName, name)
+            XCTAssertEqual(metric.formattedPercentage, "—")
+        }
+    }
+
     // MARK: - No-data sentinel propagation
 
     /// The exact defect from issue #219: an unfetched quota item carries

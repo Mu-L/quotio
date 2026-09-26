@@ -89,17 +89,7 @@ public extension MenuBarSettingsManager {
         return (modelAggregationMode == .lowest ? totals.lowest : totals.average) ?? -1
     }
 
-    func aggregateModelPercentages(_ percentages: [Double]) -> Double {
-        let validPercentages = percentages.filter { $0 >= 0 }
-        guard !validPercentages.isEmpty else { return -1 }
-        
-        switch modelAggregationMode {
-        case .lowest:
-            return validPercentages.min() ?? -1
-        case .average:
-            return validPercentages.reduce(0, +) / Double(validPercentages.count)
-        }
-    }
+
 }
 
 // MARK: - Refresh Settings Manager

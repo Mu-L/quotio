@@ -226,60 +226,6 @@ private struct AccountQuotaCardV2: View {
         provider == .antigravity && antigravityAccounts.isActive(email: account.email)
     }
 
-    /// Build 4-group display for Antigravity: Gemini 3 Pro, Gemini 3 Flash, Gemini 3 Image, Claude 4.5
-    private var antigravityDisplayGroups: [AntigravityDisplayGroup] {
-        guard let data = account.quotaData, provider == .antigravity else { return [] }
-
-        let summaryModels = data.models.filter { $0.name.hasPrefix("antigravity-") }
-        if !summaryModels.isEmpty {
-            return summaryModels.map {
-                AntigravityDisplayGroup(
-                    name: $0.displayName,
-                    percentage: $0.percentage,
-                    models: [$0]
-                )
-            }
-        }
-
-        var groups: [AntigravityDisplayGroup] = []
-
-        let gemini3ProModels = data.models.filter {
-            $0.name.contains("gemini-3-pro") && !$0.name.contains("image")
-        }
-        if !gemini3ProModels.isEmpty {
-            let aggregatedQuota = settings.aggregateModelPercentages(gemini3ProModels.map(\.percentage))
-            if aggregatedQuota >= 0 {
-                groups.append(AntigravityDisplayGroup(name: "Gemini 3 Pro", percentage: aggregatedQuota, models: gemini3ProModels))
-            }
-        }
-
-        let gemini3FlashModels = data.models.filter { $0.name.contains("gemini-3-flash") }
-        if !gemini3FlashModels.isEmpty {
-            let aggregatedQuota = settings.aggregateModelPercentages(gemini3FlashModels.map(\.percentage))
-            if aggregatedQuota >= 0 {
-                groups.append(AntigravityDisplayGroup(name: "Gemini 3 Flash", percentage: aggregatedQuota, models: gemini3FlashModels))
-            }
-        }
-
-        let geminiImageModels = data.models.filter { $0.name.contains("image") }
-        if !geminiImageModels.isEmpty {
-            let aggregatedQuota = settings.aggregateModelPercentages(geminiImageModels.map(\.percentage))
-            if aggregatedQuota >= 0 {
-                groups.append(AntigravityDisplayGroup(name: "Gemini 3 Image", percentage: aggregatedQuota, models: geminiImageModels))
-            }
-        }
-
-        let claudeModels = data.models.filter { $0.name.contains("claude") }
-        if !claudeModels.isEmpty {
-            let aggregatedQuota = settings.aggregateModelPercentages(claudeModels.map(\.percentage))
-            if aggregatedQuota >= 0 {
-                groups.append(AntigravityDisplayGroup(name: "Claude", percentage: aggregatedQuota, models: claudeModels))
-            }
-        }
-
-        return groups.sorted { $0.percentage < $1.percentage }
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             accountHeader
@@ -579,28 +525,8 @@ private struct AccountQuotaCardV2: View {
 
     @ViewBuilder
     private var quotaContentByStyle: some View {
-        if provider == .antigravity && !antigravityDisplayGroups.isEmpty {
-            // Antigravity uses grouped display
-            antigravityContentByStyle
-        } else if let data = account.quotaData {
-            // Standard providers
+        if let data = account.quotaData {
             standardContentByStyle(data: data)
-        }
-    }
-
-    @ViewBuilder
-    private var antigravityContentByStyle: some View {
-        switch displayStyle {
-        case .lowestBar:
-            AntigravityLowestBarLayout(groups: antigravityDisplayGroups)
-        case .ring:
-            AntigravityRingLayout(groups: antigravityDisplayGroups)
-        case .card:
-            VStack(spacing: 12) {
-                ForEach(antigravityDisplayGroups) { group in
-                    AntigravityGroupRow(group: group)
-                }
-            }
         }
     }
 
@@ -609,19 +535,8 @@ private struct AccountQuotaCardV2: View {
         let isCard = displayStyle == .card
         let meterModels = data.models.filter { !$0.isStandaloneMetric }
         let standaloneModels = data.models.filter(\.isStandaloneMetric)
-        let factorySections = provider == .factoryDroid
-            ? FactoryDroidQuotaSection.sections(from: meterModels)
-            : []
-
         VStack(spacing: 12) {
-            if !factorySections.isEmpty {
-                ForEach(factorySections) { section in
-                    VStack(alignment: .leading, spacing: 8) {
-                        FactoryDroidQuotaSectionHeader(title: section.title)
-                        meterContentByStyle(models: section.models)
-                    }
-                }
-            } else if !meterModels.isEmpty {
+            if !meterModels.isEmpty {
                 meterContentByStyle(models: meterModels)
             }
 
@@ -657,22 +572,6 @@ private struct AccountQuotaCardV2: View {
                     )
                 }
             }
-        }
-    }
-}
-
-private struct FactoryDroidQuotaSectionHeader: View {
-    let title: String
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Text(title)
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
-            Rectangle()
-                .fill(Color.primary.opacity(0.08))
-                .frame(height: 1)
         }
     }
 }
@@ -812,215 +711,6 @@ private struct SubscriptionBadgeV2: View {
             .padding(.vertical, 2)
             .background(tierConfig.color.opacity(0.12))
             .clipShape(Capsule())
-    }
-}
-
-// MARK: - Antigravity Display Group
-
-private struct AntigravityDisplayGroup: Identifiable {
-    let name: String
-    let percentage: Double
-    let models: [QuotaMetric]
-
-    var id: String { name }
-}
-
-// MARK: - Antigravity Group Row
-
-private struct AntigravityGroupRow: View {
-    let group: AntigravityDisplayGroup
-
-    @Environment(MenuBarSettingsManager.self) private var settings
-
-    private var displayHelper: QuotaDisplayHelper {
-        QuotaDisplayHelper(displayMode: settings.quotaDisplayMode)
-    }
-
-    private var remainingPercent: Double {
-        max(0, min(100, group.percentage))
-    }
-
-    private var groupIcon: String {
-        if group.name.contains("Claude") { return "brain.head.profile" }
-        if group.name.contains("Image") { return "photo" }
-        if group.name.contains("Flash") { return "bolt.fill" }
-        return "sparkles"
-    }
-
-    var body: some View {
-        let displayPercent = displayHelper.displayPercent(remainingPercent: remainingPercent)
-        let statusColor = displayHelper.statusColor(remainingPercent: remainingPercent)
-
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Image(systemName: groupIcon)
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .frame(width: 16)
-
-                Text(group.name)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-
-                if group.models.count > 1 {
-                    Text(String(group.models.count))
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(Color.primary.opacity(0.05))
-                        .clipShape(Capsule())
-                }
-
-                Spacer()
-
-                Text(String(format: "%.0f%%", displayPercent))
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(statusColor)
-                    .monospacedDigit()
-
-                if let firstModel = group.models.first,
-                   firstModel.formattedResetTime != "—" && !firstModel.formattedResetTime.isEmpty {
-                    Text(firstModel.formattedResetTime)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-
-            GeometryReader { proxy in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color.primary.opacity(0.06))
-                    Capsule()
-                        .fill(statusColor.gradient)
-                        .frame(width: proxy.size.width * (displayPercent / 100))
-                }
-            }
-            .frame(height: 6)
-        }
-    }
-}
-
-// MARK: - Antigravity Lowest Bar Layout
-
-private struct AntigravityLowestBarLayout: View {
-    let groups: [AntigravityDisplayGroup]
-
-    @Environment(MenuBarSettingsManager.self) private var settings
-    private var displayHelper: QuotaDisplayHelper {
-        QuotaDisplayHelper(displayMode: settings.quotaDisplayMode)
-    }
-
-    private var sorted: [AntigravityDisplayGroup] {
-        groups.sorted { $0.percentage < $1.percentage }
-    }
-
-    private var lowest: AntigravityDisplayGroup? {
-        sorted.first
-    }
-
-    private var others: [AntigravityDisplayGroup] {
-        Array(sorted.dropFirst())
-    }
-
-    private func displayPercent(for remainingPercent: Double) -> Double {
-        displayHelper.displayPercent(remainingPercent: remainingPercent)
-    }
-
-    var body: some View {
-        VStack(spacing: 10) {
-            if let lowest = lowest {
-                // Hero row for bottleneck
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text(lowest.name)
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                        Spacer()
-                        Text(String(format: "%.0f%%", displayPercent(for: lowest.percentage)))
-                            .font(.subheadline)
-                            .fontWeight(.bold)
-                            .foregroundStyle(displayHelper.statusColor(remainingPercent: lowest.percentage))
-                            .monospacedDigit()
-                    }
-
-                    GeometryReader { proxy in
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(Color.primary.opacity(0.06))
-                            Capsule()
-                                .fill(displayHelper.statusColor(remainingPercent: lowest.percentage).gradient)
-                                .frame(width: proxy.size.width * (displayPercent(for: lowest.percentage) / 100))
-                        }
-                    }
-                    .frame(height: 8)
-                }
-                .padding(10)
-                .background(displayHelper.statusColor(remainingPercent: lowest.percentage).opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            }
-
-            // Others as compact text rows
-            if !others.isEmpty {
-                VStack(spacing: 4) {
-                    ForEach(others) { group in
-                        HStack {
-                            Text(group.name)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Text(String(format: "%.0f%%", displayPercent(for: group.percentage)))
-                                .font(.caption)
-                                .fontWeight(.medium)
-                                .foregroundStyle(displayHelper.statusColor(remainingPercent: group.percentage))
-                                .monospacedDigit()
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Antigravity Ring Layout
-
-private struct AntigravityRingLayout: View {
-    let groups: [AntigravityDisplayGroup]
-
-    @Environment(MenuBarSettingsManager.self) private var settings
-    private var displayHelper: QuotaDisplayHelper {
-        QuotaDisplayHelper(displayMode: settings.quotaDisplayMode)
-    }
-
-    private var columns: [GridItem] {
-        let count = min(max(groups.count, 1), 4)
-        return Array(repeating: GridItem(.flexible(), spacing: 12), count: count)
-    }
-
-    private func ringPercent(for remainingPercent: Double) -> Double {
-        displayHelper.ringPercent(remainingPercent: remainingPercent)
-    }
-
-    var body: some View {
-        LazyVGrid(columns: columns, spacing: 12) {
-            ForEach(groups) { group in
-                VStack(spacing: 6) {
-                    RingProgressView(
-                        percent: ringPercent(for: group.percentage),
-                        size: 44,
-                        lineWidth: 5,
-                        tint: displayHelper.statusColor(remainingPercent: group.percentage),
-                        showLabel: true
-                    )
-
-                    Text(group.name)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-        }
     }
 }
 

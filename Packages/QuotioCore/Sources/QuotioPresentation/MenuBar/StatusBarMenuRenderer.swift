@@ -708,53 +708,6 @@ private struct MenuAccountCardView: View {
         return (planName, .secondary.opacity(0.1), .secondary)
     }
     
-    private var isAntigravity: Bool {
-        provider == .antigravity && !data.models.isEmpty
-    }
-    
-    private var antigravityGroups: [AntigravityDisplayGroup] {
-        guard isAntigravity else { return [] }
-        let summaryModels = data.models.filter { $0.name.hasPrefix("antigravity-") }
-        if !summaryModels.isEmpty {
-            return summaryModels
-                .map { AntigravityDisplayGroup(name: $0.displayName, percentage: $0.percentage, resetTime: $0.resetTime) }
-        }
-
-        var groups: [AntigravityDisplayGroup] = []
-
-        let gemini3ProModels = data.models.filter {
-            $0.name.contains("gemini-3-pro") && !$0.name.contains("image")
-        }
-        if !gemini3ProModels.isEmpty {
-            let aggregatedPercent = settings.aggregateModelPercentages(gemini3ProModels.map(\.percentage))
-            let minModel = gemini3ProModels.min(by: { $0.percentage < $1.percentage })
-            groups.append(AntigravityDisplayGroup(name: "Gemini 3 Pro", percentage: aggregatedPercent, resetTime: minModel?.resetTime))
-        }
-
-        let gemini3FlashModels = data.models.filter { $0.name.contains("gemini-3-flash") }
-        if !gemini3FlashModels.isEmpty {
-            let aggregatedPercent = settings.aggregateModelPercentages(gemini3FlashModels.map(\.percentage))
-            let minModel = gemini3FlashModels.min(by: { $0.percentage < $1.percentage })
-            groups.append(AntigravityDisplayGroup(name: "Gemini 3 Flash", percentage: aggregatedPercent, resetTime: minModel?.resetTime))
-        }
-
-        let geminiImageModels = data.models.filter { $0.name.contains("image") }
-        if !geminiImageModels.isEmpty {
-            let aggregatedPercent = settings.aggregateModelPercentages(geminiImageModels.map(\.percentage))
-            let minModel = geminiImageModels.min(by: { $0.percentage < $1.percentage })
-            groups.append(AntigravityDisplayGroup(name: "Gemini 3 Image", percentage: aggregatedPercent, resetTime: minModel?.resetTime))
-        }
-
-        let claudeModels = data.models.filter { $0.name.contains("claude") }
-        if !claudeModels.isEmpty {
-            let aggregatedPercent = settings.aggregateModelPercentages(claudeModels.map(\.percentage))
-            let minModel = claudeModels.min(by: { $0.percentage < $1.percentage })
-            groups.append(AntigravityDisplayGroup(name: "Claude 4.5", percentage: aggregatedPercent, resetTime: minModel?.resetTime))
-        }
-
-        return groups.sorted { $0.percentage < $1.percentage }
-    }
-    
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             headerSection
@@ -868,25 +821,14 @@ private struct MenuAccountCardView: View {
     
     private var quotaContentSection: some View {
         let isCardStyle = displayStyle == .card
-        let models: [ModelBadgeData] = {
-            if isAntigravity {
-                return antigravityGroups.map { ModelBadgeData(name: $0.name, percentage: $0.percentage, resetTime: $0.resetTime) }
-            } else {
-                let meterModels = data.models.filter { !$0.isStandaloneMetric }.map {
-                    ModelBadgeData(name: $0.displayName, percentage: $0.percentage, resetTime: $0.resetTime)
-                }
-                guard isCardStyle else { return meterModels }
-                let standaloneModels = data.models.filter(\.isStandaloneMetric).map {
-                    ModelBadgeData(name: $0.displayName, percentage: $0.percentage, resetTime: $0.resetTime, usage: $0.formattedUsage)
-                }
-                return meterModels + standaloneModels
-            }
-        }()
-        let standaloneModels = isAntigravity || isCardStyle ? [] : data.models.filter(\.isStandaloneMetric)
-        let factorySections = provider == .factoryDroid
-            ? FactoryDroidQuotaSection.sections(from: data.models.filter { !$0.isStandaloneMetric })
-            : []
-        
+        let meterModels = data.models.filter { !$0.isStandaloneMetric }.map {
+            ModelBadgeData(id: $0.id, name: $0.displayName, percentage: $0.percentage, resetTime: $0.resetTime)
+        }
+        let models = isCardStyle ? meterModels + data.models.filter(\.isStandaloneMetric).map {
+            ModelBadgeData(id: $0.id, name: $0.displayName, percentage: $0.percentage, resetTime: $0.resetTime, usage: $0.formattedUsage)
+        } : meterModels
+        let standaloneModels = isCardStyle ? [] : data.models.filter(\.isStandaloneMetric)
+
         return VStack(spacing: 8) {
             if models.isEmpty && standaloneModels.isEmpty {
                 Text("dashboard.noQuotaData".localized())
@@ -894,15 +836,6 @@ private struct MenuAccountCardView: View {
                     .foregroundStyle(.tertiary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 8)
-            } else if !factorySections.isEmpty {
-                ForEach(factorySections) { section in
-                    VStack(alignment: .leading, spacing: 6) {
-                        FactoryDroidMenuSectionHeader(title: section.title)
-                        quotaLayout(models: section.models.map {
-                            ModelBadgeData(name: $0.displayName, percentage: $0.percentage, resetTime: $0.resetTime)
-                        })
-                    }
-                }
             } else if !models.isEmpty {
                 quotaLayout(models: models)
             }
@@ -986,21 +919,6 @@ private struct MenuAccountCardView: View {
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         return formatter.string(from: date)
-    }
-}
-
-private struct FactoryDroidMenuSectionHeader: View {
-    let title: String
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Text(title)
-                .font(.system(size: 9, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
-            Rectangle()
-                .fill(Color.primary.opacity(0.08))
-                .frame(height: 1)
-        }
     }
 }
 
@@ -1758,19 +1676,20 @@ private struct AnalyticsRowView: View {
 }
 
 private struct ModelBadgeData: Identifiable {
+    let id: String
     let name: String
     let percentage: Double
     let resetTime: String?
     let usage: String?
 
-    init(name: String, percentage: Double, resetTime: String?, usage: String? = nil) {
+    init(id: String, name: String, percentage: Double, resetTime: String?, usage: String? = nil) {
+        self.id = id
         self.name = name
         self.percentage = percentage
         self.resetTime = resetTime
         self.usage = usage
     }
 
-    var id: String { name }
 
     var formattedResetTime: String? {
         guard let resetTime = resetTime else { return nil }
@@ -1802,14 +1721,6 @@ private struct ModelBadgeData: Identifiable {
             return "\(minutes)m"
         }
     }
-}
-
-private struct AntigravityDisplayGroup: Identifiable {
-    let name: String
-    let percentage: Double
-    let resetTime: String?
-
-    var id: String { name }
 }
 
 private func menuDisplayPercent(remainingPercent: Double, displayMode: QuotaDisplayMode) -> Double {

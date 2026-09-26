@@ -26,17 +26,7 @@ struct StatusBarMenuDisplaySettings: Equatable, Sendable {
     let hideSensitiveInfo: Bool
     let modelAggregationMode: ModelAggregationMode
 
-    func aggregateModelPercentages(_ percentages: [Double]) -> Double {
-        let validPercentages = percentages.filter { $0 >= 0 }
-        guard !validPercentages.isEmpty else { return -1 }
 
-        switch modelAggregationMode {
-        case .lowest:
-            return validPercentages.min() ?? -1
-        case .average:
-            return validPercentages.reduce(0, +) / Double(validPercentages.count)
-        }
-    }
 }
 
 public struct StatusBarMenuSnapshot: Equatable, Sendable {
