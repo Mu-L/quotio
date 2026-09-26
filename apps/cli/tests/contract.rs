@@ -74,6 +74,56 @@ fn every_registered_provider_conforms_to_the_public_contract() {
     assert!(!validator("ProviderList").is_valid(&invalid));
 }
 
+#[test]
+fn provider_coverage_table_matches_the_runtime_registry() {
+    let catalog = serde_json::to_value(ProviderList::new(&[])).unwrap();
+    let joined = |values: Vec<String>| {
+        if values.is_empty() {
+            "—".into()
+        } else {
+            values.join(", ")
+        }
+    };
+    let mut table = String::from(
+        "| Provider | Authentication | Sources (ownership) | Account storage OS |\n| --- | --- | --- | --- |\n",
+    );
+    for row in catalog["providers"].as_array().unwrap() {
+        let capability = &row["capabilities"];
+        let strings = |key: &str| {
+            capability[key]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|v| v.as_str().unwrap().to_owned())
+                .collect()
+        };
+        let sources = capability["source_references"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|source| {
+                format!(
+                    "{} ({})",
+                    source["kind"].as_str().unwrap(),
+                    source["origin"].as_str().unwrap()
+                )
+            })
+            .collect();
+        table.push_str(&format!(
+            "| {} | {} | {} | {} |\n",
+            row["id"].as_str().unwrap(),
+            joined(strings("auth")),
+            joined(sources),
+            joined(strings("account_storage_platforms"))
+        ));
+    }
+    let document = include_str!("../docs/provider-coverage.md");
+    assert_eq!(
+        document.split_once("<!-- registry-table -->\n").unwrap().1,
+        table
+    );
+}
+
 struct Fixture;
 impl Clock for Fixture {
     fn now(&self) -> OffsetDateTime {
