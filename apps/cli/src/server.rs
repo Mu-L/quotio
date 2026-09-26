@@ -781,6 +781,9 @@ async fn collect_usage(
         return Err("state_changed");
     }
     let result = json!({"providers":successes,"failures":failures});
+    if cache_only && successes == 0 && failures == 0 {
+        return Ok(result);
+    }
     let mut snapshot = state.snapshot.write().await;
     if !merge_refresh_report(
         &mut snapshot,
