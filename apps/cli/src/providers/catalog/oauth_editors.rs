@@ -508,6 +508,9 @@ fn grok_windows(
         now,
     )?;
     window.metric_id = Some(id.into());
+    if used.is_none() {
+        window.note = Some("Grok did not report usage for this period.".into());
+    }
     windows.push(window);
     let mut extra = common::window(
         "Extra usage",
@@ -1994,6 +1997,24 @@ mod tests {
         assert!(lower.contains("authorization: bearer grok-native-token"));
         assert!(lower.contains("x-xai-token-auth: xai-grok-cli"));
         assert!(!lower.contains("\r\ncookie:"));
+    }
+
+    #[test]
+    fn grok_unified_billing_without_usage_does_not_imply_zero_percent() {
+        let (windows, diagnostics) = grok_windows(&json!({"config": {
+            "currentPeriod": {"type": "USAGE_PERIOD_TYPE_WEEKLY", "end": "2026-10-03T00:00:00Z"},
+            "isUnifiedBillingUser": true, "onDemandCap": {"val": 0},
+            "onDemandUsed": {"val": 0}, "prepaidBalance": {"val": 0}
+        }}), OffsetDateTime::UNIX_EPOCH).unwrap();
+        assert_eq!(windows[0].quota, Quota::Unknown);
+        assert!(windows[0].amounts.is_none());
+        assert!(windows[0].consumption.is_none());
+        assert_eq!(
+            windows[0].note.as_deref(),
+            Some("Grok did not report usage for this period.")
+        );
+        assert_eq!(windows[1].quota, Quota::Disabled);
+        assert!(diagnostics.is_empty());
     }
 
     #[test]
