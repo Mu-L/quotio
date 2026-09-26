@@ -558,15 +558,27 @@ pub(super) struct CallbackInput {
     callback_url: Option<String>,
     code: Option<String>,
 }
-pub(super) async fn begin(
-    State(state): State<Arc<ApiState>>,
-    headers: HeaderMap,
-    ApiJson(input): ApiJson<SessionInput>,
-) -> Result<(StatusCode, Json<SessionDto>), ApiError> {
+fn oauth_manager(
+    state: &ApiState,
+    principal: &security::Principal,
+) -> Result<crate::accounts::oauth::OAuthSessionManager, ApiError> {
+    if !principal.owner && !principal.manage {
+        return Err(ApiError(StatusCode::FORBIDDEN, "insufficient_scope"));
+    }
     let manager = state.oauth.as_ref().ok_or(ApiError(
         StatusCode::SERVICE_UNAVAILABLE,
         "account_storage_disabled",
     ))?;
+    Ok(manager.for_owner((!principal.owner).then(|| principal.id.clone())))
+}
+
+pub(super) async fn begin(
+    State(state): State<Arc<ApiState>>,
+    Extension(principal): Extension<security::Principal>,
+    headers: HeaderMap,
+    ApiJson(input): ApiJson<SessionInput>,
+) -> Result<(StatusCode, Json<SessionDto>), ApiError> {
+    let manager = oauth_manager(&state, &principal)?;
     let mut keys = headers.get_all("idempotency-key").iter();
     let key = keys
         .next()
@@ -596,12 +608,10 @@ pub(super) async fn begin(
 }
 pub(super) async fn session(
     State(state): State<Arc<ApiState>>,
+    Extension(principal): Extension<security::Principal>,
     Path(id): Path<String>,
 ) -> Result<Json<SessionDto>, ApiError> {
-    let manager = state.oauth.as_ref().ok_or(ApiError(
-        StatusCode::SERVICE_UNAVAILABLE,
-        "account_storage_disabled",
-    ))?;
+    let manager = oauth_manager(&state, &principal)?;
     let session = manager.get(&id).await.map_err(account_error)?;
     if session.status == crate::accounts::oauth::SessionStatus::Completed
         && state
@@ -617,26 +627,22 @@ pub(super) async fn session(
 }
 pub(super) async fn cancel(
     State(state): State<Arc<ApiState>>,
+    Extension(principal): Extension<security::Principal>,
     Path(id): Path<String>,
 ) -> Result<Json<SessionDto>, ApiError> {
-    let manager = state.oauth.as_ref().ok_or(ApiError(
-        StatusCode::SERVICE_UNAVAILABLE,
-        "account_storage_disabled",
-    ))?;
+    let manager = oauth_manager(&state, &principal)?;
     Ok(Json(manager.cancel(&id).await.map_err(account_error)?))
 }
 pub(super) async fn callback(
     State(state): State<Arc<ApiState>>,
+    Extension(principal): Extension<security::Principal>,
     Path(id): Path<String>,
     ApiJson(input): ApiJson<CallbackInput>,
 ) -> Result<Json<SessionDto>, ApiError> {
     if input.callback_url.is_some() == input.code.is_some() {
         return Err(ApiError(StatusCode::BAD_REQUEST, "invalid_request"));
     }
-    let manager = state.oauth.clone().ok_or(ApiError(
-        StatusCode::SERVICE_UNAVAILABLE,
-        "account_storage_disabled",
-    ))?;
+    let manager = oauth_manager(&state, &principal)?;
     // Continue token exchange/commit if the caller disconnects; polling reflects the actual result.
     let (send, receive) = tokio::sync::oneshot::channel();
     let work = state.clone();

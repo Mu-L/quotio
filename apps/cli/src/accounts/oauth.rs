@@ -268,6 +268,7 @@ pub struct SessionDto {
     pub error_code: Option<&'static str>,
 }
 struct PendingSession {
+    owner: Option<String>,
     provider: crate::cli::Provider,
     workflow: Workflow,
     user_code: Option<String>,
@@ -294,6 +295,7 @@ struct Sessions {
 }
 #[derive(Clone)]
 pub struct OAuthSessionManager {
+    owner: Option<String>,
     context: ProviderContext,
     vault: Vault,
     sessions: Arc<tokio::sync::Mutex<Sessions>>,
@@ -308,6 +310,7 @@ impl OAuthSessionManager {
         generation: Arc<AtomicU64>,
     ) -> Self {
         Self {
+            owner: None,
             context,
             vault,
             sessions: Arc::new(tokio::sync::Mutex::new(Sessions {
@@ -318,6 +321,17 @@ impl OAuthSessionManager {
             generation,
         }
     }
+    pub(crate) fn for_owner(&self, owner: Option<String>) -> Self {
+        Self {
+            owner,
+            ..self.clone()
+        }
+    }
+
+    fn owns(&self, session: &PendingSession) -> bool {
+        self.owner.is_none() || self.owner == session.owner
+    }
+
     fn dto(id: String, session: &PendingSession) -> SessionDto {
         SessionDto {
             provider: session.provider,
@@ -391,6 +405,10 @@ impl OAuthSessionManager {
         key: String,
         endpoints: copilot::Endpoints,
     ) -> Result<SessionDto, AccountError> {
+        let key = self.owner.as_ref().map_or_else(
+            || key.clone(),
+            |owner| crate::cache::fingerprint(&["client-oauth", owner, &key]),
+        );
         if let Some(label) = &label {
             super::validate_label(label)?;
         }
@@ -517,6 +535,7 @@ impl OAuthSessionManager {
         sessions.sessions.insert(
             id.clone(),
             PendingSession {
+                owner: self.owner.clone(),
                 provider,
                 workflow,
                 user_code: None,
@@ -595,6 +614,7 @@ impl OAuthSessionManager {
         }
         let cancel = Arc::new(tokio::sync::Notify::new());
         let session = PendingSession {
+            owner: self.owner.clone(),
             provider: crate::cli::Provider::Catalog("copilot"),
             workflow: Workflow::DeviceCode,
             user_code: Some(device.user_code),
@@ -702,6 +722,9 @@ impl OAuthSessionManager {
             .sessions
             .get_mut(id)
             .ok_or(AccountError::NotFound)?;
+        if !self.owns(session) {
+            return Err(AccountError::NotFound);
+        }
         if session.status == SessionStatus::Waiting
             && Instant::now().duration_since(session.created) >= session.lifetime
         {
@@ -716,6 +739,9 @@ impl OAuthSessionManager {
             .sessions
             .get_mut(id)
             .ok_or(AccountError::NotFound)?;
+        if !self.owns(session) {
+            return Err(AccountError::NotFound);
+        }
         if session.status != SessionStatus::Waiting {
             return Err(AccountError::Busy);
         }
@@ -764,6 +790,9 @@ impl OAuthSessionManager {
             .sessions
             .get_mut(id)
             .ok_or(AccountError::NotFound)?;
+        if !self.owns(session) {
+            return Err(AccountError::NotFound);
+        }
         if session.status != SessionStatus::Waiting {
             return Err(AccountError::Busy);
         }
@@ -1109,6 +1138,56 @@ mod session_tests {
             Arc::new(tokio::sync::Mutex::new(())),
             Arc::new(AtomicU64::new(0)),
         )
+    }
+
+    #[tokio::test]
+    async fn oauth_sessions_and_retry_claims_belong_to_their_client() {
+        let admin = manager();
+        let first = admin.for_owner(Some("client-a".into()));
+        let other = admin.for_owner(Some("client-b".into()));
+        let provider = crate::cli::Provider::Catalog("claude");
+        let a = first
+            .begin_idempotent(provider, None, OAuthMode::Relay, "same-key".into())
+            .await
+            .unwrap();
+        let b = other
+            .begin_idempotent(provider, None, OAuthMode::Relay, "same-key".into())
+            .await
+            .unwrap();
+        assert_ne!(a.id, b.id);
+        assert_eq!(
+            first
+                .begin_idempotent(provider, None, OAuthMode::Relay, "same-key".into())
+                .await
+                .unwrap()
+                .id,
+            a.id
+        );
+        assert!(matches!(
+            other.get(&a.id).await,
+            Err(AccountError::NotFound)
+        ));
+        assert!(matches!(
+            other.cancel(&a.id).await,
+            Err(AccountError::NotFound)
+        ));
+        assert!(matches!(
+            other.manual_code(&a.id, "not-submitted").await,
+            Err(AccountError::NotFound)
+        ));
+        assert!(matches!(
+            other.callback(&a.id, "https://example.invalid").await,
+            Err(AccountError::NotFound)
+        ));
+        assert!(admin.get(&a.id).await.is_ok());
+        assert_eq!(
+            admin.cancel(&a.id).await.unwrap().status,
+            SessionStatus::Cancelled
+        );
+        assert_eq!(
+            other.get(&b.id).await.unwrap().status,
+            SessionStatus::Waiting
+        );
     }
 
     #[tokio::test]
