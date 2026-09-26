@@ -36,7 +36,7 @@ use std::{
     future::IntoFuture,
     sync::{
         Arc,
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     time::Duration,
 };
@@ -107,6 +107,7 @@ struct ApiState {
     snapshot: RwLock<Option<(u64, UsageReport)>>,
     transient_snapshot: Mutex<Option<crate::contract::Snapshot>>,
     generation: Arc<AtomicU64>,
+    restore_pending: AtomicBool,
     commit_guard: Arc<Mutex<()>>,
     refresh_lock: Mutex<()>,
     pending: Mutex<HashMap<String, String>>,
@@ -139,6 +140,7 @@ impl ApiState {
     async fn invalidate(&self) {
         self.generation.fetch_add(1, Ordering::SeqCst);
         self.snapshot.write().await.take();
+        self.restore_pending.store(true, Ordering::SeqCst);
         self.wake.notify_one();
     }
 
@@ -165,6 +167,7 @@ impl ApiState {
                 *snapshot = None;
             }
         }
+        self.restore_pending.store(true, Ordering::SeqCst);
         self.wake.notify_one();
     }
 }
@@ -883,6 +886,7 @@ pub async fn run(args: ServeArgs) -> Result<(), ServerError> {
         snapshot: RwLock::new(None),
         transient_snapshot: Mutex::new(None),
         generation,
+        restore_pending: AtomicBool::new(true),
         commit_guard,
         refresh_lock: Mutex::new(()),
         pending: Mutex::new(HashMap::new()),
@@ -913,8 +917,17 @@ pub async fn run(args: ServeArgs) -> Result<(), ServerError> {
             if let Err(code) = native::scheduled(&worker_state).await {
                 tracing::warn!(code, "scheduled discovery failed");
             }
-            let needs_restore = worker_state.snapshot.read().await.is_none();
+            let generation = worker_state.generation.load(Ordering::SeqCst);
+            let current = worker_state
+                .snapshot
+                .read()
+                .await
+                .as_ref()
+                .is_some_and(|(observed, _)| *observed == generation);
+            let needs_restore =
+                worker_state.restore_pending.swap(false, Ordering::SeqCst) || !current;
             if needs_restore && let Err(code) = collect_usage(&worker_state, None, true).await {
+                worker_state.restore_pending.store(true, Ordering::SeqCst);
                 tracing::warn!(code, "cached quota restoration failed");
             }
             if worker_state.settings.read().await.values.refresh_interval == 0 {

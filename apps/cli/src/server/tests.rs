@@ -61,6 +61,7 @@ pub(super) async fn fixture() -> (Arc<ApiState>, std::path::PathBuf, String) {
             snapshot: RwLock::new(None),
             transient_snapshot: Mutex::new(None),
             generation,
+            restore_pending: AtomicBool::new(true),
             commit_guard: guard,
             refresh_lock: Mutex::new(()),
             pending: Mutex::new(HashMap::new()),
@@ -1125,6 +1126,7 @@ async fn grok_owned_intake_is_explicit_secret_free_and_idempotent() {
 async fn account_edits_preserve_unrelated_quota_and_do_not_promote_invalidated_reports() {
     let (mut state, dir, id) = fixture().await;
     Arc::get_mut(&mut state).unwrap().no_saved_accounts = false;
+    state.restore_pending.store(false, Ordering::SeqCst);
     let mut other = Provider::Mock
         .adapter()
         .fetch(&state.context)
@@ -1159,6 +1161,8 @@ async fn account_edits_preserve_unrelated_quota_and_do_not_promote_invalidated_r
     .await
     .unwrap_or_else(|_| panic!());
     assert_eq!(done(&state, &op.id).await.status, "completed");
+    assert!(state.restore_pending.load(Ordering::SeqCst));
+    state.restore_pending.store(false, Ordering::SeqCst);
     let Json(frame) = resolved_snapshot(State(state.clone()))
         .await
         .unwrap_or_else(|_| panic!());
@@ -1188,6 +1192,8 @@ async fn account_edits_preserve_unrelated_quota_and_do_not_promote_invalidated_r
     .await
     .unwrap_or_else(|_| panic!());
     assert_eq!(done(&state, &op.id).await.status, "completed");
+    assert!(state.restore_pending.load(Ordering::SeqCst));
+    state.restore_pending.store(false, Ordering::SeqCst);
     let snapshot = state.snapshot.read().await;
     let (generation, report) = snapshot.as_ref().unwrap();
     assert_eq!(*generation, state.generation.load(Ordering::SeqCst));
@@ -1199,6 +1205,8 @@ async fn account_edits_preserve_unrelated_quota_and_do_not_promote_invalidated_r
             .await
             .unwrap_or_else(|_| panic!());
     assert_eq!(done(&state, &op.id).await.status, "completed");
+    assert!(state.restore_pending.load(Ordering::SeqCst));
+    state.restore_pending.store(false, Ordering::SeqCst);
     let Json(frame) = resolved_snapshot(State(state.clone()))
         .await
         .unwrap_or_else(|_| panic!());
