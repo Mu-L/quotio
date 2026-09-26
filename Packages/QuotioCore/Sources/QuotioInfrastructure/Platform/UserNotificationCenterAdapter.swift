@@ -49,8 +49,8 @@ public final class UserNotificationCenterAdapter: NotificationDelivering {
         let identifier: String
 
         switch notification {
-        case .quotaLow(let provider, let account, let remainingPercent):
-            identifier = "quota_\(provider)_\(account)"
+        case .quotaLow(let id, let provider, let account, let remainingPercent):
+            identifier = "quota_\(id)"
             content.title = localize("notification.quotaLow.title")
             content.body = String(
                 format: localize("notification.quotaLow.body"),

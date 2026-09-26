@@ -50,7 +50,7 @@ public protocol NotificationRequesting: AnyObject, Sendable {
     func requestAuthorization() async
     func refreshAuthorizationStatus() async
     func submit(_ notification: SemanticNotification)
-    func clearQuotaNotification(provider: String, account: String)
+    func clearQuotaNotification(id: String)
     func clearCoolingNotification(provider: String, account: String)
     func clearUpdateNotification(version: String)
     func suppressUpdateNotification(version: String)

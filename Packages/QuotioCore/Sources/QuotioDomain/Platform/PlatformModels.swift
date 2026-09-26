@@ -56,7 +56,7 @@ public enum NotificationAuthorizationStatus: Equatable, Sendable {
 }
 
 public enum SemanticNotification: Equatable, Sendable {
-    case quotaLow(provider: String, account: String, remainingPercent: Double)
+    case quotaLow(id: String, provider: String, account: String, remainingPercent: Double)
     case accountCooling(provider: String, account: String)
     case proxyCrashed(exitCode: Int32)
     case proxyStarted

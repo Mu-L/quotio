@@ -125,14 +125,15 @@ final class PlatformControllersTests: XCTestCase {
         let delivery = NotificationDeliveryFake(authorizationStatus: .authorized)
         let controller = NotificationController(repository: preferences, delivery: delivery)
 
-        controller.submit(.quotaLow(provider: "Claude", account: "work", remainingPercent: 10))
+        controller.submit(.quotaLow(id: "host-a:claude:account", provider: "Claude", account: "work", remainingPercent: 10))
         XCTAssertEqual(delivery.delivered, [])
 
         await controller.refreshAuthorizationStatus()
-        controller.submit(.quotaLow(provider: "Claude", account: "work", remainingPercent: 21))
+        controller.submit(.quotaLow(id: "host-a:claude:account", provider: "Claude", account: "work", remainingPercent: 21))
         XCTAssertEqual(delivery.delivered, [])
 
         let notification = SemanticNotification.quotaLow(
+            id: "host-a:claude:account",
             provider: "Claude",
             account: "work",
             remainingPercent: 20
@@ -141,17 +142,33 @@ final class PlatformControllersTests: XCTestCase {
         controller.submit(notification)
         XCTAssertEqual(delivery.delivered, [notification])
 
-        controller.clearQuotaNotification(provider: "Claude", account: "work")
+        controller.clearQuotaNotification(id: "host-a:claude:account")
         controller.submit(notification)
         XCTAssertEqual(delivery.delivered, [notification, notification])
 
         var disabled = controller.snapshot.preferences
         disabled.notifyOnQuotaLow = false
         controller.updatePreferences(disabled)
-        controller.clearQuotaNotification(provider: "Claude", account: "work")
+        controller.clearQuotaNotification(id: "host-a:claude:account")
         controller.submit(notification)
         XCTAssertEqual(delivery.delivered, [notification, notification])
         XCTAssertEqual(preferences.notification, disabled)
+    }
+
+    func testQuotaNotificationIdentitySurvivesRenameAndSeparatesHosts() async {
+        let delivery = NotificationDeliveryFake(authorizationStatus: .authorized)
+        let controller = NotificationController(repository: PlatformPreferencesFake(), delivery: delivery)
+        await controller.refreshAuthorizationStatus()
+        controller.submit(.quotaLow(id: "host-a:account", provider: "Provider", account: "Old name", remainingPercent: 10))
+        let renamed = SemanticNotification.quotaLow(id: "host-a:account", provider: "Provider", account: "New name", remainingPercent: 10)
+        controller.submit(renamed)
+        XCTAssertEqual(delivery.delivered.count, 1)
+        controller.submit(.quotaLow(id: "host-b:account", provider: "Provider", account: "New name", remainingPercent: 10))
+        XCTAssertEqual(delivery.delivered.count, 2)
+        controller.clearQuotaNotification(id: "host-a:account")
+        controller.submit(renamed)
+        XCTAssertEqual(delivery.delivered.last, renamed)
+        XCTAssertEqual(delivery.delivered.count, 3)
     }
 
     func testNotificationAuthorizationRequestPublishesResult() async {
@@ -473,7 +490,7 @@ private final class PollingNotificationFake: NotificationRequesting {
     func requestAuthorization() async {}
     func refreshAuthorizationStatus() async {}
     func submit(_ notification: SemanticNotification) { submitted.append(notification) }
-    func clearQuotaNotification(provider: String, account: String) {}
+    func clearQuotaNotification(id: String) {}
     func clearCoolingNotification(provider: String, account: String) {}
     func clearUpdateNotification(version: String) {}
     func suppressUpdateNotification(version: String) {}

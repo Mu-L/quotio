@@ -345,19 +345,19 @@ public final class QuotaFeatureController {
         let threshold = notifications.snapshot.preferences.quotaAlertThreshold
         for (provider, accountQuotas) in quota.providerQuotas where trackingPreferences.isEnabled(provider) {
             for (account, data) in accountQuotas {
-                let values = data.models.map(\.percentage).filter { $0 >= 0 }
-                guard let minimum = values.min() else { continue }
+                let accountID = QuotaAccountID(provider: provider, accountKey: account)
+                guard quota.state.accountStates[accountID]?.quota == .fresh,
+                      let minimum = data.summary?.sessionOnly.lowest else { continue }
+                let id = MenuBarQuotaItem(provider: provider.rawValue, accountKey: account, hostID: hostID).id
                 if minimum <= threshold {
                     notifications.submit(.quotaLow(
-                        provider: provider.displayName,
-                        account: account,
+                        id: id,
+                        provider: quota.state.providerNames[provider] ?? provider.displayName,
+                        account: (data.accountDisplayName ?? account).masked(if: menuBarSettings.hideSensitiveInfo),
                         remainingPercent: minimum
                     ))
                 } else {
-                    notifications.clearQuotaNotification(
-                        provider: provider.rawValue,
-                        account: account
-                    )
+                    notifications.clearQuotaNotification(id: id)
                 }
             }
         }

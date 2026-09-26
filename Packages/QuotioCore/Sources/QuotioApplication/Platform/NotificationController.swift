@@ -43,8 +43,8 @@ public final class NotificationController: NotificationRequesting {
         delivery.deliver(notification)
     }
 
-    public func clearQuotaNotification(provider: String, account: String) {
-        sentNotifications.remove("quota_\(provider)_\(account)")
+    public func clearQuotaNotification(id: String) {
+        sentNotifications.remove("quota_\(id)")
     }
 
     public func clearCoolingNotification(provider: String, account: String) {
@@ -106,14 +106,14 @@ public final class NotificationController: NotificationRequesting {
         _ notification: SemanticNotification,
         preferences: NotificationPreferences
     ) -> Bool {
-        guard case .quotaLow(_, _, let remainingPercent) = notification else { return true }
+        guard case .quotaLow(_, _, _, let remainingPercent) = notification else { return true }
         return remainingPercent <= preferences.quotaAlertThreshold
     }
 
     private func trackingKey(for notification: SemanticNotification) -> String? {
         switch notification {
-        case .quotaLow(let provider, let account, _):
-            "quota_\(provider)_\(account)"
+        case .quotaLow(let id, _, _, _):
+            "quota_\(id)"
         case .accountCooling(let provider, let account):
             "cooling_\(provider)_\(account)"
         case .proxyUpdateAvailable(let version):
