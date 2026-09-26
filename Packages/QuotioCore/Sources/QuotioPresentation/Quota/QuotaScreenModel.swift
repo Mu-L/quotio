@@ -50,7 +50,7 @@ public final class QuotaScreenModel {
     }
 
     public func supportsScopedRefresh(for provider: QuotaProvider) -> Bool {
-        state.providerNames[provider] != nil || state.quotas[provider] != nil
+        state.canRefresh && (state.providerNames[provider] != nil || state.quotas[provider] != nil)
     }
 
     public func setDidChangeHandler(

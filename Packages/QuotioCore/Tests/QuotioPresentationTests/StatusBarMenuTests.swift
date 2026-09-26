@@ -17,6 +17,9 @@ final class StatusBarMenuSnapshotMapperTests: XCTestCase {
             menuBarPreferences: MenuBarPreferences(), appearanceMode: .system, language: .english
         )
         XCTAssertEqual(snapshot.providers.first?.displayName, "Host Provider Name")
+        XCTAssertFalse(snapshot.canRefresh)
+        XCTAssertEqual(snapshot.providers.first?.supportsScopedRefresh, false)
+        XCTAssertEqual(snapshot.providers.first?.accounts.first?.isRefreshBlocked, true)
     }
 
     func testDisabledProviderIsHiddenDespiteCachedQuota() {
@@ -56,6 +59,7 @@ final class StatusBarMenuSnapshotMapperTests: XCTestCase {
             )
         )
         let quota = QuotaSnapshot(
+            canRefresh: true,
             quotas: [
                 .antigravity: [
                     "alpha-key": ProviderQuota(accountDisplayName: "alpha@example.com"),

@@ -228,7 +228,7 @@ final class StatusBarMenuRenderer {
             subscriptionInfo: account.subscription,
             isActiveInIDE: account.isActiveInIDE,
             isRefreshing: account.isRefreshing,
-            canRefresh: !account.isRefreshBlocked && provider.supportsQuotaOnlyMode,
+            canRefresh: !account.isRefreshBlocked,
             settings: snapshot.displaySettings,
             onRefresh: {
                 self.commands.dispatch(.refreshAccount(account.id))
@@ -292,6 +292,7 @@ final class StatusBarMenuRenderer {
     
     private func buildActionItems() -> [NSMenuItem] {
         let actionsView = MenuActionsView(
+            canRefresh: snapshot.canRefresh,
             isLoading: snapshot.isLoadingQuotas,
             onRefresh: { self.commands.dispatch(.refreshAll) },
             onOpenApp: { self.commands.dispatch(.openApp) },
@@ -2134,6 +2135,7 @@ private struct MenuViewMoreAccountsView: View {
 // MARK: - Menu Actions View
 
 private struct MenuActionsView: View {
+    let canRefresh: Bool
     let isLoading: Bool
     let onRefresh: () -> Void
     let onOpenApp: () -> Void
@@ -2147,7 +2149,7 @@ private struct MenuActionsView: View {
                 isLoading: isLoading,
                 action: onRefresh
             )
-            .disabled(isLoading)
+            .disabled(isLoading || !canRefresh)
             
             MenuBarActionButton(
                 icon: "macwindow",

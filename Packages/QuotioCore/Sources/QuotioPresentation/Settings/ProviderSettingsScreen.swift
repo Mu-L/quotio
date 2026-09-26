@@ -62,6 +62,7 @@ struct ProviderSettingsScreen: View {
                         Section {
                             Text(source.explanationLocalizationKey.localized())
                             Button("settings.authorize".localized()) { permission = source }
+                                .disabled(descriptor?.actions.contains("discover_native") != true)
                         }
                     }
                     if let issue = state.latestIssue, issue.reason != nil {

@@ -52,6 +52,7 @@ public struct QuotaRefreshIssue: Equatable, Sendable {
 
 public struct QuotaSnapshot: Equatable, Sendable {
     public var hostID: String?
+    public var canRefresh: Bool
     public var providerNames: [QuotaProvider: String]
     public var accountStates: [QuotaAccountID: AccountMonitoringState]
     public var quotas: [QuotaProvider: [String: ProviderQuota]]
@@ -66,6 +67,7 @@ public struct QuotaSnapshot: Equatable, Sendable {
 
     public init(
         hostID: String? = nil,
+        canRefresh: Bool = false,
         providerNames: [QuotaProvider: String] = [:],
         accountStates: [QuotaAccountID: AccountMonitoringState] = [:],
         quotas: [QuotaProvider: [String: ProviderQuota]] = [:],
@@ -79,6 +81,7 @@ public struct QuotaSnapshot: Equatable, Sendable {
         lastUpdated: Date? = nil
     ) {
         self.hostID = hostID
+        self.canRefresh = canRefresh
         self.providerNames = providerNames
         self.accountStates = accountStates
         self.quotas = quotas

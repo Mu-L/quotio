@@ -37,6 +37,7 @@ public struct StatusBarMenuSnapshot: Equatable, Sendable {
     let providers: [StatusBarMenuProviderSnapshot]
     let selectedProvider: QuotaProvider?
     let isLoadingQuotas: Bool
+    let canRefresh: Bool
     let displaySettings: StatusBarMenuDisplaySettings
     let appearanceMode: AppearanceMode
     let language: AppLanguage
@@ -85,7 +86,7 @@ public enum StatusBarMenuSnapshotMapper {
                     isActiveInIDE: provider == .antigravity
                         && emailsMatch(account.email, activeAntigravityEmail),
                     isRefreshing: quota.refreshingProviders.contains(provider),
-                    isRefreshBlocked: quota.refreshingProviders.contains(provider)
+                    isRefreshBlocked: !quota.canRefresh || quota.refreshingProviders.contains(provider)
                 )
             }
             return StatusBarMenuProviderSnapshot(
@@ -93,7 +94,7 @@ public enum StatusBarMenuSnapshotMapper {
                 provider: provider,
                 accounts: accounts,
                 isRefreshing: quota.refreshingProviders.contains(provider),
-                supportsScopedRefresh: true
+                supportsScopedRefresh: quota.canRefresh
             )
         }
 
@@ -107,6 +108,7 @@ public enum StatusBarMenuSnapshotMapper {
                 providers.contains(where: { $0.provider == selected }) ? selected : nil
             },
             isLoadingQuotas: !quota.refreshingProviders.isEmpty,
+            canRefresh: quota.canRefresh,
             displaySettings: StatusBarMenuDisplaySettings(
                 quotaDisplayMode: menuBarPreferences.quotaDisplayMode,
                 quotaDisplayStyle: menuBarPreferences.quotaDisplayStyle,

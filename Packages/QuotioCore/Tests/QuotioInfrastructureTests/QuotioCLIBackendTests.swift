@@ -6,6 +6,20 @@ import XCTest
 @testable import QuotioInfrastructure
 
 final class QuotioCLIBackendTests: XCTestCase {
+    func testRefreshAvailabilityComesFromTheHostCapability() throws {
+        for allowed in [false, true] {
+            let fixture = try hostFixture { root in
+                var host = root["host"] as! [String: Any]
+                var capabilities = host["capabilities"] as! [String: Any]
+                capabilities["refresh"] = ["available": allowed]
+                host["capabilities"] = capabilities
+                root["host"] = host
+            }
+            let host = try QuotioHostSnapshot.decode(Data(fixture.utf8))
+            XCTAssertEqual(QuotioHostPresentationMapper.resolvedSnapshot(host).canRefresh, allowed)
+        }
+    }
+
     func testQuotaSummaryUsesHostValuesWithoutRecomputingFromMetrics() throws {
         for lowest in [17, 101] {
             let fixture = try hostFixture { root in
