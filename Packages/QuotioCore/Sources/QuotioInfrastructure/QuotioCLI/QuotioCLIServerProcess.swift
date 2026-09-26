@@ -41,7 +41,6 @@ public final class QuotioCLIServerProcess {
     private let accountDataDirectory: URL?
     private let proxyAuthDirectory: URL?
     private let initialPreferences: @MainActor () -> (ProviderTrackingPreferences, RefreshPreferences, Set<String>)?
-    private let executableDirectories: [URL]
     private let applicationSupportDirectoryName: String
     private let accountVaultNamespace: String
     private let proxyURL: @MainActor () -> String?
@@ -59,7 +58,6 @@ public final class QuotioCLIServerProcess {
         accountDataDirectory: URL? = nil,
         proxyAuthDirectory: URL? = nil,
         initialPreferences: @escaping @MainActor () -> (ProviderTrackingPreferences, RefreshPreferences, Set<String>)? = { nil },
-        executableDirectories: [URL] = [],
         applicationSupportDirectoryName: String = "app.bytrong.quotio",
         accountVaultNamespace: String = "quotio-macos",
         proxyURL: @escaping @MainActor () -> String? = {
@@ -71,7 +69,6 @@ public final class QuotioCLIServerProcess {
         self.accountDataDirectory = accountDataDirectory
         self.proxyAuthDirectory = proxyAuthDirectory
         self.initialPreferences = initialPreferences
-        self.executableDirectories = executableDirectories
         self.applicationSupportDirectoryName = applicationSupportDirectoryName
         self.accountVaultNamespace = accountVaultNamespace
         self.proxyURL = proxyURL
@@ -105,8 +102,6 @@ public final class QuotioCLIServerProcess {
         }
         var environment = ProcessInfo.processInfo.environment
         environment.removeValue(forKey: "QUOTIO_SERVER_TOKEN")
-        let searchPath = executableDirectories.map(\.path) + [environment["PATH"] ?? ""]
-        environment["PATH"] = searchPath.filter { !$0.isEmpty }.joined(separator: ":")
         if let value = proxyURL(),
            let url = URL(string: value),
            url.host?.isEmpty == false {

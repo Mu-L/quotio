@@ -39,15 +39,11 @@ enum CompositionRoot {
             logger: OSApplicationLogger(subsystem: AppIdentity.bundleIdentifier, category: "NativeQuota"),
             localization: { (languageManager.bundle, languageManager.locale) }
         )
-        let agentInstallationProbe = AgentBinaryInstallationProbe()
         let quotioServer = QuotioCLIServerProcess(
             proxyAuthDirectory: URL(fileURLWithPath: paths.authDirectoryPath, isDirectory: true),
             initialPreferences: {
                 (providerTrackingRepository.load(), UserDefaultsRefreshPreferencesRepository().load(), authFileState.disabledAuthFileNames())
             },
-            executableDirectories: [CLIAgent.codexCLI, .ampCLI]
-                .compactMap(agentInstallationProbe.path)
-                .map { URL(fileURLWithPath: $0).deletingLastPathComponent() },
             applicationSupportDirectoryName: AppIdentity.bundleIdentifier,
             accountVaultNamespace: AppIdentity.quotioCLIVaultNamespace()
         )

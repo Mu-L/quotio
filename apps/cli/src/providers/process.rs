@@ -1,5 +1,8 @@
 use crate::error::ProviderError;
-use std::{path::Path, process::Stdio};
+use std::{
+    path::{Path, PathBuf},
+    process::Stdio,
+};
 use tokio::{
     io::{AsyncBufReadExt, AsyncReadExt, BufReader},
     process::{Child, Command},
@@ -7,7 +10,7 @@ use tokio::{
 pub(crate) const MAX_BYTES: usize = 1024 * 1024;
 
 pub(crate) fn spawn(program: &Path, args: &[&str]) -> Result<Child, ProviderError> {
-    Command::new(program)
+    Command::new(resolve_program(program))
         .args(args)
         .env("NO_COLOR", "1")
         .stdin(Stdio::piped())
@@ -16,6 +19,77 @@ pub(crate) fn spawn(program: &Path, args: &[&str]) -> Result<Child, ProviderErro
         .kill_on_drop(true)
         .spawn()
         .map_err(|_| ProviderError::Unavailable)
+}
+// Desktop launches often have a minimal PATH. Keep provider executable discovery in the host.
+fn resolve_program(program: &Path) -> PathBuf {
+    if program.components().count() != 1 || program.is_absolute() {
+        return program.to_owned();
+    }
+    let mut directories: Vec<PathBuf> = std::env::var_os("PATH")
+        .map(|path| std::env::split_paths(&path).collect())
+        .unwrap_or_default();
+    #[cfg(unix)]
+    {
+        directories.extend(["/usr/local/bin", "/opt/homebrew/bin", "/usr/bin"].map(PathBuf::from));
+        if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
+            directories.extend(
+                [
+                    ".local/bin",
+                    ".cargo/bin",
+                    ".bun/bin",
+                    ".deno/bin",
+                    ".npm-global/bin",
+                    ".opencode/bin",
+                    ".warp/bin",
+                    ".volta/bin",
+                    ".asdf/shims",
+                    ".local/share/mise/shims",
+                ]
+                .map(|path| home.join(path)),
+            );
+            let data_home = std::env::var_os("XDG_DATA_HOME")
+                .filter(|p| !p.is_empty())
+                .map(PathBuf::from)
+                .unwrap_or_else(|| home.join(".local/share"));
+            for (base, suffix) in [
+                (home.join(".nvm/versions/node"), "bin"),
+                (data_home.join("fnm/node-versions"), "installation/bin"),
+                (home.join(".fnm/node-versions"), "installation/bin"),
+            ] {
+                if let Ok(entries) = std::fs::read_dir(base) {
+                    let mut versions: Vec<_> = entries
+                        .filter_map(Result::ok)
+                        .map(|entry| entry.path())
+                        .collect();
+                    versions.sort_unstable_by(|a, b| b.cmp(a));
+                    directories.extend(versions.into_iter().map(|path| path.join(suffix)));
+                }
+            }
+        }
+    }
+    find_program(program, &directories).unwrap_or_else(|| program.to_owned())
+}
+fn find_program(program: &Path, directories: &[PathBuf]) -> Option<PathBuf> {
+    directories
+        .iter()
+        .map(|directory| directory.join(program))
+        .find(|path| {
+            let Ok(metadata) = path.metadata() else {
+                return false;
+            };
+            if !metadata.is_file() {
+                return false;
+            }
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                metadata.permissions().mode() & 0o111 != 0
+            }
+            #[cfg(not(unix))]
+            {
+                true
+            }
+        })
 }
 pub(crate) async fn line<R: tokio::io::AsyncBufRead + Unpin>(
     reader: &mut R,
@@ -58,6 +132,40 @@ pub(crate) async fn output(program: &Path, args: &[&str]) -> Result<Vec<u8>, Pro
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
+    #[test]
+    fn executable_lookup_preserves_order_and_rejects_nonexecutables() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = std::env::temp_dir().join(format!(
+            "quotio-process-{}",
+            crate::accounts::random_string().unwrap()
+        ));
+        let first = root.join("first");
+        let second = root.join("second");
+        std::fs::create_dir_all(&first).unwrap();
+        std::fs::create_dir_all(&second).unwrap();
+        for directory in [&first, &second] {
+            std::fs::write(directory.join("tool"), b"#!/bin/sh\nexit 0\n").unwrap();
+            std::fs::set_permissions(
+                directory.join("tool"),
+                std::fs::Permissions::from_mode(0o700),
+            )
+            .unwrap();
+        }
+        let directories = [first.clone(), second.clone()];
+        assert_eq!(
+            find_program(Path::new("tool"), &directories),
+            Some(first.join("tool"))
+        );
+        std::fs::set_permissions(first.join("tool"), std::fs::Permissions::from_mode(0o600))
+            .unwrap();
+        assert_eq!(
+            find_program(Path::new("tool"), &directories),
+            Some(second.join("tool"))
+        );
+        assert_eq!(resolve_program(&first.join("tool")), first.join("tool"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
     #[tokio::test]
     async fn protocol_lines_are_bounded() {
         let mut input = BufReader::new(&b"{\"id\":1}\n"[..]);

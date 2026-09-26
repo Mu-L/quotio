@@ -39,7 +39,6 @@ final class QuotioCLIServerProcessTests: XCTestCase {
             accountDataDirectory: directory.appendingPathComponent("accounts"),
             proxyAuthDirectory: proxyAuthDirectory,
             initialPreferences: { (ProviderTrackingPreferences(disabledProviders: [.copilot], automaticallyDiscoverLogins: false), RefreshPreferences(cadence: .manual), ["disabled.json"]) },
-            executableDirectories: [directory.appendingPathComponent("bin")],
             accountVaultNamespace: "quotio-macos-test",
             proxyURL: { "http://proxy.example:8080" }
         )
@@ -61,7 +60,7 @@ final class QuotioCLIServerProcessTests: XCTestCase {
         XCTAssertTrue(launchedArguments.contains("--account-vault-namespace\nquotio-macos-test\n"))
         XCTAssertTrue(launchedArguments.contains("--cli-proxy-auth-dir\n\(proxyAuthDirectory.path)\n"))
         let launchedEnvironment = try String(contentsOf: environment, encoding: .utf8)
-        XCTAssertTrue(launchedEnvironment.hasPrefix("\(directory.path)/bin:"))
+        XCTAssertTrue(launchedEnvironment.hasPrefix((ProcessInfo.processInfo.environment["PATH"] ?? "") + "\n"))
         XCTAssertTrue(launchedEnvironment.contains("\nhttp://proxy.example:8080\n"))
         await server.stop()
         for _ in 0..<20 where !FileManager.default.fileExists(atPath: marker.path) {
