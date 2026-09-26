@@ -362,12 +362,6 @@ public final class MenuBarSettingsManager {
         }
     }
     
-    /// Remove items that no longer exist in quota data
-    public func pruneInvalidItems(validItems: [MenuBarQuotaItem]) {
-        let validIds = Set(validItems.map(\.id))
-        selectedItems.removeAll { !validIds.contains($0.id) }
-    }
-    
     public func autoSelectNewAccounts(availableItems: [MenuBarQuotaItem]) {
         // Don't auto-add if user has manually modified the menu bar selection
         guard !hasUserModifiedMenuBar else { return }

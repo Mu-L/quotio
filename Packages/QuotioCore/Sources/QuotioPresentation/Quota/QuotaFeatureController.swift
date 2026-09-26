@@ -31,8 +31,6 @@ public final class QuotaFeatureController {
     @ObservationIgnored private let modeManager: OperatingModeManager
     @ObservationIgnored private let menuBarSettings: MenuBarSettingsManager
     @ObservationIgnored private let notifications: any NotificationRequesting
-    @ObservationIgnored private var authFiles: () -> [ManagedAuthFile]
-    @ObservationIgnored private let authFileState: (any ManagedAuthFileStateRepository)?
     @ObservationIgnored private var refreshTask: Task<Void, Never>?
     @ObservationIgnored private var didChangeHandler: (@MainActor () -> Void)?
 
@@ -43,9 +41,7 @@ public final class QuotaFeatureController {
         modeManager: OperatingModeManager,
         monitoringSettings: any MonitoringSettingsManaging,
         menuBarSettings: MenuBarSettingsManager,
-        notifications: any NotificationRequesting,
-        authFiles: @escaping () -> [ManagedAuthFile],
-        authFileState: (any ManagedAuthFileStateRepository)? = nil
+        notifications: any NotificationRequesting
     ) {
         self.settingsService = monitoringSettings
         self.quota = quota
@@ -54,8 +50,6 @@ public final class QuotaFeatureController {
         self.modeManager = modeManager
         self.menuBarSettings = menuBarSettings
         self.notifications = notifications
-        self.authFiles = authFiles
-        self.authFileState = authFileState
     }
 
     deinit {
@@ -67,10 +61,6 @@ public final class QuotaFeatureController {
     }
 
     var oauthState: QuotaOAuthState? { QuotaOAuthState(oauth.state) }
-
-    public func setAuthFilesProvider(_ provider: @escaping () -> [ManagedAuthFile]) {
-        authFiles = provider
-    }
 
     public func setDidChangeHandler(_ handler: (@MainActor () -> Void)?) {
         didChangeHandler = handler
@@ -273,13 +263,7 @@ public final class QuotaFeatureController {
         func canonicalItem(_ item: MenuBarQuotaItem) -> MenuBarQuotaItem {
             guard let provider = QuotaProvider(rawValue: item.provider),
                   let aliases = quota.state.accountAliases[provider] else { return item }
-            var key = item.accountKey
-            if provider == .codex {
-                if key.hasPrefix("codex-") { key.removeFirst("codex-".count) }
-                if key.hasSuffix(".json") { key.removeLast(".json".count) }
-            }
-            guard let canonical = aliases[key],
-                  quota.providerQuotas[provider]?[canonical] != nil else { return item }
+            guard let canonical = aliases[item.accountKey] else { return item }
             return MenuBarQuotaItem(provider: item.provider, accountKey: canonical)
         }
 
@@ -290,41 +274,19 @@ public final class QuotaFeatureController {
         if selected != menuBarSettings.selectedItems {
             menuBarSettings.selectedItems = selected
         }
-        let disabledItemIDs = Set(accounts.accounts.compactMap { account -> String? in
-            guard account.isDisabled,
-                  let provider = QuotaProvider(rawValue: account.providerID.rawValue) else { return nil }
-            return MenuBarQuotaItem(
-                provider: provider.rawValue,
-                accountKey: account.accountKey
-            ).id.lowercased()
+        var available = accounts.accounts.filter { !$0.isDisabled }.map {
+            MenuBarQuotaItem(provider: $0.providerID.rawValue, accountKey: $0.accountKey)
+        }
+        let disabled = Set(accounts.accounts.filter(\.isDisabled).map {
+            MenuBarQuotaItem(provider: $0.providerID.rawValue, accountKey: $0.accountKey).id
         })
-        var available: [MenuBarQuotaItem] = []
-        var seen = Set<String>()
+        var seen = Set(available.map(\.id))
         for (provider, quotas) in quota.providerQuotas {
-            for key in quotas.keys {
+            for key in quotas.keys.sorted() {
                 let item = MenuBarQuotaItem(provider: provider.rawValue, accountKey: key)
-                if !disabledItemIDs.contains(item.id.lowercased()), seen.insert(item.id).inserted {
-                    available.append(item)
-                }
+                if !disabled.contains(item.id), seen.insert(item.id).inserted { available.append(item) }
             }
         }
-        let disabledFiles = authFileState?.disabledAuthFileNames() ?? []
-        for file in authFiles() where !file.disabled && !disabledFiles.contains(file.name) {
-            guard let provider = file.providerID else { continue }
-            let item = canonicalItem(MenuBarQuotaItem(provider: provider.rawValue, accountKey: file.menuBarAccountKey))
-            if !disabledItemIDs.contains(item.id.lowercased()), seen.insert(item.id).inserted {
-                available.append(item)
-            }
-        }
-        for file in accounts.authFiles
-        where file.source != .cliProxyApi || !disabledFiles.contains(file.filename) {
-            guard let provider = QuotaProvider(rawValue: file.providerID.rawValue) else { continue }
-            let item = canonicalItem(MenuBarQuotaItem(provider: provider.rawValue, accountKey: file.menuBarAccountKey))
-            if !disabledItemIDs.contains(item.id.lowercased()), seen.insert(item.id).inserted {
-                available.append(item)
-            }
-        }
-        menuBarSettings.pruneInvalidItems(validItems: available)
         menuBarSettings.autoSelectNewAccounts(availableItems: available)
     }
 

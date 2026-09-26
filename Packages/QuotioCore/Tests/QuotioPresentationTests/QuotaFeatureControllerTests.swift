@@ -156,30 +156,30 @@ final class QuotaFeatureControllerTests: XCTestCase {
             MenuBarQuotaItem(provider: "codex", accountKey: "codex-same@example.com-pro.json")
         ]
         fixture.controller.synchronizeMenuBarSelection()
-        XCTAssertEqual(fixture.menuBar.selectedItems, [canonical])
+        XCTAssertEqual(fixture.menuBar.selectedItems, [MenuBarQuotaItem(provider: "codex", accountKey: "codex-same@example.com-pro.json")])
         XCTAssertTrue(fixture.menuBar.hasUserModifiedMenuBar)
         await fixture.controller.shutdown()
     }
 
-    func testDisabledProxyFilesCannotReenterMenuThroughFileFallback() async {
+    func testLegacyFilesCannotCreateMenuPinsOrEraseUnresolvedSelections() async {
         let account = Account.make(providerID: AccountProviderID(rawValue: "claude"), accountKey: "Personal", source: .quotioKeychain)
         let disabled = AuthFileDescriptor(
             id: "proxy", providerID: AccountProviderID(rawValue: "claude"), email: "Work",
             login: nil, expired: nil, accountType: nil, filePath: "/test/claude-work.json",
             source: .cliProxyApi, filename: "claude-work.json"
         )
-        let fixture = await makeFixture(account: account, provider: .claude, authFiles: [disabled], disabledFiles: [disabled.filename])
-        // Live data can briefly lag a successful disable; persisted state must win.
-        fixture.controller.setAuthFilesProvider {
-            [ManagedAuthFile(id: "proxy", name: disabled.filename, provider: "claude", status: "ready", disabled: false, unavailable: false, email: "Work")]
-        }
-        fixture.menuBar.selectedItems = [MenuBarQuotaItem(provider: "claude", accountKey: "Work")]
+        let fixture = await makeFixture(account: account, provider: .claude, authFiles: [disabled])
+        fixture.menuBar.selectedItems = []
         fixture.controller.synchronizeMenuBarSelection()
         XCTAssertFalse(fixture.menuBar.selectedItems.contains { $0.accountKey == "Work" })
+        let unresolved = MenuBarQuotaItem(provider: "claude", accountKey: "Work")
+        fixture.menuBar.toggleItem(unresolved)
+        fixture.controller.synchronizeMenuBarSelection()
+        XCTAssertTrue(fixture.menuBar.selectedItems.contains(unresolved))
 
         let sameName = await makeFixture(
             account: Account.make(providerID: AccountProviderID(rawValue: "claude"), accountKey: "Work", source: .quotioKeychain),
-            provider: .claude, authFiles: [disabled], disabledFiles: [disabled.filename]
+            provider: .claude, authFiles: [disabled]
         )
         sameName.menuBar.selectedItems = [MenuBarQuotaItem(provider: "claude", accountKey: "Work")]
         sameName.controller.synchronizeMenuBarSelection()
@@ -194,7 +194,6 @@ final class QuotaFeatureControllerTests: XCTestCase {
         quotaAccountKey: String? = nil,
         aliases: [String: String] = [:],
         authFiles: [AuthFileDescriptor] = [],
-        disabledFiles: Set<String> = [],
         lastUpdated: Date = Date(timeIntervalSince1970: 1_000),
         issues: [QuotaProvider: QuotaRefreshIssue] = [:]
     ) async -> (
@@ -236,9 +235,7 @@ final class QuotaFeatureControllerTests: XCTestCase {
             notifications: NotificationController(
                 repository: preferences,
                 delivery: QuotaFeatureNotificationDelivery()
-            ),
-            authFiles: { [] },
-            authFileState: QuotaFeatureAuthFileState(names: disabledFiles)
+            )
         )
         return (controller, accountService, quota, menuBar)
     }
@@ -362,13 +359,6 @@ private final class QuotaFeaturePreferencesRepository:
     }
 
     func save(_ preferences: NotificationPreferences) {}
-}
-
-private struct QuotaFeatureAuthFileState: ManagedAuthFileStateRepository {
-    let names: Set<String>
-    func disabledAuthFileNames() -> Set<String> { names }
-    func saveDisabledAuthFileNames(_ names: Set<String>) {}
-    func recordAuthFilesChanged(at date: Date) {}
 }
 
 private actor QuotaFeatureMonitoringSettings: MonitoringSettingsManaging {

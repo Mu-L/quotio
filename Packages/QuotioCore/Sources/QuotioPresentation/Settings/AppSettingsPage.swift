@@ -29,6 +29,18 @@ struct AppSettingsPage: View {
                                     get: { menuBar.isSelected(item) }, set: { _ in menuBar.toggleItem(item) }
                                 ))
                             }
+                            ForEach(menuBar.selectedItems.filter { item in
+                                !accounts.accounts.contains { $0.providerID.rawValue == item.provider && $0.accountKey == item.accountKey }
+                            }) { item in
+                                HStack {
+                                    VStack(alignment: .leading) {
+                                        Text(item.accountKey.masked(if: menuBar.hideSensitiveInfo))
+                                        Text("quota.notAvailable".localized()).font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Button("action.remove".localized()) { menuBar.removeItem(item) }
+                                }
+                            }
                         }
                         QuotaDisplaySettingsSection()
                         UsageDisplaySettingsSection()

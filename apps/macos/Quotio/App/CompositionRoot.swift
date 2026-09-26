@@ -210,9 +210,7 @@ enum CompositionRoot {
             modeManager: modeManager,
             monitoringSettings: quotioBackend,
             menuBarSettings: menuBarSettings,
-            notifications: notificationController,
-            authFiles: { [] },
-            authFileState: authFileState
+            notifications: notificationController
         )
         antigravityAccountScreenModel.setDidSwitchHandler { [weak quotaController] in
             await quotaController?.refresh(provider: .antigravity)
@@ -287,9 +285,6 @@ enum CompositionRoot {
             managementAPIFactory: managementAPIFactory
         )
         proxyManagementReference = proxyManagement
-        quotaController.setAuthFilesProvider { [weak proxyManagement] in
-            proxyManagement?.authFiles ?? []
-        }
         proxyManagement.setQuotaRefresh { [weak quotaController] force in
             await quotaController?.refreshAll(force: force)
         }
@@ -754,12 +749,12 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
             var isForbidden = false
             var quotaPair: MenuBarQuotaPair?
 
-            if let accountQuotas = quotaScreenModel.providerQuotas[provider],
-               let quotaData = resolveQuotaData(
-                   for: selectedItem,
-                   provider: provider,
-                   accountQuotas: accountQuotas
-               ) {
+            let account = accountsScreenModel.accounts.first {
+                $0.providerID.rawValue == provider.rawValue && $0.accountKey == selectedItem.accountKey
+            }
+            let quotaData = quotaScreenModel.providerQuotas[provider]?[selectedItem.accountKey]
+            guard account?.isDisabled != true, account != nil || quotaData != nil else { return nil }
+            if let quotaData {
                 isForbidden = quotaData.isForbidden
                 if !quotaData.models.isEmpty {
                     displayPercent = menuBarSettings.totalUsagePercent(summary: quotaData.summary)
@@ -779,43 +774,5 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
                 quotaPair: quotaPair
             )
         }
-    }
-
-    private func resolveQuotaData(
-        for selectedItem: MenuBarQuotaItem,
-        provider: QuotaProvider,
-        accountQuotas: [String: ProviderQuota]
-    ) -> ProviderQuota? {
-        if let quotaData = accountQuotas[selectedItem.accountKey] {
-            return quotaData
-        }
-
-        let cleanKey = selectedItem.accountKey.hasSuffix(".json")
-            ? String(selectedItem.accountKey.dropLast(".json".count))
-            : selectedItem.accountKey
-        if let quotaData = accountQuotas[cleanKey] {
-            return quotaData
-        }
-
-        if provider == .codex {
-            var filenameKey = selectedItem.accountKey
-            if filenameKey.hasPrefix("codex-") {
-                filenameKey.removeFirst("codex-".count)
-            }
-            if filenameKey.hasSuffix(".json") {
-                filenameKey.removeLast(".json".count)
-            }
-            return accountQuotas[filenameKey]
-        }
-        if provider == .copilot, selectedItem.accountKey.hasPrefix("github-copilot-") {
-            var filenameKey = selectedItem.accountKey
-            filenameKey.removeFirst("github-copilot-".count)
-            if filenameKey.hasSuffix(".json") {
-                filenameKey.removeLast(".json".count)
-            }
-            guard !filenameKey.isEmpty else { return nil }
-            return accountQuotas[filenameKey]
-        }
-        return nil
     }
 }
