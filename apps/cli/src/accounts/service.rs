@@ -168,7 +168,7 @@ async fn validate_with_endpoint(
     {
         return Err(AccountError::Busy);
     }
-    if matches!(provider, Provider::Catalog("cursor" | "grok" | "copilot"))
+    if matches!(provider, Provider::Catalog("cursor" | "grok"))
         && let Some(resolved) = resolved
     {
         usage.account.label = resolved.label;
@@ -315,15 +315,21 @@ async fn validate_credential(
     };
     if let Credential::ClaudeOAuth {
         account_id, email, ..
-    }
-    | Credential::CopilotOAuth {
-        account_id,
-        login: email,
-        ..
     } = credential
     {
         usage.account.id = account_id.clone();
         usage.account.label = email.clone();
+    }
+    if let Credential::CopilotOAuth { account_id, .. } = credential {
+        if usage
+            .account
+            .verified
+            .as_ref()
+            .is_none_or(|identity| identity.subject != *account_id)
+        {
+            return Err(ProviderError::Authentication.into());
+        }
+        usage.account.id = account_id.clone();
     }
     if !crate::fetch::valid_usage(&usage) || usage.account.id.is_empty() {
         return Err(ProviderError::InvalidData.into());
@@ -2603,6 +2609,51 @@ mod tests {
         }
     }
     #[tokio::test]
+    async fn copilot_profile_updates_names_without_retargeting_owned_credentials() {
+        for subject in [42, 43, 0] {
+            let credential = Credential::CopilotOAuth {
+                access_token: "synthetic-profile-token".into(),
+                account_id: "42".into(),
+                login: "old-login".into(),
+            };
+            let (endpoint, server) = http::fixture::server(vec![
+                serde_json::json!({"quota_snapshots":{"premium_interactions":{"entitlement":300,"remaining":250}}}),
+                serde_json::json!({"login":"current-login","id":subject}),
+            ]).await;
+            let result = validate_with_endpoint(
+                &http::fixture::context(),
+                Provider::Catalog("copilot"),
+                &credential,
+                Some(&endpoint),
+            )
+            .await;
+            match subject {
+                42 => {
+                    let usage = result.unwrap();
+                    assert_eq!(usage.account.id, "42");
+                    assert_eq!(usage.account.label, "current-login");
+                    assert_eq!(usage.account.verified.unwrap().subject, "42");
+                }
+                43 => assert!(matches!(
+                    result,
+                    Err(AccountError::Provider(ProviderError::Authentication))
+                )),
+                _ => assert!(matches!(
+                    result,
+                    Err(AccountError::Provider(ProviderError::InvalidData))
+                )),
+            }
+            let requests = server.await.unwrap();
+            assert!(requests[1].starts_with("GET /user "));
+            assert!(
+                requests
+                    .iter()
+                    .all(|request| request.contains("synthetic-profile-token"))
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn copilot_native_http_fences_rotation_and_disable() {
         for rotate in [false, true] {
             let dir = std::env::temp_dir().join(random_string().unwrap());
@@ -2636,7 +2687,7 @@ mod tests {
             let context = http::fixture::context();
             let before = adapter.cache_identity(&context).await.unwrap();
             let changed = path.clone();
-            let (endpoint, server) = http::fixture::server_status_with_action(vec![(200, serde_json::json!({"quota_snapshots":{"premium_interactions":{"entitlement":300,"remaining":250,"unlimited":false}}}))], move |_| {
+            let (endpoint, server) = http::fixture::server_status_with_action(vec![(200, serde_json::json!({"quota_snapshots":{"premium_interactions":{"entitlement":300,"remaining":250,"unlimited":false}}})), (200, serde_json::json!({"login":"verified-login","id":42}))], move |_| {
                 if rotate { std::fs::write(&changed, br#"{"github.com:fixture":{"oauth_token":"native-second-fixture"}}"#).unwrap(); }
             }).await;
             let result =
@@ -2645,19 +2696,15 @@ mod tests {
                 assert!(matches!(result, Err(AccountError::Busy)));
                 assert_ne!(adapter.cache_identity(&context).await.unwrap(), before);
             } else {
-                assert_eq!(
-                    result.unwrap().account.label,
-                    credential
-                        .resolve_reference(provider)
-                        .await
-                        .unwrap()
-                        .unwrap()
-                        .label
-                );
+                let usage = result.unwrap();
+                assert_eq!(usage.account.label, "verified-login");
+                assert_eq!(usage.account.verified.unwrap().subject, "42");
                 assert_eq!(std::fs::read(&path).unwrap(), original);
             }
             let requests = server.await.unwrap();
-            assert_eq!(requests.len(), 1);
+            assert_eq!(requests.len(), 2);
+            assert!(requests[1].starts_with("GET /user "));
+            assert!(requests[1].contains("native-first-fixture"));
             assert!(requests[0].starts_with("GET "));
             assert!(requests[0].contains("native-first-fixture"));
             assert!(!requests[0].contains("owner-only") && !requests[0].contains("unselected"));

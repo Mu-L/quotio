@@ -107,32 +107,13 @@ pub(super) async fn credential(
     endpoint: &str,
     token: String,
 ) -> Result<Credential, AccountError> {
-    #[derive(Deserialize)]
-    struct Profile {
-        login: String,
-        id: u64,
-    }
-    let profile: Profile = http::json(
-        context
-            .http
-            .get(endpoint)
-            .bearer_auth(&token)
-            .header("Accept", "application/vnd.github+json")
-            .header("User-Agent", "Quotio"),
-        context.clock.now(),
-    )
-    .await?;
-    if profile.id == 0
-        || profile.login.is_empty()
-        || profile.login.len() > 80
-        || profile.login.chars().any(char::is_control)
-    {
-        return Err(AccountError::OAuth);
-    }
+    let (account_id, login) =
+        crate::providers::catalog::oauth_primary::copilot_profile(context, endpoint, &token)
+            .await?;
     Ok(Credential::CopilotOAuth {
         access_token: token,
-        account_id: profile.id.to_string(),
-        login: profile.login,
+        account_id,
+        login,
     })
 }
 #[cfg(test)]

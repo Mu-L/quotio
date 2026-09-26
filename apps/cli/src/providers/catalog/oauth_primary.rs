@@ -1064,6 +1064,36 @@ fn copilot_usage(value: &Value, now: OffsetDateTime) -> Result<CopilotUsage, Pro
     Ok(CopilotUsage { plan, windows })
 }
 
+pub(crate) async fn copilot_profile(
+    context: &ProviderContext,
+    endpoint: &str,
+    token: &str,
+) -> Result<(String, String), ProviderError> {
+    #[derive(serde::Deserialize)]
+    struct Profile {
+        login: String,
+        id: u64,
+    }
+    let profile: Profile = http::json(
+        context
+            .http
+            .get(endpoint)
+            .bearer_auth(token)
+            .header("Accept", "application/vnd.github+json")
+            .header("User-Agent", "Quotio"),
+        context.clock.now(),
+    )
+    .await?;
+    if profile.id == 0
+        || profile.login.is_empty()
+        || profile.login.len() > 80
+        || profile.login.chars().any(char::is_control)
+    {
+        return Err(ProviderError::InvalidData);
+    }
+    Ok((profile.id.to_string(), profile.login))
+}
+
 pub(crate) async fn fetch_copilot_at(
     context: &ProviderContext,
     endpoint: &str,
@@ -1088,7 +1118,15 @@ pub(crate) async fn fetch_copilot_at(
     .await?;
     let parsed = copilot_usage(&response, now)?;
     let mut usage = common::usage("copilot", &token, "github-oauth", parsed.windows)?;
-    usage.account.label = "GitHub Copilot OAuth token".into();
+    let profile_url = reqwest::Url::parse(endpoint)
+        .and_then(|url| url.join("/user"))
+        .map_err(|_| ProviderError::InvalidData)?;
+    let (subject, login) = copilot_profile(context, profile_url.as_str(), &token.0).await?;
+    usage.account.label = login;
+    usage.account.verified = Some(crate::domain::VerifiedIdentity {
+        subject,
+        tenant: None,
+    });
     usage.account.plan = parsed.plan;
     Ok(usage)
 }
