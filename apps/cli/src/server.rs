@@ -614,7 +614,7 @@ async fn collect_usage(
     if !state.no_saved_accounts
         && let Some(vault) = state.vault.clone()
     {
-        match crate::accounts::service::freeze_copilot_selectors(vault).await {
+        match crate::accounts::service::freeze_native_selectors(vault).await {
             Ok(true) => state.invalidate().await,
             Ok(false) => (),
             Err(error) => {

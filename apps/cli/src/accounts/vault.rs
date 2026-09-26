@@ -10,6 +10,12 @@ use std::{
     },
 };
 
+fn has_factory_selectors(document: &Document) -> bool {
+    document.accounts.iter().any(|account| matches!(&account.credential, super::Credential::FactoryNative { source } if source.entry_key.is_some()))
+        || document.native_discovery.as_ref().is_some_and(|report| report.permissions.iter().chain(&report.known_sources)
+            .any(|source| source.kind == "factory_native" && source.keychain_account.is_some()))
+}
+
 #[cfg(target_os = "macos")]
 const PRODUCTION_KEYCHAIN_SERVICE: &str = "app.quotio.cli.accounts.v1";
 #[cfg(target_os = "macos")]
@@ -330,7 +336,8 @@ impl Vault {
                 }
                 let doc: Document =
                     serde_json::from_slice(&bytes).map_err(|_| AccountError::Corrupt)?;
-                if !matches!(doc.version, 1..=15)
+                if !matches!(doc.version, 1..=16)
+                    || (doc.version < 16 && has_factory_selectors(&doc))
                     || (doc.version < 15
                         && (doc
                             .accounts
@@ -520,6 +527,9 @@ impl Transaction {
                 })
         {
             self.document.version = self.document.version.max(15);
+        }
+        if has_factory_selectors(&self.document) {
+            self.document.version = self.document.version.max(16);
         }
         let bytes = serde_json::to_vec(&self.document).map_err(|_| AccountError::Corrupt)?;
         if bytes.len() > 1024 * 1024 {

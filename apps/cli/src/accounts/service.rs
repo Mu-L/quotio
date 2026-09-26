@@ -1013,6 +1013,67 @@ impl ProviderAdapter for FailedProvider {
         Box::pin(async { Err(ProviderError::CredentialStorage) })
     }
 }
+pub(crate) async fn freeze_native_selectors(vault: Vault) -> Result<bool, AccountError> {
+    let copilot_changed = freeze_copilot_selectors(vault.clone()).await?;
+    let mut updates = Vec::new();
+    for account in list(vault.clone()).await? {
+        if let Credential::FactoryNative { source } = &account.credential {
+            let mut selected = source.clone();
+            if matches!(selected.freeze_keychain_account().await, Ok(true)) {
+                updates.push((account, selected));
+            }
+        }
+    }
+    let factory_changed = freeze_factory_selectors_as(vault, updates).await?;
+    Ok(copilot_changed || factory_changed)
+}
+
+async fn freeze_factory_selectors_as(
+    vault: Vault,
+    updates: Vec<(Account, super::sources::FactoryNativeReference)>,
+) -> Result<bool, AccountError> {
+    if updates.is_empty() {
+        return Ok(false);
+    }
+    let mut tx = begin(vault).await?;
+    let mut changed = false;
+    for (previous, selected) in updates {
+        let Some(account) =
+            tx.document.accounts.iter_mut().find(|account| {
+                account.id == previous.id && account.credential == previous.credential
+            })
+        else {
+            continue;
+        };
+        account.identity = selected.identity()?;
+        account.credential = Credential::FactoryNative {
+            source: selected.clone(),
+        };
+        if let Some(naming) = &mut account.naming {
+            naming.observed_name = None;
+        }
+        if let Some(report) = &mut tx.document.native_discovery {
+            let location = serde_json::to_value(selected.location).expect("factory location");
+            for source in report
+                .permissions
+                .iter_mut()
+                .chain(&mut report.known_sources)
+            {
+                if source.kind == "factory_native"
+                    && source.location.as_deref() == location.as_str()
+                {
+                    source.keychain_account = selected.entry_key.clone();
+                }
+            }
+        }
+        changed = true;
+    }
+    if changed {
+        commit(tx).await?;
+    }
+    Ok(changed)
+}
+
 pub(crate) async fn freeze_copilot_selectors(vault: Vault) -> Result<bool, AccountError> {
     if !list(vault.clone())
         .await?
@@ -1078,7 +1139,7 @@ async fn discover(
     timeout: std::time::Duration,
 ) -> Result<(Vec<Account>, std::collections::HashSet<String>), AccountError> {
     tokio::time::timeout(timeout, async {
-        freeze_copilot_selectors(vault.clone()).await?;
+        freeze_native_selectors(vault.clone()).await?;
         let tx = begin(vault).await?;
         Ok((
             tx.document.accounts.clone(),
@@ -1589,6 +1650,62 @@ mod tests {
         sync::atomic::{AtomicUsize, Ordering},
         time::Duration,
     };
+
+    #[tokio::test]
+    async fn factory_keychain_selector_migration_preserves_ids_labels_and_rejects_downgrade() {
+        let dir = std::env::temp_dir().join(random_string().unwrap());
+        let memory = Arc::new(Memory::default());
+        let vault = Vault::new(memory.clone(), dir.join("lock"));
+        let source = super::super::sources::FactoryNativeReference {
+            directory: dir.clone(),
+            location: super::super::sources::FactoryLocation::V2Keyring,
+            entry_key: None,
+        };
+        let id = add(
+            vault.clone(),
+            Provider::Factory,
+            "My Factory account".into(),
+            Credential::FactoryNative {
+                source: source.clone(),
+            },
+            source.identity().unwrap(),
+        )
+        .await
+        .unwrap();
+        let before = super::super::api::resolved_list(vault.clone())
+            .await
+            .unwrap();
+        let previous = get(vault.clone(), id.clone()).await.unwrap();
+        let mut selected = source;
+        selected.entry_key = Some("auth-encryption-key".into());
+        assert!(
+            freeze_factory_selectors_as(vault.clone(), vec![(previous.clone(), selected.clone())])
+                .await
+                .unwrap()
+        );
+        selected.entry_key = Some("auth-encryption-key-security-cli".into());
+        assert!(
+            !freeze_factory_selectors_as(vault.clone(), vec![(previous, selected)])
+                .await
+                .unwrap()
+        );
+        let after = super::super::api::resolved_list(vault.clone())
+            .await
+            .unwrap();
+        assert_eq!(before.accounts[0].id, after.accounts[0].id);
+        assert_eq!(after.accounts[0].display_name, "My Factory account");
+        assert_eq!(
+            after.accounts[0].sources[0].keychain_account.as_deref(),
+            Some("auth-encryption-key")
+        );
+        let mut value: serde_json::Value =
+            serde_json::from_slice(&memory.read().unwrap().unwrap()).unwrap();
+        assert_eq!(value["version"], 16);
+        value["version"] = 15.into();
+        memory.write(&serde_json::to_vec(&value).unwrap()).unwrap();
+        assert!(matches!(vault.begin(), Err(AccountError::Corrupt)));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[tokio::test]
     async fn legacy_copilot_keychain_alias_is_frozen_once_without_changing_account_ids() {
@@ -2220,6 +2337,7 @@ mod tests {
                     source: super::super::sources::FactoryNativeReference {
                         directory: missing.clone(),
                         location: super::super::sources::FactoryLocation::Legacy,
+                        entry_key: None,
                     },
                 },
             ),
@@ -2526,6 +2644,7 @@ mod tests {
                     source: super::super::sources::FactoryNativeReference {
                         directory: dir.clone(),
                         location: super::super::sources::FactoryLocation::Legacy,
+                        entry_key: None,
                     },
                 };
                 let vault = Vault::new(Arc::new(Memory::default()), dir.join("lock"));

@@ -61,7 +61,7 @@ pub async fn scan(
     restore_removed: bool,
 ) -> Result<Report, AccountError> {
     // Check the host's own store before inspecting any provider credential sources.
-    let references_updated = service::freeze_copilot_selectors(vault.clone()).await?;
+    let references_updated = service::freeze_native_selectors(vault.clone()).await?;
     service::list(vault.clone()).await?;
     if restore_removed {
         let store = vault.clone();

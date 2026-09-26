@@ -28,7 +28,10 @@ pub(crate) fn target(input: &SourceInput) -> Result<(&'static str, Option<&str>)
         SourceInput::FactoryNative {
             location:
                 FactoryLocation::V2LoginKeychain | FactoryLocation::V2Keyring | FactoryLocation::Legacy,
-        } => Ok(("Factory CLI", None)),
+            entry_key: Some(account),
+        } if crate::providers::factory::valid_keychain_account(account) => {
+            Ok(("Factory CLI", Some(account)))
+        }
         _ => Err(AccountError::Input),
     }
 }
@@ -42,15 +45,20 @@ pub(crate) async fn authorize(mut input: SourceInput) -> Result<SourceInput, Acc
     {
         *entry_key = crate::providers::catalog::oauth_primary::copilot_keychain_account().await?;
     }
+    if let SourceInput::FactoryNative {
+        location,
+        entry_key,
+    } = &mut input
+    {
+        let mut source =
+            super::sources::FactoryNativeReference::system(*location, entry_key.clone())?;
+        source.freeze_keychain_account().await?;
+        *entry_key = source.entry_key;
+    }
     let (service, account) = target(&input)?;
-    let mut account = account.map(str::to_owned);
+    let account = account.map(str::to_owned);
     tokio::task::spawn_blocking(move || {
         use crate::providers::catalog::common;
-        if service == "Factory CLI"
-            && common::keychain_item_exists(service, Some("auth-encryption-key-security-cli"))?
-        {
-            account = Some("auth-encryption-key-security-cli".into());
-        }
         common::authorize_keychain(service, account.as_deref())
     })
     .await
@@ -63,6 +71,26 @@ mod tests {
     use super::*;
 
     #[test]
+    fn factory_authorization_targets_the_same_frozen_account_as_loading() {
+        for account in ["auth-encryption-key", "auth-encryption-key-security-cli"] {
+            let input = SourceInput::FactoryNative {
+                location: FactoryLocation::V2Keyring,
+                entry_key: Some(account.into()),
+            };
+            assert_eq!(target(&input).unwrap(), ("Factory CLI", Some(account)));
+        }
+        for entry_key in [None, Some("unrelated-account".into())] {
+            assert!(
+                target(&SourceInput::FactoryNative {
+                    location: FactoryLocation::V2Keyring,
+                    entry_key
+                })
+                .is_err()
+            );
+        }
+    }
+
+    #[test]
     fn authorization_only_accepts_supported_keychain_sources() {
         for (kind, location) in [
             ("claude_native", "code_keychain"),
@@ -73,6 +101,8 @@ mod tests {
             let mut value = serde_json::json!({"kind":kind,"location":location});
             if kind == "copilot_native" {
                 value["entry_key"] = "fixture".into();
+            } else if kind == "factory_native" {
+                value["entry_key"] = "auth-encryption-key".into();
             }
             let source: SourceInput = serde_json::from_value(value).unwrap();
             assert!(target(&source).is_ok());
@@ -83,6 +113,7 @@ mod tests {
             },
             SourceInput::FactoryNative {
                 location: FactoryLocation::V2File,
+                entry_key: None,
             },
             SourceInput::AmpNative {},
         ] {

@@ -124,16 +124,21 @@ final class QuotioCLIBackendTests: XCTestCase {
     }
 
     func testKeychainAuthorizationForwardsTheHostSelectedAccount() async throws {
-        let backend = QuotioCLIBackend(session: stubSession())
-        await backend.connect(.init(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
-        QuotioCLIURLProtocol.enqueue(#"{"id":"authorize","status":"failed","error":"native_keychain_access_failed"}"#)
-        do {
-            try await backend.authorizeNativeSource(.init(provider: .copilot, kind: "copilot_native", location: "gh_keychain", keychainAccount: "selected-user"))
-            XCTFail("Expected the supplied failure")
-        } catch {}
-        let data = try XCTUnwrap(QuotioCLIURLProtocol.body(forPath: "/v2/sources/authorize"))
-        let value = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: String])
-        XCTAssertEqual(value["entry_key"], "selected-user")
+        for source in [
+            NativeSourcePermission(provider: .copilot, kind: "copilot_native", location: "gh_keychain", keychainAccount: "selected-user"),
+            NativeSourcePermission(provider: .factoryDroid, kind: "factory_native", location: "v2_keyring", keychainAccount: "auth-encryption-key"),
+        ] {
+            let backend = QuotioCLIBackend(session: stubSession())
+            await backend.connect(.init(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))
+            QuotioCLIURLProtocol.enqueue(#"{"id":"authorize","status":"failed","error":"native_keychain_access_failed"}"#)
+            do {
+                try await backend.authorizeNativeSource(source)
+                XCTFail("Expected the supplied failure")
+            } catch {}
+            let data = try XCTUnwrap(QuotioCLIURLProtocol.bodies(forPath: "/v2/sources/authorize").last)
+            let value = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: String])
+            XCTAssertEqual(value["entry_key"], source.keychainAccount)
+        }
     }
 
     func testAuthorizationFailurePreservesItsVerifiedStage() async throws {

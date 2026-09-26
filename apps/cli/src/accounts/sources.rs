@@ -328,9 +328,14 @@ impl FactoryLocation {
 pub struct FactoryNativeReference {
     pub directory: std::path::PathBuf,
     pub location: FactoryLocation,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry_key: Option<String>,
 }
 impl FactoryNativeReference {
-    pub fn system(location: FactoryLocation) -> Result<Self, AccountError> {
+    pub fn system(
+        location: FactoryLocation,
+        entry_key: Option<String>,
+    ) -> Result<Self, AccountError> {
         if !cfg!(target_os = "macos")
             && matches!(
                 location,
@@ -345,12 +350,40 @@ impl FactoryNativeReference {
                 .ok_or(AccountError::NotFound)?
                 .join(".factory"),
             location,
+            entry_key,
         };
         source.identity()?;
         Ok(source)
     }
+
+    pub(crate) async fn freeze_keychain_account(&mut self) -> Result<bool, AccountError> {
+        self.identity()?;
+        if self.entry_key.is_some() || self.location == FactoryLocation::V2File {
+            return Ok(false);
+        }
+        let bytes = crate::providers::catalog::oauth_primary::native_file(
+            self.directory.join(self.location.filename()),
+        )
+        .await?
+        .ok_or(AccountError::NotFound)?;
+        if self.location == FactoryLocation::Legacy
+            && bytes.iter().find(|b| !b.is_ascii_whitespace()) == Some(&b'{')
+        {
+            return Ok(false);
+        }
+        self.entry_key = tokio::task::spawn_blocking(crate::providers::factory::keychain_account)
+            .await
+            .map_err(|_| AccountError::Storage)??;
+        Ok(self.entry_key.is_some())
+    }
+
     pub fn identity(&self) -> Result<String, AccountError> {
-        if !self.directory.is_absolute()
+        if self
+            .entry_key
+            .as_deref()
+            .is_some_and(|key| !crate::providers::factory::valid_keychain_account(key))
+            || (self.location == FactoryLocation::V2File && self.entry_key.is_some())
+            || !self.directory.is_absolute()
             || self
                 .directory
                 .components()
@@ -358,12 +391,17 @@ impl FactoryNativeReference {
         {
             return Err(AccountError::Input);
         }
-        Ok(crate::cache::fingerprint(&[
+        let mut parts = vec![
             "factory_native",
             self.directory.to_str().ok_or(AccountError::Input)?,
             self.location.filename(),
-        ]))
+        ];
+        if let Some(account) = self.entry_key.as_deref() {
+            parts.push(account);
+        }
+        Ok(crate::cache::fingerprint(&parts))
     }
+
     pub async fn resolve(&self) -> Result<Resolved, AccountError> {
         self.identity()?;
         let credential = crate::providers::factory::load_native(self).await?;
@@ -980,7 +1018,12 @@ mod tests {
         let source = FactoryNativeReference {
             directory: dir.clone(),
             location: FactoryLocation::V2File,
+            entry_key: None,
         };
+        assert_eq!(
+            source.identity().unwrap(),
+            crate::cache::fingerprint(&["factory_native", dir.to_str().unwrap(), "auth.v2.file",])
+        );
         let clear = br#"{"access_token":"fixture-access","refresh_token":"owner-only-refresh","active_organization_id":"org"}"#;
         let key = [42u8; 32];
         let nonce = [7u8; 12];
@@ -1025,10 +1068,14 @@ mod tests {
         // A valid legacy sibling must not rescue a broken explicit v2 selection.
         std::fs::write(dir.join("auth.encrypted"), clear).unwrap();
         assert!(source.resolve().await.is_err());
-        let legacy = FactoryNativeReference {
+        let mut legacy = FactoryNativeReference {
             directory: dir.clone(),
             location: FactoryLocation::Legacy,
+            entry_key: None,
         };
+        let identity = legacy.identity().unwrap();
+        assert!(!legacy.freeze_keychain_account().await.unwrap());
+        assert_eq!(legacy.identity().unwrap(), identity);
         assert!(legacy.resolve().await.is_ok());
         assert_ne!(legacy.identity().unwrap(), source.identity().unwrap());
         for bytes in [b"{}".to_vec(), vec![b' '; 1024 * 1024 + 1]] {

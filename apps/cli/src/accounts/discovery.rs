@@ -166,8 +166,14 @@ impl Registry {
             if inspect {
                 let candidates = choices
                     .into_iter()
-                    .filter_map(|source| {
+                    .filter_map(|mut source| {
                         let status = self.probe(&kind, source["location"].as_str())?;
+                        if kind == "factory_native" && status == "permission_required" {
+                            source["entry_key"] = crate::providers::factory::keychain_account()
+                                .ok()
+                                .flatten()?
+                                .into();
+                        }
                         Some(json!({"label":"Native source","status":status,"source":source}))
                     })
                     .collect::<Vec<_>>();
@@ -311,12 +317,16 @@ impl Registry {
                 if !file(&format!(".factory/{name}")) {
                     return None;
                 }
-                if location == "v2_file" && file(".factory/auth.v2.key") {
+                if (location == "legacy"
+                    && read_native(&home.join(".factory/auth.encrypted")).is_ok_and(|bytes| {
+                        bytes.iter().find(|b| !b.is_ascii_whitespace()) == Some(&b'{')
+                    }))
+                    || (location == "v2_file" && file(".factory/auth.v2.key"))
+                {
                     Some("available")
                 } else if location != "v2_file"
                     && [
                         Some("auth-encryption-key-security-cli"),
-                        None,
                         Some("auth-encryption-key"),
                     ]
                     .into_iter()
@@ -652,6 +662,11 @@ mod tests {
         std::fs::write(home.join(".factory/auth.v2.file"), b"encrypted").unwrap();
         std::fs::write(home.join(".factory/auth.v2.key"), [7; 32]).unwrap();
         std::fs::write(home.join(".factory/auth.v2.loginkeychain"), b"encrypted").unwrap();
+        std::fs::write(
+            home.join(".factory/auth.encrypted"),
+            br#"{"access_token":"synthetic-native"}"#,
+        )
+        .unwrap();
         let mut registry = Registry {
             home: Some(home),
             ..Default::default()
@@ -667,6 +682,11 @@ mod tests {
         let candidates = discovered["candidates"].as_array().unwrap();
         assert!(candidates.iter().any(|candidate| {
             candidate["source"]["location"] == "v2_file" && candidate["status"] == "available"
+        }));
+        assert!(candidates.iter().any(|candidate| {
+            candidate["source"]["location"] == "legacy"
+                && candidate["status"] == "available"
+                && candidate["source"]["entry_key"].is_null()
         }));
         assert!(!candidates.iter().any(|candidate| {
             candidate["source"]["location"] == "v2_login_keychain"

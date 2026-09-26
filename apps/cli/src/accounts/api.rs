@@ -406,6 +406,8 @@ pub enum SourceInput {
     },
     FactoryNative {
         location: super::sources::FactoryLocation,
+        #[serde(default)]
+        entry_key: Option<String>,
     },
     CopilotNative {
         location: super::sources::CopilotLocation,
@@ -458,8 +460,12 @@ pub async fn prepare_source(input: SourceInput) -> Result<PreparedAccount, Accou
                 resolved,
             )
         }
-        SourceInput::FactoryNative { location } => {
-            let source = super::sources::FactoryNativeReference::system(location)?;
+        SourceInput::FactoryNative {
+            location,
+            entry_key,
+        } => {
+            let mut source = super::sources::FactoryNativeReference::system(location, entry_key)?;
+            source.freeze_keychain_account().await?;
             let resolved = source.resolve().await?;
             (
                 source.identity()?,

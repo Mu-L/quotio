@@ -5,10 +5,48 @@ use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 pub struct FactoryProvider;
 
+pub(crate) fn valid_keychain_account(account: &str) -> bool {
+    matches!(
+        account,
+        "auth-encryption-key-security-cli" | "auth-encryption-key"
+    )
+}
+
+pub(crate) fn select_keychain_account(
+    mut exists: impl FnMut(&str) -> Result<bool, ProviderError>,
+) -> Result<Option<String>, ProviderError> {
+    for account in ["auth-encryption-key-security-cli", "auth-encryption-key"] {
+        if exists(account)? {
+            return Ok(Some(account.into()));
+        }
+    }
+    Ok(None)
+}
+
+pub(crate) fn keychain_account() -> Result<Option<String>, ProviderError> {
+    select_keychain_account(|account| {
+        super::catalog::common::keychain_item_exists("Factory CLI", Some(account))
+    })
+}
+
 pub(crate) async fn load_native(
     source: &crate::accounts::sources::FactoryNativeReference,
 ) -> Result<crate::accounts::Credential, crate::accounts::AccountError> {
-    use super::catalog::oauth_primary::{native_file, native_keychain};
+    load_native_with_keychain(source, |account| async move {
+        super::catalog::oauth_primary::native_keychain("Factory CLI", Some(&account)).await
+    })
+    .await
+}
+
+async fn load_native_with_keychain<F, Fut>(
+    source: &crate::accounts::sources::FactoryNativeReference,
+    read_key: F,
+) -> Result<crate::accounts::Credential, crate::accounts::AccountError>
+where
+    F: FnOnce(String) -> Fut,
+    Fut: std::future::Future<Output = Result<Option<Vec<u8>>, ProviderError>>,
+{
+    use super::catalog::oauth_primary::native_file;
     use crate::accounts::{AccountError, sources::FactoryLocation};
     let bytes = native_file(source.directory.join(source.location.filename()))
         .await?
@@ -23,18 +61,13 @@ pub(crate) async fn load_native(
             .await?
             .ok_or(AccountError::NotFound)?
     } else {
-        let mut key = None;
-        for account in [
-            Some("auth-encryption-key-security-cli"),
-            None,
-            Some("auth-encryption-key"),
-        ] {
-            key = native_keychain("Factory CLI", account).await?;
-            if key.is_some() {
-                break;
-            }
-        }
-        key.ok_or(AccountError::NotFound)?
+        let account = source
+            .entry_key
+            .as_deref()
+            .ok_or(ProviderError::CredentialStorage)?;
+        read_key(account.to_owned())
+            .await?
+            .ok_or(AccountError::NotFound)?
     };
     parse_native(&decrypt_native(&bytes, &key)?)
 }
@@ -600,6 +633,75 @@ impl ProviderAdapter for FactoryProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn keychain_selection_only_probes_known_exact_accounts() {
+        let mut queried = Vec::new();
+        let selected = select_keychain_account(|account| {
+            queried.push(account.to_owned());
+            Ok(account == "auth-encryption-key")
+        })
+        .unwrap();
+        assert_eq!(selected.as_deref(), Some("auth-encryption-key"));
+        assert_eq!(
+            queried,
+            ["auth-encryption-key-security-cli", "auth-encryption-key"]
+        );
+        assert!(!valid_keychain_account("unrelated-account"));
+    }
+
+    #[tokio::test]
+    async fn native_keychain_read_uses_the_frozen_selector_without_fallback() {
+        use base64::{Engine, engine::general_purpose::STANDARD};
+        use ring::aead;
+        let directory = std::env::temp_dir().join(crate::accounts::random_string().unwrap());
+        std::fs::create_dir_all(&directory).unwrap();
+        let key = [42u8; 32];
+        let nonce = [7u8; 12];
+        let cipher =
+            aead::LessSafeKey::new(aead::UnboundKey::new(&aead::AES_256_GCM, &key).unwrap());
+        let mut bytes =
+            br#"{"access_token":"synthetic-factory-token","active_organization_id":"fixture-org"}"#
+                .to_vec();
+        cipher
+            .seal_in_place_append_tag(
+                aead::Nonce::assume_unique_for_key(nonce),
+                aead::Aad::empty(),
+                &mut bytes,
+            )
+            .unwrap();
+        let tag = bytes.split_off(bytes.len() - 16);
+        std::fs::write(
+            directory.join("auth.v2.keyring"),
+            format!(
+                "{}:{}:{}",
+                STANDARD.encode(nonce),
+                STANDARD.encode(tag),
+                STANDARD.encode(bytes)
+            ),
+        )
+        .unwrap();
+        let mut source = crate::accounts::sources::FactoryNativeReference {
+            directory: directory.clone(),
+            location: crate::accounts::sources::FactoryLocation::V2Keyring,
+            entry_key: Some("auth-encryption-key".into()),
+        };
+        assert!(
+            load_native_with_keychain(&source, |account| async move {
+                assert_eq!(account, "auth-encryption-key");
+                Ok(Some(key.to_vec()))
+            })
+            .await
+            .is_ok()
+        );
+        source.entry_key = None;
+        assert!(
+            load_native_with_keychain(&source, |_| async { panic!("unbound keychain read") })
+                .await
+                .is_err()
+        );
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
     fn jwt(claims: serde_json::Value) -> String {
         use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
         format!("e30.{}.fixture", URL_SAFE_NO_PAD.encode(claims.to_string()))

@@ -1569,6 +1569,7 @@
                       "kind": {
                         "const": "factory_native"
                       },
+                      "entry_key": {"enum": [null, "auth-encryption-key-security-cli", "auth-encryption-key"]},
                       "location": {
                         "enum": [
                           "v2_login_keychain",
@@ -3596,9 +3597,10 @@
         "required": ["kind", "location"],
         "properties": {
           "kind": {"const": "factory_native"},
+          "entry_key": {"enum": [null, "auth-encryption-key-security-cli", "auth-encryption-key"]},
           "location": {"enum": ["v2_file", "v2_login_keychain", "v2_keyring", "legacy"]}
         },
-        "description": "Explicit read-only binding to one file under this node's standard ~/.factory directory. v2_file uses auth.v2.file and auth.v2.key. v2_login_keychain and v2_keyring use their matching files and the macOS Factory CLI Keychain service. legacy uses auth.encrypted (plaintext on macOS/Linux; encrypted requires macOS Keychain). No newest-file selection, fallback file, caller path or credential copy. Owner rotation invalidates cache; only Factory may refresh or write native credentials."
+        "description": "Explicit read-only binding to one file under this node's standard ~/.factory directory. v2_file uses auth.v2.file and auth.v2.key. v2_login_keychain and v2_keyring use their matching files and the macOS Factory CLI Keychain service with a frozen exact entry_key. Omitted selectors are resolved from known account metadata before authorization; v2_file rejects entry_key. legacy uses auth.encrypted (plaintext on macOS/Linux; encrypted requires macOS Keychain). No newest-file selection, fallback file, caller path or credential copy. Owner rotation invalidates cache; only Factory may refresh or write native credentials."
       },
       "KiroOwnedInput": {
         "type": "object",

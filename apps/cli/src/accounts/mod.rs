@@ -228,6 +228,7 @@ pub struct AccountInfo<'a> {
 impl Account {
     pub(crate) fn keychain_account(&self) -> Option<&str> {
         match &self.credential {
+            Credential::FactoryNative { source } => source.entry_key.as_deref(),
             Credential::CopilotNative { source }
                 if source.location == sources::CopilotLocation::GhKeychain
                     && source.entry_key != "github.com" =>
