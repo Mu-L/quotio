@@ -16,7 +16,6 @@ struct AppSettingsPage: View {
         Group {
             switch page {
             case .updates, .about: AboutSettingsPage()
-            case .proxy: CLIProxySettingsPage()
             default:
                 Form {
                     AccountStorageAccessSection()
