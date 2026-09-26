@@ -262,10 +262,17 @@ impl Account {
                     "Devin Desktop state.vscdb".to_owned()
                 }
             }),
-            Credential::CopilotNative { source }
-                if source.location != sources::CopilotLocation::GhKeychain =>
-            {
-                Some(format!("Copilot {}", &source.identity()?[..8]))
+            Credential::CopilotNative { source } => {
+                let current = format!("Copilot {}", &source.identity()?[..8]);
+                if source.location == sources::CopilotLocation::GhKeychain && self.label != current
+                {
+                    // Selector migration preserved the label generated from the former shared selector.
+                    let mut legacy = source.clone();
+                    legacy.entry_key = "github.com".into();
+                    Some(format!("Copilot {}", &legacy.identity()?[..8]))
+                } else {
+                    Some(current)
+                }
             }
             _ => None,
         };
@@ -689,6 +696,17 @@ mod naming_tests {
         .unwrap();
         let fallback = format!("Copilot {}", &copilot.identity().unwrap()[..8]);
         let cases = [
+            (
+                Provider::Catalog("copilot"),
+                Credential::CopilotNative {
+                    source: sources::CopilotNativeReference {
+                        location: sources::CopilotLocation::GhKeychain,
+                        path: None,
+                        entry_key: "verified-user".into(),
+                    },
+                },
+                "Copilot a527541e".into(),
+            ),
             (
                 Provider::Catalog("copilot"),
                 Credential::CopilotNative { source: copilot },

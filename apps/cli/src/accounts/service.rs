@@ -946,9 +946,15 @@ impl ProviderAdapter for ManagedProvider {
                 Credential::CodexOAuth { account_id, .. } => account_id.clone(),
                 credential => serde_json::to_string(credential).ok()?,
             };
+            // Refresh older Copilot observations once so repaired native naming is persisted.
+            let identity_version = if self.provider == Provider::Catalog("copilot") {
+                "resolved-copilot-identity-v3"
+            } else {
+                "resolved-identity-v2"
+            };
             if let Some(naming) = &account.naming {
                 return Some(crate::cache::fingerprint(&[
-                    "resolved-identity-v2",
+                    identity_version,
                     &account.id,
                     &account.identity,
                     &scope,
@@ -961,7 +967,7 @@ impl ProviderAdapter for ManagedProvider {
                 ]));
             }
             Some(crate::cache::fingerprint(&[
-                "resolved-identity-v2",
+                identity_version,
                 &account.id,
                 &account.identity,
                 &scope,
