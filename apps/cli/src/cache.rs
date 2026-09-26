@@ -62,6 +62,14 @@ pub(crate) fn environment_identity(id: &str, context: &ProviderContext) -> Optio
     Some(fingerprint(&[id, &encoded]))
 }
 
+#[derive(serde::Deserialize, serde::Serialize)]
+struct CachedObservation {
+    #[serde(flatten)]
+    usage: Option<ProviderUsage>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    last_failure: Option<crate::error::ProviderError>,
+}
+
 #[derive(Clone)]
 pub struct UsageCache {
     directory: Option<PathBuf>,
@@ -229,22 +237,30 @@ impl UsageCache {
             None => (None, None),
         };
         let mut snapshot = None;
+        let mut last_failure = None;
         if let Some(entry) = &entry {
             let path = entry.path.clone();
-            snapshot = match tokio::task::spawn_blocking(move || read(&path)).await {
-                Ok(Ok(value)) => value.filter(|usage| {
-                    usage.provider == adapter.id()
-                        && usage.account_ref.as_ref().map(|a| &a.id)
-                            == adapter.account_ref().as_ref().map(|a| &a.id)
-                        && valid(usage)
-                        && adapter.cacheable(usage)
+            let cached = match tokio::task::spawn_blocking(move || read(&path)).await {
+                Ok(Ok(value)) => value.filter(|cached| {
+                    (cached.usage.is_some() || cached.last_failure.is_some())
+                        && cached.usage.as_ref().is_none_or(|usage| {
+                            usage.provider == adapter.id()
+                                && usage.account_ref.as_ref().map(|a| &a.id)
+                                    == adapter.account_ref().as_ref().map(|a| &a.id)
+                                && valid(usage)
+                                && adapter.cacheable(usage)
+                        })
                 }),
                 _ => {
                     diagnostic("could not read usage cache");
                     None
                 }
             };
-            if snapshot.is_none() && entry.path.exists() {
+            if let Some(cached) = cached {
+                snapshot = cached.usage;
+                last_failure = cached.last_failure;
+            }
+            if snapshot.is_none() && last_failure.is_none() && entry.path.exists() {
                 diagnostic("invalid usage cache");
             }
         }
@@ -253,13 +269,14 @@ impl UsageCache {
             && checked_identity(&*adapter, &context, deadline, &cancellation).await == identity;
         if !same_identity {
             snapshot = None;
+            last_failure = None;
         }
         if policy == ReadPolicy::CacheOnly {
             let providers = snapshot
                 .into_iter()
                 .map(|mut usage| {
                     usage.account_ref = adapter.account_ref();
-                    if !self.fresh(&usage, context.clock.now()) {
+                    if last_failure.is_some() || !self.fresh(&usage, context.clock.now()) {
                         usage.reset_credits = None;
                         usage.codex_reset_credits = None;
                     }
@@ -270,10 +287,19 @@ impl UsageCache {
                 schema_version: 1,
                 generated_at: context.clock.now(),
                 providers,
-                failures: vec![],
+                failures: last_failure
+                    .into_iter()
+                    .map(|code| ProviderFailure {
+                        provider: adapter.id(),
+                        account_ref: adapter.account_ref(),
+                        code,
+                        message: code.to_string(),
+                    })
+                    .collect(),
             };
         }
         if policy == ReadPolicy::PreferCache
+            && last_failure.is_none()
             && tokio::time::Instant::now() < deadline
             && snapshot
                 .as_ref()
@@ -309,25 +335,33 @@ impl UsageCache {
             .await
                 == identity;
         if same_identity {
-            if let Some(usage) = report.providers.first() {
+            let last_failure = if let Some(usage) = report.providers.first() {
                 if !adapter.cacheable(usage) || !valid(usage) {
                     return report;
                 }
-                if let Some(entry) = entry {
-                    let usage = usage.clone();
-                    if !matches!(
-                        tokio::task::spawn_blocking(move || entry.write(&usage)).await,
-                        Ok(Ok(()))
-                    ) {
-                        diagnostic("could not write usage cache; returning fetched usage");
-                    }
+                None
+            } else {
+                let failure = report.failures.first().map(|failure| failure.code);
+                if let Some(mut usage) = snapshot {
+                    usage.account_ref = adapter.account_ref();
+                    usage.reset_credits = None;
+                    usage.codex_reset_credits = None;
+                    usage.diagnostics.clear();
+                    report.providers.push(usage);
                 }
-            } else if let Some(mut usage) = snapshot {
-                usage.account_ref = adapter.account_ref();
-                // Stale quota remains useful, but do not advertise an old banked balance.
-                usage.reset_credits = None;
-                usage.diagnostics.clear();
-                report.providers.push(usage);
+                failure
+            };
+            if let Some(entry) = entry {
+                let observation = CachedObservation {
+                    usage: report.providers.first().cloned(),
+                    last_failure,
+                };
+                if !matches!(
+                    tokio::task::spawn_blocking(move || entry.write(&observation)).await,
+                    Ok(Ok(()))
+                ) {
+                    diagnostic("could not write usage cache; returning collected result");
+                }
             }
         }
         report
@@ -362,7 +396,7 @@ fn diagnostic(message: &str) {
 fn valid(usage: &ProviderUsage) -> bool {
     !usage.windows.is_empty() && crate::fetch::valid_usage(usage)
 }
-fn read(path: &Path) -> io::Result<Option<ProviderUsage>> {
+fn read(path: &Path) -> io::Result<Option<CachedObservation>> {
     let mut options = OpenOptions::new();
     options.read(true);
     #[cfg(unix)]
@@ -424,7 +458,7 @@ impl LockedEntry {
             _lock: lock,
         })
     }
-    fn write(self, usage: &ProviderUsage) -> io::Result<()> {
+    fn write(self, usage: &CachedObservation) -> io::Result<()> {
         // The per-entry OS lock covers read, fetch and rename. It is released on
         // cancellation/crash and never unlinked, so waiters lock the same inode.
         let temp = self.path.with_extension("tmp");

@@ -164,6 +164,49 @@ impl Drop for Fixture {
 }
 
 #[tokio::test]
+async fn restore_preserves_partial_failures_and_regular_collection_retries_them() {
+    let fixture = Fixture::new();
+    let healthy = Adapter::new("healthy");
+    let stale = Adapter::new("stale");
+    let failed = Adapter::new("failed");
+    fixture
+        .collect(vec![healthy.clone(), stale.clone()], true)
+        .await;
+    stale.fails.store(true, Ordering::SeqCst);
+    failed.fails.store(true, Ordering::SeqCst);
+    fixture
+        .collect(vec![stale.clone(), failed.clone()], true)
+        .await;
+    let restarted = UsageCache::new(fixture.dir.clone(), Duration::from_secs(300));
+    let request = CollectRequest {
+        providers: vec![healthy.clone(), stale.clone(), failed.clone()],
+        timeout: Duration::from_secs(3),
+        cancellation: Cancellation::default(),
+    };
+    let restored = restarted.restore(&fixture.collector, request).await;
+    assert_eq!(restored.providers.len(), 2);
+    assert_eq!(restored.failures.len(), 2);
+    assert!(
+        restored
+            .failures
+            .iter()
+            .all(|failure| failure.code == ProviderError::Unavailable)
+    );
+    assert_eq!(healthy.calls.load(Ordering::SeqCst), 1);
+    assert_eq!(stale.calls.load(Ordering::SeqCst), 2);
+    assert_eq!(failed.calls.load(Ordering::SeqCst), 1);
+    stale.fails.store(false, Ordering::SeqCst);
+    failed.fails.store(false, Ordering::SeqCst);
+    let recovered = fixture
+        .collect(vec![stale.clone(), failed.clone()], false)
+        .await;
+    assert!(recovered.failures.is_empty());
+    assert_eq!(recovered.providers.len(), 2);
+    assert_eq!(stale.calls.load(Ordering::SeqCst), 3);
+    assert_eq!(failed.calls.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
 async fn restore_survives_restart_without_fetching_or_reusing_another_login() {
     let fixture = Fixture::new();
     let adapter = Adapter::new("restored");
