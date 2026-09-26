@@ -3,13 +3,12 @@ import QuotioDomain
 import SwiftUI
 
 public struct RootNavigationView: View {
-    public init(logsScreenModel: LogsScreenModel) {}
+    public init() {}
 
     @Environment(NavigationScreenModel.self) private var navigation
     @Environment(AccountsScreenModel.self) private var accounts
     @Environment(QuotaScreenModel.self) private var quota
     @Environment(QuotaFeatureController.self) private var controller
-    @Environment(RefreshSettingsManager.self) private var refreshSettings
     @State private var search = ""
     @State private var showUnconnected = false
     @State private var showDisabled = false

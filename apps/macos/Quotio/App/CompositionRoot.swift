@@ -18,14 +18,6 @@ enum CompositionRoot {
             AppIdentity.migrateLegacyUserDefaults()
         }
 
-        let customProviderRepository = UserDefaultsCustomProviderRepository()
-        let customProviderTransport = URLSessionCustomProviderTransport()
-        let customProviderService = QuotioApplication.CustomProviderService(
-            repository: customProviderRepository,
-            discovery: customProviderTransport,
-            connectionTester: customProviderTransport,
-            configurationSynchronizer: FileCustomProviderConfigurationSynchronizer()
-        )
         let urlOpener = WorkspaceURLOpener()
         let applicationPlatform = AppKitApplicationPlatformAdapter()
         let pasteboard = PasteboardScreenModel(writer: MacOSPasteboardAdapter())
@@ -34,7 +26,6 @@ enum CompositionRoot {
             repository: UserDefaultsLanguagePreferencesRepository()
         )
         let proxyPreferences = UserDefaultsProxyPreferencesRepository()
-        let managementAPIFactory = LiveProxyManagementAPIFactory()
         let notificationController = NotificationController(
             repository: UserDefaultsNotificationPreferencesRepository(),
             delivery: UserNotificationCenterAdapter { [languageManager] key in
@@ -42,45 +33,6 @@ enum CompositionRoot {
             }
         )
         let paths = FileProxyConfigurationRepository.defaultPaths()
-        let configurationRepository = FileProxyConfigurationRepository(paths: paths)
-        let proxyController = ProxyLifecycleController(
-            paths: paths,
-            processController: ProxyProcessController(),
-            versionRepository: FileProxyVersionRepository(),
-            releaseRepository: GitHubProxyReleaseRepository(),
-            updateFeed: GitHubAtomProxyUpdateFeed(),
-            configurationRepository: configurationRepository,
-            binaryDownloader: URLSessionProxyBinaryDownloader(),
-            checksumVerifier: SHA256ProxyChecksumVerifier(),
-            managementChecker: LocalProxyManagementClient(),
-            metadataRepository: UserDefaultsProxyRuntimeMetadataRepository(),
-            preferencesRepository: UserDefaultsProxyPreferencesRepository(),
-            keyVault: ProxyManagementKeyVaultAdapter(
-                dataStore: KeychainCredentialDataStore(
-                    service: AppIdentity.keychainService(suffix: "local-management"),
-                    legacyServices: AppIdentity.legacyKeychainServices(suffix: "local-management"),
-                    canMigrateLegacy: AppIdentity.isProduction,
-                    legacyProtectedStore: legacyYubiKey
-                )
-            ),
-            configurationSupplement: CustomProviderConfigurationSupplement(
-                service: customProviderService
-            ),
-            notificationDelivery: ProxyNotificationRelay(notifications: notificationController),
-            sleeper: ContinuousSleeper(),
-            dateProvider: SystemDateProvider(),
-            installedVersionLimit: AppConstants.maxInstalledVersions
-        )
-        let proxyScreenModel = ProxyScreenModel(
-            controller: proxyController,
-            initialState: ProxySnapshot(
-                status: ProxyStatus(
-                    port: UserDefaultsProxyRuntimeMetadataRepository().loadPort()
-                ),
-                paths: paths
-            )
-        )
-
         let authFileRepository = FileAuthFileRepository()
         let authFileState = UserDefaultsManagedAuthFileStateRepository()
         let providerTrackingRepository = UserDefaultsProviderTrackingPreferencesRepository()
@@ -124,85 +76,19 @@ enum CompositionRoot {
             backend: quotioBackend,
             urlOpener: urlOpener
         )
-        let localProxyAuthorizer = LocalProxyOAuthAuthorizer(
-            runtime: { [proxyScreenModel] in
-                LocalProxyOAuthRuntime(
-                    cli: proxyScreenModel.isBinaryInstalled
-                        ? ProxyCLIAuthRuntime(
-                            binaryPath: proxyScreenModel.effectiveBinaryPath,
-                            configurationPath: proxyScreenModel.configPath
-                        )
-                        : nil,
-                    management: proxyScreenModel.proxyStatus.running
-                        ? ProxyManagementConnection(
-                            baseURL: proxyScreenModel.managementURL,
-                            authKey: proxyScreenModel.managementKey
-                        )
-                        : nil
-                )
-            },
-            authenticator: ProcessProxyCLIAuthenticator(copyDeviceCode: pasteboard.copy),
-            authFiles: authFileRepository,
-            urlOpener: urlOpener,
-            managementAPIFactory: managementAPIFactory
-        ) { 0 }
         let modeManager = OperatingModeManager(
             repository: UserDefaultsOperatingModePreferencesRepository()
         )
-        let authorizer = OperatingModeOAuthAuthorizer(
-            monitor: monitorAuthorizer,
-            localProxy: localProxyAuthorizer
-        ) {
-            await MainActor.run { modeManager.isMonitorMode }
-        }
         let oauthScreenModel = OAuthScreenModel(
-            controller: OAuthFlowController(authorizer: authorizer)
+            controller: OAuthFlowController(authorizer: monitorAuthorizer)
         )
 
-        let warpTokenRepository = SecureWarpTokenRepository(
-            dataStore: KeychainCredentialDataStore(
-                service: AppIdentity.keychainService(suffix: "warp"),
-                legacyServices: AppIdentity.legacyKeychainServices(suffix: "warp"),
-                canMigrateLegacy: AppIdentity.isProduction,
-                legacyProtectedStore: legacyYubiKey
-            )
-        )
-        let warpTokenScreenModel = WarpTokenScreenModel(
-            repository: warpTokenRepository
-        )
         let quotaScreenModel = QuotaScreenModel(
             coordinator: quotioBackend
-        )
-        let dashboardScreenModel = DashboardScreenModel(
-            quota: quotaScreenModel,
-            accounts: accountsScreenModel
-        )
-        let providersScreenModel = ProvidersScreenModel(
-            accounts: accountsScreenModel,
-            oauth: oauthScreenModel,
-            quota: quotaScreenModel,
-            customProviderService: customProviderService
-        )
-        providersScreenModel.reloadCustomProviders()
-
-        let antigravityAccountScreenModel = AntigravityAccountScreenModel(
-            switcher: AntigravityAccountSwitcherFactory.make(
-                logger: OSApplicationLogger(
-                    subsystem: AppIdentity.bundleIdentifier,
-                    category: "Antigravity"
-                )
-            )
-        )
-        let refreshSettings = RefreshSettingsManager(
-            repository: UserDefaultsRefreshPreferencesRepository()
         )
         let menuBarSettings = MenuBarSettingsManager(
             repository: UserDefaultsMenuBarPreferencesRepository()
         )
-        let warmupSettings = WarmupSettingsManager(
-            repository: UserDefaultsWarmupPreferencesRepository()
-        )
-        let ideScanSettings = IDEScanSettingsManager()
         let quotaController = QuotaFeatureController(
             quota: quotaScreenModel,
             accounts: accountsScreenModel,
@@ -212,126 +98,10 @@ enum CompositionRoot {
             menuBarSettings: menuBarSettings,
             notifications: notificationController
         )
-        antigravityAccountScreenModel.setDidSwitchHandler { [weak quotaController] in
-            await quotaController?.refresh(provider: .antigravity)
-        }
-        let tunnelPreferences = UserDefaultsTunnelPreferencesRepository()
-        let tunnelController = TunnelLifecycleController(
-            tunnel: CloudflaredService(),
-            remoteAccess: ProxyTunnelRemoteAccessAdapter(proxy: proxyScreenModel),
-            preferences: tunnelPreferences,
-            sleeper: ContinuousSleeper(),
-            clock: SystemDateProvider()
-        )
-        let tunnel = TunnelScreenModel(
-            controller: tunnelController,
-            failureMessage: { failure in
-                switch failure {
-                case .notInstalled:
-                    "tunnel.error.notInstalled".localized()
-                case .alreadyRunning:
-                    "Tunnel is already running"
-                case .startFailed(let reason):
-                    "Failed to start tunnel: \(reason)"
-                case .unexpectedExit:
-                    "tunnel.error.unexpectedExit".localized()
-                case .startTimeout:
-                    "tunnel.error.startTimeout".localized()
-                @unknown default:
-                    "tunnel.error.unexpectedExit".localized()
-                }
-            }
-        )
-        let agentFileStore = AgentFileStore()
-        let agentDetector = AgentDetectionAdapter()
-        let copilotAvailableModelCatalog = CopilotAvailableModelCatalog()
-        let agentConfigurationService = QuotioApplication.AgentConfigurationService(
-            adapters: [
-                ClaudeCodeAgentConfigurationAdapter(fileStore: agentFileStore),
-                CodexAgentConfigurationAdapter(fileStore: agentFileStore),
-                AmpAgentConfigurationAdapter(fileStore: agentFileStore),
-                OpenCodeAgentConfigurationAdapter(fileStore: agentFileStore),
-                FactoryDroidAgentConfigurationAdapter(fileStore: agentFileStore),
-            ],
-            detector: agentDetector,
-            shellProfiles: ShellProfileAdapter(fileStore: agentFileStore),
-            modelCatalog: AgentModelCatalogHTTPAdapter {
-                await copilotAvailableModelCatalog.availableModelIDs()
-            }
-        )
-        weak var proxyManagementReference: ProxyManagementScreenModel?
-        let agentSetup = AgentSetupScreenModel(
-            service: agentConfigurationService,
-            endpointContext: { [weak proxyScreenModel, weak tunnel] in
-                guard let proxyScreenModel else { return nil }
-                return AgentEndpointContext(
-                    baseURL: tunnel?.tunnelState.publicURL ?? proxyScreenModel.baseURL,
-                    apiKey: proxyManagementReference?.apiKeys.first ?? proxyScreenModel.managementKey
-                )
-            }
-        )
-        let proxyManagement = ProxyManagementScreenModel(
-            proxy: proxyScreenModel,
-            accounts: accountsScreenModel,
-            oauth: oauthScreenModel,
-            tunnel: tunnel,
-            agentSetup: agentSetup,
-            authWorkaround: FileAntigravityAuthWorkaround(),
-            notifications: notificationController,
-            refreshSettings: refreshSettings,
-            tunnelPreferences: tunnelPreferences,
-            proxyPreferences: proxyPreferences,
-            authFileState: authFileState,
-            managementAPIFactory: managementAPIFactory
-        )
-        proxyManagementReference = proxyManagement
-        proxyManagement.setQuotaRefresh { [weak quotaController] force in
-            await quotaController?.refreshAll(force: force)
-        }
-        oauthScreenModel.setSuccessHandler { [weak proxyManagement, weak quotaController] in
-            if !modeManager.isMonitorMode {
-                await proxyManagement?.refreshData(refreshQuota: false)
-            }
+        oauthScreenModel.setSuccessHandler { [weak quotaController] in
             await quotaController?.refreshAll(force: true)
         }
 
-        let warmupExecutor = ProxyWarmupExecutor { [weak proxyManagement] in
-            proxyManagement?.managementAPI
-        }
-        let warmupScreenModel = WarmupScreenModel(
-            scheduler: WarmupSchedulerService(
-                executor: warmupExecutor,
-                availability: warmupExecutor,
-                clock: SystemDateProvider(),
-                sleeper: ContinuousSleeper()
-            ),
-            settings: warmupSettings,
-            authFiles: { [weak proxyManagement] in proxyManagement?.authFiles ?? [] }
-        )
-        let ideImportScreenModel = IDEImportScreenModel(
-            quotaController: quotaController,
-            settings: ideScanSettings,
-            cliToolProbe: CLIToolInstallationProbe()
-        )
-
-        let logRepository = QuotioInfrastructure.ManagementAPIClient(
-            connectionProvider: { [proxyScreenModel] in
-                await MainActor.run {
-                    QuotioInfrastructure.ManagementAPIClient.Connection(
-                        baseURL: proxyScreenModel.managementURL,
-                        authKey: proxyScreenModel.managementKey
-                    )
-                }
-            }
-        )
-        let logsScreenModel = LogsScreenModel(
-            loadLogs: LoadProxyLogsUseCase(
-                repository: logRepository,
-                timeProvider: SystemDateProvider()
-            ),
-            clearLogs: ClearProxyLogsUseCase(repository: logRepository),
-            sleeper: ContinuousSleeper()
-        )
         let updatePreferences = UserDefaultsUpdatePreferencesRepository()
         let applicationUpdateController = ApplicationUpdateController(
             checker: SparkleApplicationUpdateAdapter(),
@@ -392,11 +162,8 @@ enum CompositionRoot {
         )
         let settingsScreenModel = SettingsScreenModel(
             proxyRepository: proxyPreferences,
-            tunnelRepository: tunnelPreferences,
+            tunnelRepository: UserDefaultsTunnelPreferencesRepository(),
             appShellRepository: UserDefaultsAppShellPreferencesRepository(),
-            applyNetworkAccess: { [proxyScreenModel] enabled in
-                proxyScreenModel.setNetworkAccess(enabled)
-            },
             applyAutomaticUpdateChecks: { [applicationUpdateController] enabled in
                 applicationUpdateController.automaticallyChecksForUpdates = enabled
             },
@@ -413,18 +180,10 @@ enum CompositionRoot {
         )
         let statusBarManager = StatusBarManager()
         let services = ProductionAppRuntimeServices(
-            proxyManagement: proxyManagement,
             quotaController: quotaController,
             quotaScreenModel: quotaScreenModel,
             accountsScreenModel: accountsScreenModel,
-            dashboardScreenModel: dashboardScreenModel,
-            providersScreenModel: providersScreenModel,
-            warpTokenScreenModel: warpTokenScreenModel,
             navigationScreenModel: NavigationScreenModel(),
-            warmupScreenModel: warmupScreenModel,
-            ideImportScreenModel: ideImportScreenModel,
-            antigravityAccountScreenModel: antigravityAccountScreenModel,
-            logsScreenModel: logsScreenModel,
             pasteboard: pasteboard,
             providerImageModel: providerImageModel,
             platformActions: platformActions,
@@ -434,9 +193,6 @@ enum CompositionRoot {
             statusBarManager: statusBarManager,
             menuBarSettings: menuBarSettings,
             languageManager: languageManager,
-            refreshSettings: refreshSettings,
-            warmupSettings: warmupSettings,
-            ideScanSettings: ideScanSettings,
             launchAtLoginModel: launchAtLoginModel,
             notificationSettingsModel: notificationSettingsModel,
             telemetryConsentModel: telemetryConsentModel,
@@ -446,7 +202,6 @@ enum CompositionRoot {
             telemetryController: telemetryController,
             applicationUpdateController: applicationUpdateController,
             applicationPlatform: applicationPlatform,
-            tunnel: tunnel,
             quotioServer: quotioServer,
             quotioBackend: quotioBackend,
             reconnectQuotioServer: reconnectQuotioServer
@@ -469,18 +224,10 @@ private struct CustomProviderConfigurationSupplement: ProxyConfigurationSuppleme
 
 @MainActor
 private final class ProductionAppRuntimeServices: AppRuntimeServices {
-    let proxyManagement: ProxyManagementScreenModel
     let quotaController: QuotaFeatureController
     let quotaScreenModel: QuotaScreenModel
     let accountsScreenModel: AccountsScreenModel
-    let dashboardScreenModel: DashboardScreenModel
-    let providersScreenModel: ProvidersScreenModel
-    let warpTokenScreenModel: WarpTokenScreenModel
     let navigationScreenModel: NavigationScreenModel
-    let warmupScreenModel: WarmupScreenModel
-    let ideImportScreenModel: IDEImportScreenModel
-    let antigravityAccountScreenModel: AntigravityAccountScreenModel
-    let logsScreenModel: LogsScreenModel
     let pasteboard: PasteboardScreenModel
     let providerImageModel: ProviderImageScreenModel
     let platformActions: PlatformActionScreenModel
@@ -490,9 +237,6 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
     let statusBarManager: StatusBarManager
     let menuBarSettings: MenuBarSettingsManager
     let languageManager: LanguageManager
-    let refreshSettings: RefreshSettingsManager
-    let warmupSettings: WarmupSettingsManager
-    let ideScanSettings: IDEScanSettingsManager
     let launchAtLoginModel: LaunchAtLoginScreenModel
     let notificationSettingsModel: NotificationSettingsScreenModel
     let telemetryConsentModel: TelemetryConsentScreenModel
@@ -503,7 +247,6 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
     private let telemetryController: TelemetryController
     private let applicationUpdateController: ApplicationUpdateController
     private let applicationPlatform: AppKitApplicationPlatformAdapter
-    private let tunnel: TunnelScreenModel
     private let quotioServer: QuotioCLIServerProcess
     private let quotioBackend: QuotioCLIBackend
     private let reconnectQuotioServer: @MainActor @Sendable () async -> Bool
@@ -513,18 +256,10 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
     var canCheckForUpdates: Bool { applicationUpdateModel.snapshot.canCheck }
 
     init(
-        proxyManagement: ProxyManagementScreenModel,
         quotaController: QuotaFeatureController,
         quotaScreenModel: QuotaScreenModel,
         accountsScreenModel: AccountsScreenModel,
-        dashboardScreenModel: DashboardScreenModel,
-        providersScreenModel: ProvidersScreenModel,
-        warpTokenScreenModel: WarpTokenScreenModel,
         navigationScreenModel: NavigationScreenModel,
-        warmupScreenModel: WarmupScreenModel,
-        ideImportScreenModel: IDEImportScreenModel,
-        antigravityAccountScreenModel: AntigravityAccountScreenModel,
-        logsScreenModel: LogsScreenModel,
         pasteboard: PasteboardScreenModel,
         providerImageModel: ProviderImageScreenModel,
         platformActions: PlatformActionScreenModel,
@@ -534,9 +269,6 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
         statusBarManager: StatusBarManager,
         menuBarSettings: MenuBarSettingsManager,
         languageManager: LanguageManager,
-        refreshSettings: RefreshSettingsManager,
-        warmupSettings: WarmupSettingsManager,
-        ideScanSettings: IDEScanSettingsManager,
         launchAtLoginModel: LaunchAtLoginScreenModel,
         notificationSettingsModel: NotificationSettingsScreenModel,
         telemetryConsentModel: TelemetryConsentScreenModel,
@@ -546,23 +278,14 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
         telemetryController: TelemetryController,
         applicationUpdateController: ApplicationUpdateController,
         applicationPlatform: AppKitApplicationPlatformAdapter,
-        tunnel: TunnelScreenModel,
         quotioServer: QuotioCLIServerProcess,
         quotioBackend: QuotioCLIBackend,
         reconnectQuotioServer: @escaping @MainActor @Sendable () async -> Bool
     ) {
-        self.proxyManagement = proxyManagement
         self.quotaController = quotaController
         self.quotaScreenModel = quotaScreenModel
         self.accountsScreenModel = accountsScreenModel
-        self.dashboardScreenModel = dashboardScreenModel
-        self.providersScreenModel = providersScreenModel
-        self.warpTokenScreenModel = warpTokenScreenModel
         self.navigationScreenModel = navigationScreenModel
-        self.warmupScreenModel = warmupScreenModel
-        self.ideImportScreenModel = ideImportScreenModel
-        self.antigravityAccountScreenModel = antigravityAccountScreenModel
-        self.logsScreenModel = logsScreenModel
         self.pasteboard = pasteboard
         self.providerImageModel = providerImageModel
         self.platformActions = platformActions
@@ -572,9 +295,6 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
         self.statusBarManager = statusBarManager
         self.menuBarSettings = menuBarSettings
         self.languageManager = languageManager
-        self.refreshSettings = refreshSettings
-        self.warmupSettings = warmupSettings
-        self.ideScanSettings = ideScanSettings
         self.launchAtLoginModel = launchAtLoginModel
         self.notificationSettingsModel = notificationSettingsModel
         self.telemetryConsentModel = telemetryConsentModel
@@ -584,7 +304,6 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
         self.telemetryController = telemetryController
         self.applicationUpdateController = applicationUpdateController
         self.applicationPlatform = applicationPlatform
-        self.tunnel = tunnel
         self.quotioServer = quotioServer
         self.quotioBackend = quotioBackend
         self.reconnectQuotioServer = reconnectQuotioServer

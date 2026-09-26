@@ -7,7 +7,6 @@ struct ProviderSettingsScreen: View {
     @Environment(AccountsScreenModel.self) private var accounts
     @Environment(QuotaScreenModel.self) private var quota
     @Environment(QuotaFeatureController.self) private var controller
-    @Environment(RefreshSettingsManager.self) private var refreshSettings
     @Environment(MenuBarSettingsManager.self) private var menuBar
     @State private var oauthPresented = false
     @State private var apiKeyPresented = false

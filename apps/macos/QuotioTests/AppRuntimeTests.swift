@@ -91,20 +91,10 @@ final class AppRuntimeTests: XCTestCase {
 @MainActor
 private final class FakeAppRuntimeServices: AppRuntimeServices {
     private lazy var dependencies = CompositionRoot.makeProduction()
-    var proxyManagement: ProxyManagementScreenModel { dependencies.proxyManagement }
     var quotaController: QuotaFeatureController { dependencies.quotaController }
     var quotaScreenModel: QuotaScreenModel { dependencies.quotaScreenModel }
     var accountsScreenModel: AccountsScreenModel { dependencies.accountsScreenModel }
-    var dashboardScreenModel: DashboardScreenModel { dependencies.dashboardScreenModel }
-    var providersScreenModel: ProvidersScreenModel { dependencies.providersScreenModel }
-    var warpTokenScreenModel: WarpTokenScreenModel { dependencies.warpTokenScreenModel }
     var navigationScreenModel: NavigationScreenModel { dependencies.navigationScreenModel }
-    var warmupScreenModel: WarmupScreenModel { dependencies.warmupScreenModel }
-    var ideImportScreenModel: IDEImportScreenModel { dependencies.ideImportScreenModel }
-    var antigravityAccountScreenModel: AntigravityAccountScreenModel {
-        dependencies.antigravityAccountScreenModel
-    }
-    let logsScreenModel: LogsScreenModel
     let pasteboard = PasteboardScreenModel(writer: MacOSPasteboardAdapter())
     var providerImageModel: ProviderImageScreenModel { dependencies.providerImageModel }
     var platformActions: PlatformActionScreenModel { dependencies.platformActions }
@@ -118,9 +108,6 @@ private final class FakeAppRuntimeServices: AppRuntimeServices {
         tunnelRepository: AppRuntimeTestPreferencesRepository(),
         appShellRepository: AppRuntimeTestPreferencesRepository()
     )
-    var refreshSettings: RefreshSettingsManager { dependencies.refreshSettings }
-    var warmupSettings: WarmupSettingsManager { dependencies.warmupSettings }
-    var ideScanSettings: IDEScanSettingsManager { dependencies.ideScanSettings }
     var launchAtLoginModel: LaunchAtLoginScreenModel { dependencies.launchAtLoginModel }
     var notificationSettingsModel: NotificationSettingsScreenModel {
         dependencies.notificationSettingsModel
@@ -146,17 +133,6 @@ private final class FakeAppRuntimeServices: AppRuntimeServices {
     private(set) var foregroundUpdateCheckCount = 0
     private(set) var shutdownOAuthCount = 0
 
-    init() {
-        let logRepository = AppRuntimeTestProxyLogRepository()
-        logsScreenModel = LogsScreenModel(
-            loadLogs: LoadProxyLogsUseCase(
-                repository: logRepository,
-                timeProvider: SystemDateProvider()
-            ),
-            clearLogs: ClearProxyLogsUseCase(repository: logRepository),
-            sleeper: ContinuousSleeper()
-        )
-    }
 
     func prepareForLaunch() {
         prepareForLaunchCount += 1
@@ -200,14 +176,6 @@ private final class FakeAppRuntimeServices: AppRuntimeServices {
         try? await Task.sleep(for: shutdownDelay)
     }
 
-}
-
-private actor AppRuntimeTestProxyLogRepository: ProxyLogRepository {
-    func fetchLogs(after timestamp: Int?) -> ProxyLogPage {
-        ProxyLogPage(lines: [], latestTimestamp: nil)
-    }
-
-    func clearLogs() {}
 }
 
 private final class AppRuntimeTestPreferencesRepository:

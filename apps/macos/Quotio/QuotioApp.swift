@@ -1,6 +1,6 @@
 //
 //  QuotioApp.swift
-//  Quotio - CLIProxyAPI GUI Wrapper
+//  Quotio - Native quota monitoring frontend
 //
 
 import QuotioPresentation
@@ -13,10 +13,8 @@ struct QuotioApp: App {
     @Environment(\.openWindow) private var openWindow
 
     private var runtime: AppRuntime { appDelegate.runtime }
-    private var proxyManagement: ProxyManagementScreenModel { runtime.proxyManagement }
     private var quotaScreenModel: QuotaScreenModel { runtime.quotaScreenModel }
     private var menuBarSettings: MenuBarSettingsManager { runtime.menuBarSettings }
-    private var statusBarManager: StatusBarManager { runtime.statusBarManager }
     private var modeManager: OperatingModeManager { runtime.modeManager }
     private var appearanceManager: AppearanceManager { runtime.appearanceManager }
     private var languageManager: LanguageManager { runtime.languageManager }
@@ -26,14 +24,10 @@ struct QuotioApp: App {
             if AppEnvironment.isRunningUnitTests {
                 EmptyView()
             } else {
-                configured(RootNavigationView(logsScreenModel: runtime.logsScreenModel))
+                configured(RootNavigationView())
                     .task {
                         await runtime.initializeIfNeeded()
                         showOnboarding = runtime.needsOnboarding
-                    }
-                    .onChange(of: proxyManagement.directAuthFiles.count) {
-                        runtime.updateStatusBar()
-                        statusBarManager.rebuildMenuInPlace()
                     }
                     .sheet(isPresented: $showOnboarding) {
                         OnboardingFlow { mode in
@@ -76,26 +70,15 @@ struct QuotioApp: App {
     private func configured<Content: View>(_ content: Content) -> some View {
         content
             .id(runtime.languageManager.currentLanguage)
-            .environment(runtime.proxyManagement)
-            .environment(runtime.proxyManagement.proxy)
             .environment(runtime.quotaController)
             .environment(runtime.quotaScreenModel)
             .environment(runtime.accountsScreenModel)
-            .environment(runtime.dashboardScreenModel)
-            .environment(runtime.providersScreenModel)
-            .environment(runtime.warpTokenScreenModel)
             .environment(runtime.navigationScreenModel)
-            .environment(runtime.warmupScreenModel)
-            .environment(runtime.ideImportScreenModel)
-            .environment(runtime.antigravityAccountScreenModel)
             .environment(runtime.modeManager)
             .environment(runtime.menuBarSettings)
             .environment(runtime.appearanceManager)
             .environment(runtime.languageManager)
             .environment(runtime.settingsScreenModel)
-            .environment(runtime.refreshSettings)
-            .environment(runtime.warmupSettings)
-            .environment(runtime.ideScanSettings)
             .environment(runtime.launchAtLoginModel)
             .environment(runtime.applicationUpdateModel)
             .environment(runtime.notificationSettingsModel)

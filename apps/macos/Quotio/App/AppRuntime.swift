@@ -4,18 +4,10 @@ import QuotioPresentation
 
 @MainActor
 protocol AppRuntimeServices: AnyObject, Sendable {
-    var proxyManagement: ProxyManagementScreenModel { get }
     var quotaController: QuotaFeatureController { get }
     var quotaScreenModel: QuotaScreenModel { get }
     var accountsScreenModel: AccountsScreenModel { get }
-    var dashboardScreenModel: DashboardScreenModel { get }
-    var providersScreenModel: ProvidersScreenModel { get }
-    var warpTokenScreenModel: WarpTokenScreenModel { get }
     var navigationScreenModel: NavigationScreenModel { get }
-    var warmupScreenModel: WarmupScreenModel { get }
-    var ideImportScreenModel: IDEImportScreenModel { get }
-    var antigravityAccountScreenModel: AntigravityAccountScreenModel { get }
-    var logsScreenModel: LogsScreenModel { get }
     var pasteboard: PasteboardScreenModel { get }
     var providerImageModel: ProviderImageScreenModel { get }
     var platformActions: PlatformActionScreenModel { get }
@@ -25,9 +17,6 @@ protocol AppRuntimeServices: AnyObject, Sendable {
     var appearanceManager: AppearanceManager { get }
     var languageManager: LanguageManager { get }
     var settingsScreenModel: SettingsScreenModel { get }
-    var refreshSettings: RefreshSettingsManager { get }
-    var warmupSettings: WarmupSettingsManager { get }
-    var ideScanSettings: IDEScanSettingsManager { get }
     var launchAtLoginModel: LaunchAtLoginScreenModel { get }
     var notificationSettingsModel: NotificationSettingsScreenModel { get }
     var telemetryConsentModel: TelemetryConsentScreenModel { get }
@@ -62,20 +51,10 @@ final class AppRuntime {
     private(set) var needsOnboarding = false
     private(set) var hasShutDown = false
 
-    var proxyManagement: ProxyManagementScreenModel { services.proxyManagement }
     var quotaController: QuotaFeatureController { services.quotaController }
     var quotaScreenModel: QuotaScreenModel { services.quotaScreenModel }
     var accountsScreenModel: AccountsScreenModel { services.accountsScreenModel }
-    var dashboardScreenModel: DashboardScreenModel { services.dashboardScreenModel }
-    var providersScreenModel: ProvidersScreenModel { services.providersScreenModel }
-    var warpTokenScreenModel: WarpTokenScreenModel { services.warpTokenScreenModel }
     var navigationScreenModel: NavigationScreenModel { services.navigationScreenModel }
-    var warmupScreenModel: WarmupScreenModel { services.warmupScreenModel }
-    var ideImportScreenModel: IDEImportScreenModel { services.ideImportScreenModel }
-    var antigravityAccountScreenModel: AntigravityAccountScreenModel {
-        services.antigravityAccountScreenModel
-    }
-    var logsScreenModel: LogsScreenModel { services.logsScreenModel }
     var pasteboard: PasteboardScreenModel { services.pasteboard }
     var providerImageModel: ProviderImageScreenModel { services.providerImageModel }
     var platformActions: PlatformActionScreenModel { services.platformActions }
@@ -85,9 +64,6 @@ final class AppRuntime {
     var appearanceManager: AppearanceManager { services.appearanceManager }
     var languageManager: LanguageManager { services.languageManager }
     var settingsScreenModel: SettingsScreenModel { services.settingsScreenModel }
-    var refreshSettings: RefreshSettingsManager { services.refreshSettings }
-    var warmupSettings: WarmupSettingsManager { services.warmupSettings }
-    var ideScanSettings: IDEScanSettingsManager { services.ideScanSettings }
     var launchAtLoginModel: LaunchAtLoginScreenModel { services.launchAtLoginModel }
     var notificationSettingsModel: NotificationSettingsScreenModel {
         services.notificationSettingsModel
