@@ -24,6 +24,7 @@ pub(super) async fn status(State(state): State<Arc<ApiState>>) -> Result<Json<Re
 
 pub(super) async fn start(
     State(state): State<Arc<ApiState>>,
+    Extension(principal): Extension<security::Principal>,
     ApiJson(mut request): ApiJson<Request>,
 ) -> Result<(StatusCode, Json<Operation>), ApiError> {
     if !state.manage {
@@ -50,6 +51,7 @@ pub(super) async fn start(
         serde_json::to_string(&request.providers)
             .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "invalid_request"))?
     );
+    let key = principal.scoped_key(&key);
     let mut pending = state.pending.lock().await;
     if let Some(id) = pending.get(&key)
         && let Some(operation) = state.operations.lock().await.get(id)
@@ -60,7 +62,7 @@ pub(super) async fn start(
         .operations
         .lock()
         .await
-        .start("discovery", None, key.clone())
+        .start(&principal.id, "discovery", None, key.clone())
         .map_err(operation_error)?;
     pending.insert(key.clone(), operation.id.clone());
     drop(pending);

@@ -272,6 +272,7 @@ async fn discovery_retry_survives_expiry_and_restart_without_reading_source() {
     };
     let (_, Json(first)) = management::reference(
         State(state.clone()),
+        security::owner(),
         headers("receipt-retry"),
         ApiJson(body.clone()),
     )
@@ -294,6 +295,7 @@ async fn discovery_retry_survives_expiry_and_restart_without_reading_source() {
     );
     let (_, Json(retry)) = management::reference(
         State(state.clone()),
+        security::owner(),
         headers("receipt-retry"),
         ApiJson(body.clone()),
     )
@@ -310,6 +312,7 @@ async fn discovery_retry_survives_expiry_and_restart_without_reading_source() {
         |_| panic!("receipt recovery must not read preferences");
     let (_, Json(retry)) = management::reference(
         State(restarted.clone()),
+        security::owner(),
         headers("receipt-retry"),
         ApiJson(body.clone()),
     )
@@ -320,6 +323,7 @@ async fn discovery_retry_survives_expiry_and_restart_without_reading_source() {
     assert_eq!(completed.result.unwrap()["account_id"], account_id);
     let conflict = management::reference(
         State(restarted.clone()),
+        security::owner(),
         headers("receipt-retry"),
         ApiJson(json!({"kind":"discovered","discovery_ref":"different-fixture"})),
     )
@@ -331,6 +335,7 @@ async fn discovery_retry_survives_expiry_and_restart_without_reading_source() {
     // A different key is a new mutation and must validate its live reference.
     let (_, Json(new)) = management::reference(
         State(restarted.clone()),
+        security::owner(),
         headers("new-mutation"),
         ApiJson(body),
     )

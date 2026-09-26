@@ -162,6 +162,7 @@ async fn account_scoped_refresh_does_not_require_scheduled_provider() {
 
     let result = manual_refresh(
         State(state.clone()),
+        security::owner(),
         ApiJson(RefreshRequest {
             providers: vec![Provider::Amp],
             account_id: Some(id),
@@ -226,6 +227,7 @@ async fn account_scoped_refresh_accepts_borrowed_proxy_account() {
     let refresh_guard = state.refresh_lock.lock().await;
     let result = manual_refresh(
         State(state.clone()),
+        security::owner(),
         ApiJson(RefreshRequest {
             providers: vec![Provider::Catalog("claude")],
             account_id: Some(snapshot.accounts[0].id.clone()),
@@ -354,6 +356,7 @@ async fn account_scoped_refresh_requires_an_explicit_provider() {
 
     let result = manual_refresh(
         State(state),
+        security::owner(),
         ApiJson(RefreshRequest {
             providers: vec![],
             account_id: Some(id),
@@ -377,6 +380,7 @@ async fn account_scoped_refresh_rejects_duplicate_providers() {
 
     let result = manual_refresh(
         State(state),
+        security::owner(),
         ApiJson(RefreshRequest {
             providers: vec![Provider::Amp, Provider::Amp],
             account_id: Some(id),
@@ -522,6 +526,7 @@ async fn account_scoped_refresh_reports_account_removed_before_collection() {
     let refresh_guard = state.refresh_lock.lock().await;
     let result = manual_refresh(
         State(state.clone()),
+        security::owner(),
         ApiJson(RefreshRequest {
             providers: vec![Provider::Amp],
             account_id: Some(id.clone()),
@@ -563,6 +568,7 @@ async fn unscoped_refresh_still_requires_enabled_provider() {
 
     let result = manual_refresh(
         State(state),
+        security::owner(),
         ApiJson(RefreshRequest {
             providers: vec![Provider::Amp],
             account_id: None,
@@ -654,6 +660,7 @@ async fn grok_local_alias_child() {
         ));
         let result = manual_refresh(
             State(state.clone()),
+            security::owner(),
             ApiJson(RefreshRequest {
                 providers: vec![Provider::Catalog("grok")],
                 account_id: Some("local".into()),
@@ -984,6 +991,7 @@ async fn antigravity_owned_intake_is_explicit_and_idempotent() {
     let body = json!({"kind":"antigravity_owned","label":"Owned Antigravity","access_token":"synthetic-antigravity-access","refresh_token":"synthetic-antigravity-refresh","expires_at":0,"client_id":"1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com","client_secret":"synthetic-client-secret"});
     let (_, Json(op)) = management::resolved_create(
         State(state.clone()),
+        security::owner(),
         key("antigravity-intake"),
         ApiJson(body.clone()),
     )
@@ -992,6 +1000,7 @@ async fn antigravity_owned_intake_is_explicit_and_idempotent() {
     assert_eq!(done(&state, &op.id).await.status, "completed");
     let (_, Json(retry)) = management::resolved_create(
         State(state.clone()),
+        security::owner(),
         key("antigravity-intake"),
         ApiJson(body.clone()),
     )
@@ -1016,6 +1025,7 @@ async fn antigravity_owned_intake_is_explicit_and_idempotent() {
         assert!(matches!(
             management::resolved_create(
                 State(state.clone()),
+                security::owner(),
                 key("invalid-antigravity"),
                 ApiJson(invalid)
             )
@@ -1031,6 +1041,7 @@ async fn kiro_owned_intake_is_explicit_and_idempotent() {
     let body = json!({"kind":"kiro_owned","label":"Owned Kiro","access_token":"synthetic-kiro-access","refresh_token":"synthetic-kiro-refresh","expires_at":0,"authMethod":"Social","region":"us-east-1"});
     let (_, Json(op)) = management::resolved_create(
         State(state.clone()),
+        security::owner(),
         key("kiro-intake"),
         ApiJson(body.clone()),
     )
@@ -1039,6 +1050,7 @@ async fn kiro_owned_intake_is_explicit_and_idempotent() {
     assert_eq!(done(&state, &op.id).await.status, "completed");
     let (_, Json(retry)) = management::resolved_create(
         State(state.clone()),
+        security::owner(),
         key("kiro-intake"),
         ApiJson(body.clone()),
     )
@@ -1063,6 +1075,7 @@ async fn kiro_owned_intake_is_explicit_and_idempotent() {
         assert!(matches!(
             management::resolved_create(
                 State(state.clone()),
+                security::owner(),
                 key("invalid-kiro"),
                 ApiJson(invalid)
             )
@@ -1078,6 +1091,7 @@ async fn factory_owned_intake_is_explicit_and_idempotent() {
     let body = json!({"kind":"factory_owned","label":"Owned Factory","access_token":"synthetic-factory-access","refresh_token":"synthetic-factory-refresh","organization_id":"org"});
     let (_, Json(op)) = management::resolved_create(
         State(state.clone()),
+        security::owner(),
         key("factory-intake"),
         ApiJson(body.clone()),
     )
@@ -1086,6 +1100,7 @@ async fn factory_owned_intake_is_explicit_and_idempotent() {
     assert_eq!(done(&state, &op.id).await.status, "completed");
     let (_, Json(retry)) = management::resolved_create(
         State(state.clone()),
+        security::owner(),
         key("factory-intake"),
         ApiJson(body.clone()),
     )
@@ -1118,6 +1133,7 @@ async fn factory_owned_intake_is_explicit_and_idempotent() {
         assert!(matches!(
             management::resolved_create(
                 State(state.clone()),
+                security::owner(),
                 key("invalid-factory"),
                 ApiJson(invalid)
             )
@@ -1133,6 +1149,7 @@ async fn grok_owned_intake_is_explicit_secret_free_and_idempotent() {
     let body = json!({"kind":"grok_owned","label":"Owned Grok","access_token":"synthetic-grok-access","refresh_token":"synthetic-grok-refresh","expires_at":0});
     let (_, Json(op)) = management::resolved_create(
         State(state.clone()),
+        security::owner(),
         key("grok-intake"),
         ApiJson(body.clone()),
     )
@@ -1141,6 +1158,7 @@ async fn grok_owned_intake_is_explicit_secret_free_and_idempotent() {
     assert_eq!(done(&state, &op.id).await.status, "completed");
     let (_, Json(retry)) = management::resolved_create(
         State(state.clone()),
+        security::owner(),
         key("grok-intake"),
         ApiJson(body.clone()),
     )
@@ -1162,6 +1180,7 @@ async fn grok_owned_intake_is_explicit_secret_free_and_idempotent() {
         assert!(matches!(
             management::resolved_create(
                 State(state.clone()),
+                security::owner(),
                 key("invalid-grok"),
                 ApiJson(invalid)
             )
@@ -1169,9 +1188,10 @@ async fn grok_owned_intake_is_explicit_secret_free_and_idempotent() {
             Err(ApiError(StatusCode::BAD_REQUEST, _))
         ));
     }
-    assert!(matches!(management::reference(State(state.clone()), key("invalid-source"), ApiJson(json!({"kind":"grok_native","entry_key":"https://auth.x.ai::fixture","path":"/tmp/auth.json"}))).await, Err(ApiError(StatusCode::BAD_REQUEST, _))));
+    assert!(matches!(management::reference(State(state.clone()), security::owner(), key("invalid-source"), ApiJson(json!({"kind":"grok_native","entry_key":"https://auth.x.ai::fixture","path":"/tmp/auth.json"}))).await, Err(ApiError(StatusCode::BAD_REQUEST, _))));
     let (_, Json(disable)) = management::resolved_patch(
         State(state.clone()),
+        security::owner(),
         Path(id.clone()),
         key("disable-grok"),
         ApiJson(json!({"enabled":false})),
@@ -1179,10 +1199,14 @@ async fn grok_owned_intake_is_explicit_secret_free_and_idempotent() {
     .await
     .unwrap_or_else(|_| panic!());
     assert_eq!(done(&state, &disable.id).await.status, "completed");
-    let (_, Json(remove)) =
-        management::resolved_remove(State(state.clone()), Path(id), key("remove-grok"))
-            .await
-            .unwrap_or_else(|_| panic!());
+    let (_, Json(remove)) = management::resolved_remove(
+        State(state.clone()),
+        security::owner(),
+        Path(id),
+        key("remove-grok"),
+    )
+    .await
+    .unwrap_or_else(|_| panic!());
     assert_eq!(done(&state, &remove.id).await.status, "completed");
     std::fs::remove_dir_all(dir).unwrap();
 }
@@ -1219,6 +1243,7 @@ async fn account_edits_preserve_unrelated_quota_and_do_not_promote_invalidated_r
     ));
     let (_, Json(op)) = management::resolved_patch(
         State(state.clone()),
+        security::owner(),
         Path(id.clone()),
         key("rename-preserves-quota"),
         ApiJson(json!({"user_label":"Renamed"})),
@@ -1250,6 +1275,7 @@ async fn account_edits_preserve_unrelated_quota_and_do_not_promote_invalidated_r
     );
     let (_, Json(op)) = management::source_patch(
         State(state.clone()),
+        security::owner(),
         Path(id.clone()),
         key("disable-one-source"),
         ApiJson(json!({"enabled":false})),
@@ -1265,10 +1291,14 @@ async fn account_edits_preserve_unrelated_quota_and_do_not_promote_invalidated_r
     assert_eq!(report.providers.len(), 1);
     assert_eq!(report.providers[0].provider.0, "mock");
     drop(snapshot);
-    let (_, Json(op)) =
-        management::resolved_remove(State(state.clone()), Path(id), key("remove-one-account"))
-            .await
-            .unwrap_or_else(|_| panic!());
+    let (_, Json(op)) = management::resolved_remove(
+        State(state.clone()),
+        security::owner(),
+        Path(id),
+        key("remove-one-account"),
+    )
+    .await
+    .unwrap_or_else(|_| panic!());
     assert_eq!(done(&state, &op.id).await.status, "completed");
     assert!(state.restore_pending.load(Ordering::SeqCst));
     state.restore_pending.store(false, Ordering::SeqCst);
@@ -1296,6 +1326,7 @@ async fn account_http_services_are_secret_free_idempotent_and_fenced() {
     let body = json!({"user_label":"new label","active":true});
     let (_, Json(op)) = management::resolved_patch(
         State(state.clone()),
+        security::owner(),
         Path(id.clone()),
         key("change-1"),
         ApiJson(body.clone()),
@@ -1306,6 +1337,7 @@ async fn account_http_services_are_secret_free_idempotent_and_fenced() {
     assert_eq!(state.generation.load(Ordering::SeqCst), 1);
     let (_, Json(retry)) = management::resolved_patch(
         State(state.clone()),
+        security::owner(),
         Path(id.clone()),
         key("change-1"),
         ApiJson(body),
@@ -1316,6 +1348,7 @@ async fn account_http_services_are_secret_free_idempotent_and_fenced() {
     assert!(matches!(
         management::resolved_patch(
             State(state.clone()),
+            security::owner(),
             Path(id.clone()),
             key("change-1"),
             ApiJson(json!({"user_label":"different"}))
@@ -1325,6 +1358,7 @@ async fn account_http_services_are_secret_free_idempotent_and_fenced() {
     ));
     let (_, Json(invalid)) = management::resolved_create(
         State(state.clone()),
+        security::owner(),
         key("create-1"),
         ApiJson(json!({"provider":"amp","api_key":""})),
     )
@@ -1334,10 +1368,14 @@ async fn account_http_services_are_secret_free_idempotent_and_fenced() {
         done(&state, &invalid.id).await.error,
         Some("invalid_credential")
     );
-    let (_, Json(remove)) =
-        management::resolved_remove(State(state.clone()), Path(id.clone()), key("remove-1"))
-            .await
-            .unwrap_or_else(|_| panic!());
+    let (_, Json(remove)) = management::resolved_remove(
+        State(state.clone()),
+        security::owner(),
+        Path(id.clone()),
+        key("remove-1"),
+    )
+    .await
+    .unwrap_or_else(|_| panic!());
     assert_eq!(done(&state, &remove.id).await.status, "completed");
     assert!(matches!(
         management::resolved_account(State(state.clone()), Path(id), security::owner()).await,
@@ -1380,12 +1418,14 @@ async fn external_config_conflict_recovers_and_refresh_requests_coalesce() {
         include_owned: true,
         disabled_proxy_auth_files: Vec::new(),
     };
-    let (_, Json(first)) = manual_refresh(State(state.clone()), ApiJson(request()))
-        .await
-        .unwrap_or_else(|_| panic!());
-    let (_, Json(second)) = manual_refresh(State(state.clone()), ApiJson(request()))
-        .await
-        .unwrap_or_else(|_| panic!());
+    let (_, Json(first)) =
+        manual_refresh(State(state.clone()), security::owner(), ApiJson(request()))
+            .await
+            .unwrap_or_else(|_| panic!());
+    let (_, Json(second)) =
+        manual_refresh(State(state.clone()), security::owner(), ApiJson(request()))
+            .await
+            .unwrap_or_else(|_| panic!());
     assert_eq!(first.id, second.id);
     // Change enabled scope while a queued refresh waits; it must not publish old scope.
     state
@@ -1602,6 +1642,7 @@ async fn native_authorization_retry_uses_its_receipt_before_reading_another_keyc
     .unwrap();
     let (_, Json(operation)) = management::authorize(
         State(state.clone()),
+        security::owner(),
         key("finished-authorization"),
         ApiJson(body),
     )
@@ -1619,6 +1660,7 @@ async fn account_retry_survives_loss_of_in_memory_operations() {
     let body = json!({"user_label":"first change"});
     let (_, Json(first)) = management::resolved_patch(
         State(state.clone()),
+        security::owner(),
         Path(id.clone()),
         key("durable-key"),
         ApiJson(body.clone()),
@@ -1628,6 +1670,7 @@ async fn account_retry_survives_loss_of_in_memory_operations() {
     assert_eq!(done(&state, &first.id).await.status, "completed");
     let (_, Json(later)) = management::resolved_patch(
         State(state.clone()),
+        security::owner(),
         Path(id.clone()),
         key("later-name"),
         ApiJson(json!({"user_label":"later change"})),
@@ -1638,6 +1681,7 @@ async fn account_retry_survives_loss_of_in_memory_operations() {
     *state.operations.lock().await = Operations::default();
     let (_, Json(retry)) = management::resolved_patch(
         State(state.clone()),
+        security::owner(),
         Path(id.clone()),
         key("durable-key"),
         ApiJson(body),
@@ -1654,6 +1698,7 @@ async fn account_retry_survives_loss_of_in_memory_operations() {
     *state.operations.lock().await = Operations::default();
     let conflict = management::resolved_patch(
         State(state.clone()),
+        security::owner(),
         Path(id),
         key("durable-key"),
         ApiJson(json!({"user_label":"different intent"})),
@@ -1696,10 +1741,14 @@ async fn legacy_migration_preserves_disabled_credentials_and_survives_restart() 
             "credential":{"access_token":"synthetic-old-access", "refresh_token":oauth.then_some("synthetic-old-refresh"),
                 "id_token":(provider == "codex").then_some("synthetic-id-token"), "account_id":"old-user", "expires_at":0, "extra":extra}});
         let key_value = format!("migrate-{provider}");
-        let (_, Json(op)) =
-            management::migrate(State(state.clone()), key(&key_value), ApiJson(body.clone()))
-                .await
-                .unwrap_or_else(|_| panic!("intake {provider}"));
+        let (_, Json(op)) = management::migrate(
+            State(state.clone()),
+            security::owner(),
+            key(&key_value),
+            ApiJson(body.clone()),
+        )
+        .await
+        .unwrap_or_else(|_| panic!("intake {provider}"));
         let completed = done(&state, &op.id).await;
         assert_eq!(
             completed.status, "completed",
@@ -1725,10 +1774,14 @@ async fn legacy_migration_preserves_disabled_credentials_and_survives_restart() 
         }
         tx.commit().unwrap();
         *state.operations.lock().await = Operations::default();
-        let (_, Json(retry)) =
-            management::migrate(State(state.clone()), key(&key_value), ApiJson(body))
-                .await
-                .unwrap_or_else(|_| panic!());
+        let (_, Json(retry)) = management::migrate(
+            State(state.clone()),
+            security::owner(),
+            key(&key_value),
+            ApiJson(body),
+        )
+        .await
+        .unwrap_or_else(|_| panic!());
         let repeated = done(&state, &retry.id).await;
         assert_eq!(repeated.result.unwrap()["account_id"], id);
         let tx = vault.begin().unwrap();
@@ -1767,9 +1820,14 @@ async fn legacy_migration_rejects_invalid_and_conflicting_imports() {
             json!({"legacy_id":"old", "provider":"amp", "label":"old label", "enabled":true,"credential":{"access_token":"synthetic"}}),
         ),
     ] {
-        let (_, Json(op)) = management::migrate(State(state.clone()), key(name), ApiJson(body))
-            .await
-            .unwrap_or_else(|_| panic!());
+        let (_, Json(op)) = management::migrate(
+            State(state.clone()),
+            security::owner(),
+            key(name),
+            ApiJson(body),
+        )
+        .await
+        .unwrap_or_else(|_| panic!());
         assert_eq!(done(&state, &op.id).await.status, "failed");
     }
     assert_eq!(
@@ -1997,6 +2055,7 @@ async fn logical_account_and_source_crud_have_distinct_atomic_scopes() {
     };
     let (_, Json(invalid)) = management::source_patch(
         State(state.clone()),
+        security::owner(),
         Path(second.clone()),
         key("invalid-source-key"),
         ApiJson(json!({"api_key":"", "enabled":false})),
@@ -2015,6 +2074,7 @@ async fn logical_account_and_source_crud_have_distinct_atomic_scopes() {
     );
     let (_, Json(op)) = management::source_patch(
         State(state.clone()),
+        security::owner(),
         Path(second.clone()),
         key("disable-source"),
         ApiJson(json!({"enabled":false})),
@@ -2033,6 +2093,7 @@ async fn logical_account_and_source_crud_have_distinct_atomic_scopes() {
     let patch = json!({"user_label":"Team account", "enabled":false});
     let (_, Json(op)) = management::resolved_patch(
         State(state.clone()),
+        security::owner(),
         Path(second.clone()),
         key("edit-group"),
         ApiJson(patch.clone()),
@@ -2059,6 +2120,7 @@ async fn logical_account_and_source_crud_have_distinct_atomic_scopes() {
     );
     let (_, Json(invalid)) = management::resolved_patch(
         State(state.clone()),
+        security::owner(),
         Path(first.clone()),
         key("invalid-selection"),
         ApiJson(json!({"user_label":"Must not persist", "enabled":false, "active":true})),
@@ -2076,6 +2138,7 @@ async fn logical_account_and_source_crud_have_distinct_atomic_scopes() {
     assert!(!unchanged.enabled);
     let (_, Json(retry)) = management::resolved_patch(
         State(state.clone()),
+        security::owner(),
         Path(second.clone()),
         key("edit-group"),
         ApiJson(patch),
@@ -2086,6 +2149,7 @@ async fn logical_account_and_source_crud_have_distinct_atomic_scopes() {
     assert!(matches!(
         management::resolved_patch(
             State(state.clone()),
+            security::owner(),
             Path(second.clone()),
             key("edit-group"),
             ApiJson(json!({"enabled":true}))
@@ -2095,6 +2159,7 @@ async fn logical_account_and_source_crud_have_distinct_atomic_scopes() {
     ));
     let (_, Json(op)) = management::source_remove(
         State(state.clone()),
+        security::owner(),
         Path(first.clone()),
         key("unlink-source"),
     )
@@ -2115,6 +2180,7 @@ async fn logical_account_and_source_crud_have_distinct_atomic_scopes() {
     );
     let (_, Json(op)) = management::resolved_patch(
         State(state.clone()),
+        security::owner(),
         Path(first.clone()),
         key("reset-name"),
         ApiJson(json!({"user_label":null, "enabled":true, "active":true})),
@@ -2153,6 +2219,7 @@ async fn logical_account_and_source_crud_have_distinct_atomic_scopes() {
     assert!(matches!(
         management::resolved_patch(
             State(state.clone()),
+            security::owner(),
             Path(first.clone()),
             key("invalid-null"),
             ApiJson(json!({"enabled":null}))
@@ -2162,6 +2229,7 @@ async fn logical_account_and_source_crud_have_distinct_atomic_scopes() {
     ));
     let (_, Json(op)) = management::resolved_remove(
         State(state.clone()),
+        security::owner(),
         Path(first.clone()),
         key("remove-group"),
     )
@@ -2328,6 +2396,7 @@ async fn external_snapshot_account_can_refresh_without_duplicate_observations() 
     for _ in 0..2 {
         let (_, Json(operation)) = manual_refresh(
             State(state.clone()),
+            security::owner(),
             ApiJson(RefreshRequest {
                 providers: vec![Provider::Mock],
                 account_id: Some(id.clone()),
@@ -2459,10 +2528,10 @@ async fn native_discovery_is_a_deduplicated_host_operation_with_a_shared_report(
     let (state, dir, _) = fixture().await;
     let guard = state.native_scan_lock.lock().await;
     let input = || ApiJson(serde_json::from_value(json!({"providers":["mock"]})).unwrap());
-    let (_, Json(first)) = native::start(State(state.clone()), input())
+    let (_, Json(first)) = native::start(State(state.clone()), security::owner(), input())
         .await
         .unwrap_or_else(|_| panic!());
-    let (_, Json(retry)) = native::start(State(state.clone()), input())
+    let (_, Json(retry)) = native::start(State(state.clone()), security::owner(), input())
         .await
         .unwrap_or_else(|_| panic!());
     assert_eq!(first.id, retry.id);

@@ -201,7 +201,9 @@ mod tests {
             );
         }
         let mut operations = crate::server::operations::Operations::default();
-        let (operation, _) = operations.start("refresh", None, "runtime".into()).unwrap();
+        let (operation, _) = operations
+            .start("owner", "refresh", None, "runtime".into())
+            .unwrap();
         validate(
             &schemas["Operation"],
             &serde_json::to_value(operation).unwrap(),

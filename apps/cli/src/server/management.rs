@@ -82,6 +82,7 @@ pub(super) async fn resolved_accounts(
 
 pub(super) async fn resolved_create(
     State(state): State<Arc<ApiState>>,
+    Extension(principal): Extension<security::Principal>,
     headers: HeaderMap,
     ApiJson(body): ApiJson<Value>,
 ) -> Result<(StatusCode, Json<Operation>), ApiError> {
@@ -89,6 +90,7 @@ pub(super) async fn resolved_create(
         .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "invalid_request"))?;
     mutate(
         state,
+        principal,
         headers,
         "resolved_account_create",
         "",
@@ -116,6 +118,7 @@ pub(super) async fn resolved_account(
 
 pub(super) async fn resolved_patch(
     State(state): State<Arc<ApiState>>,
+    Extension(principal): Extension<security::Principal>,
     Path(id): Path<String>,
     headers: HeaderMap,
     ApiJson(body): ApiJson<Value>,
@@ -124,6 +127,7 @@ pub(super) async fn resolved_patch(
         .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "invalid_request"))?;
     mutate(
         state,
+        principal,
         headers,
         "resolved_account_update",
         &id.clone(),
@@ -134,11 +138,13 @@ pub(super) async fn resolved_patch(
 }
 pub(super) async fn resolved_remove(
     State(state): State<Arc<ApiState>>,
+    Extension(principal): Extension<security::Principal>,
     Path(id): Path<String>,
     headers: HeaderMap,
 ) -> Result<(StatusCode, Json<Operation>), ApiError> {
     mutate(
         state,
+        principal,
         headers,
         "resolved_account_remove",
         &id.clone(),
@@ -149,6 +155,7 @@ pub(super) async fn resolved_remove(
 }
 pub(super) async fn source_patch(
     State(state): State<Arc<ApiState>>,
+    Extension(principal): Extension<security::Principal>,
     Path(id): Path<String>,
     headers: HeaderMap,
     ApiJson(body): ApiJson<Value>,
@@ -158,6 +165,7 @@ pub(super) async fn source_patch(
     let patch = patch.into_account_patch().map_err(account_error)?;
     mutate(
         state,
+        principal,
         headers,
         "source_update",
         &id.clone(),
@@ -168,11 +176,13 @@ pub(super) async fn source_patch(
 }
 pub(super) async fn source_remove(
     State(state): State<Arc<ApiState>>,
+    Extension(principal): Extension<security::Principal>,
     Path(id): Path<String>,
     headers: HeaderMap,
 ) -> Result<(StatusCode, Json<Operation>), ApiError> {
     mutate(
         state,
+        principal,
         headers,
         "source_remove",
         &id.clone(),
@@ -194,6 +204,7 @@ enum Mutation {
 }
 pub(super) async fn migrate(
     State(state): State<Arc<ApiState>>,
+    Extension(principal): Extension<security::Principal>,
     headers: HeaderMap,
     ApiJson(body): ApiJson<Value>,
 ) -> Result<(StatusCode, Json<Operation>), ApiError> {
@@ -201,6 +212,7 @@ pub(super) async fn migrate(
         .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "invalid_request"))?;
     mutate(
         state,
+        principal,
         headers,
         "account_migrate",
         "",
@@ -246,6 +258,7 @@ pub(super) async fn discover(
 }
 pub(super) async fn authorize(
     State(state): State<Arc<ApiState>>,
+    Extension(principal): Extension<security::Principal>,
     headers: HeaderMap,
     ApiJson(body): ApiJson<Value>,
 ) -> Result<(StatusCode, Json<Operation>), ApiError> {
@@ -254,6 +267,7 @@ pub(super) async fn authorize(
     crate::accounts::authorization::target(&input).map_err(account_error)?;
     mutate(
         state,
+        principal,
         headers,
         "native_source_authorize",
         "",
@@ -265,6 +279,7 @@ pub(super) async fn authorize(
 
 pub(super) async fn authorize_vault(
     State(state): State<Arc<ApiState>>,
+    Extension(principal): Extension<security::Principal>,
     headers: HeaderMap,
     ApiJson(body): ApiJson<Value>,
 ) -> Result<(StatusCode, Json<Operation>), ApiError> {
@@ -273,6 +288,7 @@ pub(super) async fn authorize_vault(
     }
     mutate(
         state,
+        principal,
         headers,
         "account_vault_authorize",
         "",
@@ -284,6 +300,7 @@ pub(super) async fn authorize_vault(
 
 pub(super) async fn reference(
     State(state): State<Arc<ApiState>>,
+    Extension(principal): Extension<security::Principal>,
     headers: HeaderMap,
     ApiJson(body): ApiJson<Value>,
 ) -> Result<(StatusCode, Json<Operation>), ApiError> {
@@ -291,6 +308,7 @@ pub(super) async fn reference(
         .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "invalid_request"))?;
     mutate(
         state,
+        principal,
         headers,
         "account_source_register",
         "",
@@ -301,6 +319,7 @@ pub(super) async fn reference(
 }
 async fn mutate(
     state: Arc<ApiState>,
+    principal: security::Principal,
     headers: HeaderMap,
     kind: &str,
     target: &str,
@@ -323,7 +342,10 @@ async fn mutate(
             .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "invalid_request"))?,
     ]);
     drop(body);
-    let intent = crate::accounts::service::MutationIntent::new(key, fingerprint.clone())
+    crate::accounts::service::MutationIntent::new(key, String::new())
+        .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "invalid_idempotency_key"))?;
+    let key = principal.scoped_key(key);
+    let intent = crate::accounts::service::MutationIntent::new(&key, fingerprint.clone())
         .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "invalid_idempotency_key"))?;
     // Durable receipts survive both discovery expiry and server restart. Validate
     // the body fingerprint before attempting to read a live native source.
@@ -339,7 +361,7 @@ async fn mutate(
         .operations
         .lock()
         .await
-        .start(kind, Some(key.into()), fingerprint)
+        .start(&principal.id, kind, Some(key), fingerprint)
         .map_err(operation_error)?;
     if new {
         let work = state.clone();

@@ -15,6 +15,7 @@ pub struct Operation {
     pub message: Option<&'static str>,
 }
 struct Entry {
+    owner: String,
     operation: Operation,
     finished: Option<Instant>,
     key: Option<String>,
@@ -46,6 +47,7 @@ impl Operations {
     }
     pub fn start(
         &mut self,
+        owner: &str,
         kind: &str,
         key: Option<String>,
         fingerprint: String,
@@ -55,7 +57,11 @@ impl Operations {
             if key.is_empty() || key.len() > 128 || !key.bytes().all(|c| c.is_ascii_graphic()) {
                 return Err("invalid_idempotency_key");
             }
-            if let Some(e) = self.entries.values().find(|e| e.key.as_ref() == Some(key)) {
+            if let Some(e) = self
+                .entries
+                .values()
+                .find(|e| e.owner == owner && e.key.as_ref() == Some(key))
+            {
                 return if e.operation.kind == kind && e.fingerprint == fingerprint {
                     Ok((e.operation.clone(), false))
                 } else {
@@ -87,6 +93,7 @@ impl Operations {
         self.entries.insert(
             id,
             Entry {
+                owner: owner.into(),
                 operation: operation.clone(),
                 finished: None,
                 key,
@@ -118,6 +125,14 @@ impl Operations {
             }
         }
     }
+    pub fn get_for(&mut self, id: &str, owner: &str, admin: bool) -> Option<Operation> {
+        self.prune();
+        self.entries
+            .get(id)
+            .filter(|entry| admin || entry.owner == owner)
+            .map(|entry| entry.operation.clone())
+    }
+
     pub fn get(&mut self, id: &str) -> Option<Operation> {
         self.prune();
         self.entries.get(id).map(|e| e.operation.clone())
@@ -127,19 +142,54 @@ impl Operations {
 mod tests {
     use super::*;
     #[test]
+    fn clients_cannot_reuse_another_clients_retry_key_or_read_its_operation() {
+        let mut operations = Operations::default();
+        let (first, _) = operations
+            .start(
+                "client-a",
+                "account_update",
+                Some("retry".into()),
+                "same-body".into(),
+            )
+            .unwrap();
+        let (second, _) = operations
+            .start(
+                "client-b",
+                "account_update",
+                Some("retry".into()),
+                "same-body".into(),
+            )
+            .unwrap();
+        assert_ne!(first.id, second.id);
+        let (retried, fresh) = operations
+            .start(
+                "client-a",
+                "account_update",
+                Some("retry".into()),
+                "same-body".into(),
+            )
+            .unwrap();
+        assert!(!fresh);
+        assert_eq!(retried.id, first.id);
+        assert!(operations.get_for(&first.id, "client-b", false).is_none());
+        assert!(operations.get_for(&first.id, "client-a", false).is_some());
+        assert!(operations.get_for(&first.id, "owner", true).is_some());
+    }
+
+    #[test]
     fn retry_conflict_capacity_and_expiry() {
         let mut ops = Operations::default();
         let (op, new) = ops
-            .start("create", Some("request-1".into()), "a".into())
+            .start("owner", "create", Some("request-1".into()), "a".into())
             .unwrap();
         assert!(new);
         assert!(
-            !ops.start("create", Some("request-1".into()), "a".into())
+            !ops.start("owner", "create", Some("request-1".into()), "a".into())
                 .unwrap()
                 .1
         );
         assert!(matches!(
-            ops.start("create", Some("request-1".into()), "b".into()),
+            ops.start("owner", "create", Some("request-1".into()), "b".into()),
             Err("idempotency_conflict")
         ));
         ops.finish(&op.id, Ok(serde_json::json!({"account_id":"test"})));
@@ -148,15 +198,15 @@ mod tests {
             Some(Instant::now() - Duration::from_secs(901));
         assert!(ops.get(&op.id).is_some());
         assert!(
-            !ops.start("create", Some("request-1".into()), "a".into())
+            !ops.start("owner", "create", Some("request-1".into()), "a".into())
                 .unwrap()
                 .1
         );
         for _ in 0..128 {
-            ops.start("refresh", None, String::new()).unwrap();
+            ops.start("owner", "refresh", None, String::new()).unwrap();
         }
         assert!(matches!(
-            ops.start("refresh", None, String::new()),
+            ops.start("owner", "refresh", None, String::new()),
             Err("operations_full")
         ));
     }
@@ -165,7 +215,7 @@ mod tests {
         let mut ops = Operations::default();
         let mut first = String::new();
         for n in 0..300 {
-            let (op, _) = ops.start("refresh", None, n.to_string()).unwrap();
+            let (op, _) = ops.start("owner", "refresh", None, n.to_string()).unwrap();
             if n == 0 {
                 first = op.id.clone();
             }
@@ -174,8 +224,13 @@ mod tests {
         assert!(ops.get(&first).is_none());
         assert_eq!(ops.entries.len(), 128);
         assert!(
-            ops.start("account_update", Some("new-key".into()), "body".into())
-                .is_ok()
+            ops.start(
+                "owner",
+                "account_update",
+                Some("new-key".into()),
+                "body".into()
+            )
+            .is_ok()
         );
     }
     #[test]
@@ -183,19 +238,29 @@ mod tests {
         let mut ops = Operations::default();
         for n in 0..4096 {
             let (op, _) = ops
-                .start("account_update", Some(n.to_string()), "body".into())
+                .start(
+                    "owner",
+                    "account_update",
+                    Some(n.to_string()),
+                    "body".into(),
+                )
                 .unwrap();
             ops.finish(&op.id, Ok(serde_json::json!({"account_id":"fake"})));
         }
         assert!(matches!(
-            ops.start("account_update", Some("overflow".into()), "body".into()),
+            ops.start(
+                "owner",
+                "account_update",
+                Some("overflow".into()),
+                "body".into()
+            ),
             Err("idempotency_full")
         ));
         assert!(
-            !ops.start("account_update", Some("0".into()), "body".into())
+            !ops.start("owner", "account_update", Some("0".into()), "body".into())
                 .unwrap()
                 .1
         );
-        assert!(ops.start("refresh", None, "scope".into()).is_ok());
+        assert!(ops.start("owner", "refresh", None, "scope".into()).is_ok());
     }
 }

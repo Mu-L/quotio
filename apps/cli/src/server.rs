@@ -563,6 +563,7 @@ fn include_owned_default() -> bool {
 }
 async fn manual_refresh(
     State(state): State<Arc<ApiState>>,
+    Extension(principal): Extension<security::Principal>,
     ApiJson(mut request): ApiJson<RefreshRequest>,
 ) -> Result<(StatusCode, Json<Operation>), ApiError> {
     let enabled = state
@@ -597,8 +598,10 @@ async fn manual_refresh(
     } else if request.providers.iter().any(|p| !enabled.contains(p)) {
         return Err(ApiError(StatusCode::BAD_REQUEST, "invalid_refresh_scope"));
     }
-    let key = serde_json::to_string(&request)
-        .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "invalid_request"))?;
+    let key = principal.scoped_key(
+        &serde_json::to_string(&request)
+            .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "invalid_request"))?,
+    );
     let mut pending = state.pending.lock().await;
     if let Some(id) = pending.get(&key)
         && let Some(op) = state.operations.lock().await.get(id)
@@ -609,7 +612,7 @@ async fn manual_refresh(
         .operations
         .lock()
         .await
-        .start("refresh", None, key.clone())
+        .start(&principal.id, "refresh", None, key.clone())
         .map_err(operation_error)?;
     pending.insert(key.clone(), op.id.clone());
     drop(pending);
@@ -642,8 +645,17 @@ fn operation_error(code: &'static str) -> ApiError {
         code,
     )
 }
-async fn operation(State(state): State<Arc<ApiState>>, Path(id): Path<String>) -> Response {
-    match state.operations.lock().await.get(&id) {
+async fn operation(
+    State(state): State<Arc<ApiState>>,
+    Extension(principal): Extension<security::Principal>,
+    Path(id): Path<String>,
+) -> Response {
+    match state
+        .operations
+        .lock()
+        .await
+        .get_for(&id, &principal.id, principal.owner)
+    {
         Some(op) => Json(op).into_response(),
         None => error(StatusCode::NOT_FOUND, "operation_not_found"),
     }

@@ -18,6 +18,16 @@ pub(super) struct Principal {
     pub manage: bool,
 }
 
+impl Principal {
+    pub(super) fn scoped_key(&self, key: &str) -> String {
+        if self.owner {
+            key.to_owned()
+        } else {
+            crate::cache::fingerprint(&["client-request", &self.id, key])
+        }
+    }
+}
+
 #[cfg(test)]
 pub(super) fn owner() -> axum::Extension<Principal> {
     axum::Extension(Principal {
