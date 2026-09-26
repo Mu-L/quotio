@@ -228,7 +228,7 @@ fn parse_usage(
         let resets_at = partial(reset(plan.get(reset_field)), reset_field, &mut diagnostics);
         let mut window = common::window(
             label,
-            None,
+            Some(100.0 - remaining.clamp(0.0, 100.0)),
             Some(100.0),
             Some(remaining.clamp(0.0, 100.0)),
             "percent",
@@ -323,6 +323,7 @@ mod tests {
         assert_eq!(first.account.verified, second.account.verified);
         assert_eq!(first.account.verified.as_ref().unwrap().subject, "user-1");
         assert_eq!(first.account.label, "person@example.test");
+        assert_eq!(first.windows[0].consumption.as_ref().unwrap().used, 50.0);
         root["userStatus"]["teamId"] = json!("other-team");
         let other = parse_usage(
             &root,
@@ -610,12 +611,14 @@ mod tests {
         assert_eq!(balance.amounts.as_ref().unwrap().remaining, 1.25);
         assert_eq!(balance.amounts.as_ref().unwrap().unit, "USD");
         assert_eq!(balance.amounts.as_ref().unwrap().limit, None);
-        assert!(
-            usage
-                .windows
-                .iter()
-                .all(|window| window.consumption.is_none())
-        );
+        for window in &usage.windows[..2] {
+            assert_eq!(
+                window.consumption.as_ref().unwrap().used
+                    + window.amounts.as_ref().unwrap().remaining,
+                100.0
+            );
+        }
+        assert!(usage.windows[2].consumption.is_none());
     }
 
     #[test]
