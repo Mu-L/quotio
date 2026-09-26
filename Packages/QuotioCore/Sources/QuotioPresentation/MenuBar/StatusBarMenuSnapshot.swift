@@ -48,11 +48,11 @@ public enum StatusBarMenuSnapshotMapper {
         trackingPreferences: ProviderTrackingPreferences = ProviderTrackingPreferences()
     ) -> StatusBarMenuSnapshot {
         let disabledAccounts = Set(monitorAccounts.lazy.filter(\.isDisabled).map {
-            "\($0.providerID.rawValue):\($0.accountKey.lowercased())"
+            "\($0.providerID.rawValue):\($0.accountKey)"
         })
         let availableProviders = Set(quota.quotas.compactMap { provider, accounts in
             trackingPreferences.isEnabled(provider) && accounts.contains { accountKey, _ in
-                !disabledAccounts.contains("\(provider.rawValue):\(accountKey.lowercased())")
+                !disabledAccounts.contains("\(provider.rawValue):\(accountKey)")
             } ? provider : nil
         })
 
@@ -60,7 +60,7 @@ public enum StatusBarMenuSnapshotMapper {
         let providers = availableProviders.sorted { displayName($0) < displayName($1) }.map { provider in
             let accounts = orderedAccounts(
                 (quota.quotas[provider] ?? [:]).filter { accountKey, _ in
-                    !disabledAccounts.contains("\(provider.rawValue):\(accountKey.lowercased())")
+                    !disabledAccounts.contains("\(provider.rawValue):\(accountKey)")
                 }
             ).map { account in
                 let accountID = QuotaAccountID(provider: provider, accountKey: account.accountKey)

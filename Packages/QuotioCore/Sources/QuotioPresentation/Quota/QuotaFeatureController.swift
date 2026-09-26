@@ -179,28 +179,18 @@ public final class QuotaFeatureController {
     }
 
     func remove(account: QuotaAccountID) async {
-        if let storedAccount = accounts.accounts.first(where: {
+        guard let storedAccount = accounts.accounts.first(where: {
             $0.providerID.rawValue == account.provider.rawValue && $0.accountKey == account.accountKey
-        }), storedAccount.canDelete {
-            if storedAccount.source == .localIDE {
-                await accounts.setDisabled(false, accountID: storedAccount.id)
-            } else {
-                try? await accounts.delete(accountID: storedAccount.id)
-            }
-        }
-        await quota.removeQuota(for: account, mode: operatingMode)
+        }), storedAccount.canDelete else { return }
+        do { try await accounts.delete(accountID: storedAccount.id) }
+        catch { return }
+        await quota.bootstrap(mode: operatingMode)
         await finishRefresh()
     }
 
     func setAccountDisabled(_ disabled: Bool, accountID: String) async {
-        let account = accounts.accounts.first { $0.id == accountID }
         await accounts.setDisabled(disabled, accountID: accountID)
-        if disabled, let account, let provider = QuotaProvider(rawValue: account.providerID.rawValue) {
-            await quota.removeQuota(
-                for: QuotaAccountID(provider: provider, accountKey: account.accountKey),
-                mode: operatingMode
-            )
-        }
+        await quota.bootstrap(mode: operatingMode)
         await finishRefresh()
     }
 
@@ -307,7 +297,6 @@ public final class QuotaFeatureController {
 
     private func finishRefresh() async {
         await reloadAccounts()
-        await removeDisabledMonitorQuotas()
         checkQuotaNotifications()
         synchronizeMenuBarSelection()
         didChangeHandler?()
@@ -315,20 +304,6 @@ public final class QuotaFeatureController {
 
     private func reloadAccounts() async {
         await accounts.reloadAccounts()
-    }
-
-    private func removeDisabledMonitorQuotas() async {
-        guard operatingMode == .monitor else { return }
-        for account in accounts.accounts where account.isDisabled {
-            guard let provider = QuotaProvider(rawValue: account.providerID.rawValue),
-                  let quotaKey = quota.providerQuotas[provider]?.keys.first(where: {
-                      $0.caseInsensitiveCompare(account.accountKey) == .orderedSame
-                  }) else { continue }
-            await quota.removeQuota(
-                for: QuotaAccountID(provider: provider, accountKey: quotaKey),
-                mode: operatingMode
-            )
-        }
     }
 
     private func startObservingHost() {

@@ -63,7 +63,7 @@ final class QuotaFeatureControllerTests: XCTestCase {
         await fixture.controller.shutdown()
     }
 
-    func testRefreshRemovesQuotaForDisabledNativeAccount() async {
+    func testRefreshDoesNotNormalizeOpaqueAccountIDsOrRemoveHostQuota() async {
         let account = Account.make(
             providerID: AccountProviderID(rawValue: QuotaProvider.kiro.rawValue),
             accountKey: "Person@example.com",
@@ -78,11 +78,11 @@ final class QuotaFeatureControllerTests: XCTestCase {
 
         await fixture.controller.refresh(provider: .kiro)
 
-        XCTAssertNil(fixture.quota.providerQuotas[.kiro])
+        XCTAssertNotNil(fixture.quota.providerQuotas[.kiro]?["person@example.com"])
         await fixture.controller.shutdown()
     }
 
-    func testRemoveImportedIDEAccountClearsDisabledMetadataWithoutDeletingCredential() async {
+    func testRemovingBorrowedAccountSubmitsTheHostRemovalWithoutReenablingIt() async {
         let account = Account.make(
             providerID: AccountProviderID(rawValue: QuotaProvider.cursor.rawValue),
             accountKey: "person@example.com",
@@ -99,15 +99,13 @@ final class QuotaFeatureControllerTests: XCTestCase {
 
         let disabledUpdates = await fixture.accountService.disabledUpdates()
         let deletedAccountIDs = await fixture.accountService.deletedAccountIDs()
-        XCTAssertEqual(disabledUpdates, [
-            QuotaFeatureAccountService.DisabledUpdate(accountID: account.id, disabled: false),
-        ])
-        XCTAssertEqual(deletedAccountIDs, [])
-        XCTAssertNil(fixture.quota.providerQuotas[.cursor]?[account.accountKey])
+        XCTAssertEqual(disabledUpdates, [])
+        XCTAssertEqual(deletedAccountIDs, [account.id])
+        XCTAssertNotNil(fixture.quota.providerQuotas[.cursor]?[account.accountKey])
         await fixture.controller.shutdown()
     }
 
-    func testRemoveOwnedAccountDeletesCredentialBeforeRemovingQuota() async {
+    func testRemovingOwnedAccountReloadsQuotaInsteadOfEditingTheHostSnapshot() async {
         let account = Account.make(
             providerID: AccountProviderID(rawValue: QuotaProvider.openRouter.rawValue),
             accountKey: "Personal",
@@ -125,7 +123,7 @@ final class QuotaFeatureControllerTests: XCTestCase {
         let deletedAccountIDs = await fixture.accountService.deletedAccountIDs()
         XCTAssertEqual(disabledUpdates, [])
         XCTAssertEqual(deletedAccountIDs, [account.id])
-        XCTAssertNil(fixture.quota.providerQuotas[.openRouter]?[account.accountKey])
+        XCTAssertNotNil(fixture.quota.providerQuotas[.openRouter]?[account.accountKey])
         await fixture.controller.shutdown()
     }
 

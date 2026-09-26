@@ -7,6 +7,16 @@ import XCTest
 
 @MainActor
 final class StatusBarMenuSnapshotMapperTests: XCTestCase {
+    func testDisabledAccountsMatchOpaqueIDsExactly() {
+        let disabled = Account.make(providerID: .init(rawValue: "codex"), accountKey: "Account-A", source: .nativeCredential, status: .disabled)
+        let snapshot = StatusBarMenuSnapshotMapper.makeSnapshot(
+            monitorAccounts: [disabled],
+            quota: QuotaSnapshot(quotas: [.codex: ["Account-A": ProviderQuota(), "account-a": ProviderQuota()]]),
+            menuBarPreferences: MenuBarPreferences(), appearanceMode: .system, language: .english
+        )
+        XCTAssertEqual(snapshot.providers.first?.accounts.map(\.id.accountKey), ["account-a"])
+    }
+
     func testMenuUsesHostProviderNamesWithoutAClientProviderSwitch() throws {
         let provider = try XCTUnwrap(QuotaProvider(rawValue: "future-provider"))
         let snapshot = StatusBarMenuSnapshotMapper.makeSnapshot(
