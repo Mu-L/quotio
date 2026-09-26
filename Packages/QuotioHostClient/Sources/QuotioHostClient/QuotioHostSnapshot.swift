@@ -79,6 +79,19 @@ public struct QuotioHostSnapshot: Decodable, Sendable {
         public let resetDescription: String?
         public let fetchedAt: Date
     }
+    public struct Summary: Decodable, Sendable {
+        public struct Totals: Decodable, Sendable {
+            public let lowest: Double?
+            public let average: Double?
+        }
+        public struct Metric: Decodable, Sendable {
+            public let displayName: String
+            public let remainingPercent: Double?
+        }
+        public let sessionOnly: Totals
+        public let combined: Totals
+        public let pair: [Metric]
+    }
     public struct Usage: Decodable, Sendable {
         public let accountId: String
         public let freshness: String
@@ -91,6 +104,7 @@ public struct QuotioHostSnapshot: Decodable, Sendable {
         public let codexResetCredits: QuotioHostCodexResetCredits?
         public let antigravitySubscription: QuotioHostSubscription?
         public let metrics: [Metric]
+        public let summary: Summary?
         public let issue: Issue?
     }
     public let schemaVersion: Int
@@ -131,6 +145,13 @@ public struct QuotioHostSnapshot: Decodable, Sendable {
         }
         var usageIDs = Set<String>()
         for value in usage {
+            if let summary = value.summary {
+                let values = [summary.sessionOnly.lowest, summary.sessionOnly.average, summary.combined.lowest, summary.combined.average] + summary.pair.map(\.remainingPercent)
+                guard values.compactMap { $0 }.allSatisfy({ $0.isFinite && (0...100).contains($0) }),
+                      summary.pair.isEmpty || summary.pair.count == 2,
+                      summary.pair.allSatisfy({ !$0.displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.displayName.utf8.count <= 512 && $0.displayName.rangeOfCharacter(from: .controlCharacters) == nil }) else { throw QuotioHostClientError.incompatible }
+            }
+
             if ["fresh", "stale"].contains(value.freshness), value.fetchedAt == nil { throw QuotioHostClientError.incompatible }
             guard accountIDs.contains(value.accountId), usageIDs.insert(value.accountId).inserted,
                   Set(value.metrics.map(\.id)).count == value.metrics.count,

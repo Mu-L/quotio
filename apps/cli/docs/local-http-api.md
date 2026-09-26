@@ -95,6 +95,11 @@ Supplemental profile, subscription and reset-credit observations remain attached
 to the selected source. Expired reset credits are omitted even between refreshes.
 There is no reset-credit redemption route.
 
+`usage.summary` supplies session-only and combined totals (lowest and average),
+plus an optional two-metric display pair. Clients choose a display preference and
+format these values; they must not regroup provider metrics or recompute totals.
+A null percentage means unknown, not zero or unlimited.
+
 A new host can publish registered accounts with `not_loaded` quota before its
 first refresh. Provider failures do not hide healthy accounts. Invalid snapshots
 and unavailable protected storage return errors rather than an empty account list.

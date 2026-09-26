@@ -6,6 +6,33 @@ import XCTest
 @testable import QuotioInfrastructure
 
 final class QuotioCLIBackendTests: XCTestCase {
+    func testQuotaSummaryUsesHostValuesWithoutRecomputingFromMetrics() throws {
+        for lowest in [17, 101] {
+            let fixture = try hostFixture { root in
+                var usage = root["usage"] as! [[String: Any]]
+                usage[1]["summary"] = [
+                    "session_only": ["lowest": lowest, "average": 33],
+                    "combined": ["lowest": 72, "average": 84],
+                    "pair": [["display_name": "Host metric", "remaining_percent": 17],
+                             ["display_name": "Unknown", "remaining_percent": NSNull()]],
+                ]
+                root["usage"] = usage
+            }
+            if lowest > 100 {
+                XCTAssertThrowsError(try QuotioHostSnapshot.decode(Data(fixture.utf8)))
+                continue
+            }
+            let host = try QuotioHostSnapshot.decode(Data(fixture.utf8))
+            let snapshot = QuotioHostPresentationMapper.resolvedSnapshot(host)
+            let summaries = snapshot.quotas.values.flatMap { $0.values }.compactMap(\.summary)
+            let summary = try XCTUnwrap(summaries.first)
+            XCTAssertEqual(summary.sessionOnly.lowest, 17)
+            XCTAssertEqual(summary.combined.average, 84)
+            XCTAssertEqual(summary.pair[0].displayName, "Host metric")
+            XCTAssertNil(summary.pair[1].remainingPercent)
+        }
+    }
+
     func testResolvedMutationsPreserveAccountAndSourceScopesAndExplicitNameReset() async throws {
         let backend = QuotioCLIBackend(session: stubSession())
         await backend.connect(.init(baseURL: URL(string: "http://127.0.0.1:43210")!, token: "test"))

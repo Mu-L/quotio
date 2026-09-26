@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use time::OffsetDateTime;
 pub mod snapshot;
+pub mod summary;
 
 pub(crate) fn valid_id(id: &str) -> bool {
     !id.is_empty()
@@ -163,6 +164,8 @@ pub struct Usage {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub codex_reset_credits: Option<crate::domain::CodexResetCreditInventory>,
     pub metrics: Vec<Metric>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<summary::Summary>,
     pub issue: Option<Issue>,
 }
 
@@ -235,6 +238,13 @@ impl Snapshot {
         }
         let mut usages = HashSet::new();
         for usage in &self.usage {
+            if usage
+                .summary
+                .as_ref()
+                .is_some_and(|summary| !summary.is_valid())
+            {
+                return Err("invalid_usage_summary");
+            }
             if matches!(usage.freshness, Freshness::Fresh | Freshness::Stale)
                 && usage.fetched_at.is_none()
             {

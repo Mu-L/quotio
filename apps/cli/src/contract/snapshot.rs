@@ -193,6 +193,7 @@ fn observation(
         antigravity_subscription: value.antigravity_subscription.clone(),
         codex_profile: value.codex_profile.clone(),
         codex_reset_credits: value.codex_reset_credits.clone().filter(|_| !stale),
+        summary: Some(super::summary::project(value)),
         metrics: value
             .windows
             .iter()
@@ -360,6 +361,7 @@ pub fn project(
                 codex_profile: None,
                 codex_reset_credits: None,
                 metrics: Vec::new(),
+                summary: None,
                 issue: source_issue,
             });
         }

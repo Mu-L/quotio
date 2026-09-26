@@ -90,7 +90,14 @@ struct QuotioHostPresentationMapper {
             lastUpdated: usage.fetchedAt ?? .distantPast,
             planType: usage.plan,
             analytics: analytics(usage),
-            accountDisplayName: name
+            accountDisplayName: name,
+            summary: usage.summary.map { value in
+                QuotaSummary(
+                    sessionOnly: .init(lowest: value.sessionOnly.lowest, average: value.sessionOnly.average),
+                    combined: .init(lowest: value.combined.lowest, average: value.combined.average),
+                    pair: value.pair.map { .init(displayName: $0.displayName, remainingPercent: $0.remainingPercent) }
+                )
+            }
         )
     }
 

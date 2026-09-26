@@ -803,10 +803,9 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
                ) {
                 isForbidden = quotaData.isForbidden
                 if !quotaData.models.isEmpty {
-                    let models = quotaData.models.map { (name: $0.name, percentage: $0.percentage) }
-                    displayPercent = menuBarSettings.totalUsagePercent(models: models)
+                    displayPercent = menuBarSettings.totalUsagePercent(summary: quotaData.summary)
                     if menuBarSettings.stackPairedQuotaMetrics {
-                        quotaPair = MenuBarQuotaPair.resolve(for: provider, from: quotaData.models)
+                        quotaPair = MenuBarQuotaPair.resolve(from: quotaData.summary)
                     }
                 }
             }

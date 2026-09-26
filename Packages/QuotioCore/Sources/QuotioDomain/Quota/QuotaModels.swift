@@ -255,7 +255,35 @@ public struct QuotaAnalyticsRow: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+public struct QuotaSummary: Codable, Equatable, Sendable {
+    public struct Totals: Codable, Equatable, Sendable {
+        public let lowest: Double?
+        public let average: Double?
+        public init(lowest: Double?, average: Double?) {
+            self.lowest = lowest
+            self.average = average
+        }
+    }
+    public struct Metric: Codable, Equatable, Sendable {
+        public let displayName: String
+        public let remainingPercent: Double?
+        public init(displayName: String, remainingPercent: Double?) {
+            self.displayName = displayName
+            self.remainingPercent = remainingPercent
+        }
+    }
+    public let sessionOnly: Totals
+    public let combined: Totals
+    public let pair: [Metric]
+    public init(sessionOnly: Totals, combined: Totals, pair: [Metric]) {
+        self.sessionOnly = sessionOnly
+        self.combined = combined
+        self.pair = pair
+    }
+}
+
 public struct ProviderQuota: Codable, Equatable, Sendable {
+    public var summary: QuotaSummary?
     public var models: [QuotaMetric]
     public var lastUpdated: Date
     public var isForbidden: Bool
@@ -271,7 +299,8 @@ public struct ProviderQuota: Codable, Equatable, Sendable {
         planType: String? = nil,
         tokenExpiresAt: Date? = nil,
         analytics: QuotaAnalytics? = nil,
-        accountDisplayName: String? = nil
+        accountDisplayName: String? = nil,
+        summary: QuotaSummary? = nil
     ) {
         self.models = models
         self.lastUpdated = lastUpdated
@@ -279,6 +308,7 @@ public struct ProviderQuota: Codable, Equatable, Sendable {
         self.planType = planType
         self.tokenExpiresAt = tokenExpiresAt
         self.analytics = analytics
+        self.summary = summary
         self.accountDisplayName = accountDisplayName
     }
 }

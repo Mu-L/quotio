@@ -1779,6 +1779,9 @@
       }
     },
     "schemas": {
+      "V2SummaryTotals": {"type": "object", "required": ["lowest", "average"], "properties": {"lowest": {"type": ["number", "null"], "minimum": 0, "maximum": 100}, "average": {"type": ["number", "null"], "minimum": 0, "maximum": 100}}},
+      "V2SummaryMetric": {"type": "object", "required": ["display_name", "remaining_percent"], "properties": {"display_name": {"type": "string", "minLength": 1, "maxLength": 512}, "remaining_percent": {"type": ["number", "null"], "minimum": 0, "maximum": 100}}},
+      "V2UsageSummary": {"type": "object", "required": ["session_only", "combined", "pair"], "properties": {"session_only": {"$ref": "#/components/schemas/V2SummaryTotals"}, "combined": {"$ref": "#/components/schemas/V2SummaryTotals"}, "pair": {"type": "array", "items": {"$ref": "#/components/schemas/V2SummaryMetric"}, "maxItems": 2}}},
       "V2Discovery": {
         "type": "object",
         "additionalProperties": false,
@@ -4255,6 +4258,7 @@
           "issue"
         ],
         "properties": {
+        "summary": {"anyOf": [{"$ref": "#/components/schemas/V2UsageSummary"}, {"type": "null"}]},
           "subscription_status": {"type": "string"},
           "reset_credits": {"$ref": "#/components/schemas/ResetCredits"},
           "antigravity_subscription": {"$ref": "#/components/schemas/AntigravitySubscriptionInfo"},

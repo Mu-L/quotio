@@ -83,79 +83,12 @@ public final class AppearanceManager {
 // MARK: - Usage Calculation Helpers
 
 public extension MenuBarSettingsManager {
-    /// Compute total usage percentage using session/extra logic
-    /// Treats extra-usage, codex-extra, on-demand as extra models; all others as session
-    func totalUsagePercent(models: [(name: String, percentage: Double)]) -> Double {
-        let extraModelNames: Set<String> = ["extra-usage", "codex-extra", "on-demand"]
-        
-        var sessionPercentages: [Double] = []
-        var extraPercentages: [Double] = []
-        
-        for model in models {
-            if extraModelNames.contains(model.name) {
-                extraPercentages.append(model.percentage)
-            } else {
-                sessionPercentages.append(model.percentage)
-            }
-        }
-        
-        let sessionRemaining = aggregateModelPercentages(sessionPercentages)
-        let extraRemaining = aggregateModelPercentages(extraPercentages)
-        
-        let hasExtraModels = !extraPercentages.isEmpty
-        
-        switch totalUsageMode {
-        case .sessionOnly:
-            if sessionRemaining >= 0 {
-                return sessionRemaining
-            }
-            if hasExtraModels {
-                return extraRemaining
-            }
-            return -1
-            
-        case .combined:
-            let session = sessionRemaining >= 0 ? sessionRemaining : -1
-            let extra = extraRemaining >= 0 ? extraRemaining : -1
-            
-            if session < 0 && extra < 0 {
-                return -1
-            }
-            if session < 0 {
-                return extra
-            }
-            if extra < 0 {
-                return session
-            }
-            return max(session, extra)
-        }
+    func totalUsagePercent(summary: QuotaSummary?) -> Double {
+        guard let summary else { return -1 }
+        let totals = totalUsageMode == .sessionOnly ? summary.sessionOnly : summary.combined
+        return (modelAggregationMode == .lowest ? totals.lowest : totals.average) ?? -1
     }
-    
-    func calculateTotalUsagePercent(sessionPercent: Double?, extraPercent: Double?) -> Double {
-        switch totalUsageMode {
-        case .sessionOnly:
-            if let session = sessionPercent {
-                return session
-            }
-            return extraPercent ?? -1
-            
-        case .combined:
-            let session = sessionPercent ?? -1
-            let extra = extraPercent ?? -1
-            
-            if session < 0 && extra < 0 {
-                return -1
-            }
-            if session < 0 {
-                return extra
-            }
-            if extra < 0 {
-                return session
-            }
-            return max(session, extra)
-        }
-    }
-    
+
     func aggregateModelPercentages(_ percentages: [Double]) -> Double {
         let validPercentages = percentages.filter { $0 >= 0 }
         guard !validPercentages.isEmpty else { return -1 }
@@ -219,111 +152,14 @@ public struct MenuBarQuotaPair: Equatable, Sendable {
         self.bottom = bottom
     }
 
-    public static func resolve(for provider: QuotaProvider, from models: [QuotaMetric]) -> MenuBarQuotaPair? {
-        switch provider {
-        case .claude:
-            return makePair(
-                from: models,
-                topNames: ["five-hour-session"],
-                topLabelKey: "quota.metric.fiveHour",
-                bottomNames: ["seven-day-weekly", "seven-day-sonnet", "seven-day-opus"],
-                bottomLabelKey: "quota.metric.weekly"
-            )
-        case .codex:
-            let sessionNames: Set<String> = ["codex-session", "codex-spark"]
-            guard let sessionPercentage = minimumPercentage(in: models, named: sessionNames),
-                  sessionPercentage >= 0 else {
-                return nil
-            }
-            return makePair(
-                from: models,
-                topNames: sessionNames,
-                topLabelKey: "quota.metric.session",
-                bottomNames: ["codex-weekly", "codex-spark-weekly"],
-                bottomLabelKey: "quota.metric.weekly"
-            )
-        case .amp:
-            return makePair(
-                from: models,
-                topNames: ["amp-agent-usage"],
-                topLabelKey: "amp.quota.agent",
-                bottomNames: ["amp-orb-usage"],
-                bottomLabelKey: "amp.quota.orb",
-                requiresBoth: true
-            )
-        case .antigravity:
-            return makePair(
-                from: models,
-                topNames: ["antigravity-gemini-session", "antigravity-claude-gpt-session"],
-                topLabelKey: "quota.metric.session",
-                bottomNames: ["antigravity-gemini-weekly", "antigravity-claude-gpt-weekly"],
-                bottomLabelKey: "quota.metric.weekly"
-            )
-        case .devin:
-            return makePair(
-                from: models,
-                topNames: ["devin-daily"],
-                topLabelKey: "quota.metric.daily",
-                bottomNames: ["devin-weekly"],
-                bottomLabelKey: "quota.metric.weekly",
-                requiresBoth: true
-            )
-        case .cursor:
-            guard models.contains(where: {
-                $0.name == "on-demand"
-                    && ($0.limit ?? 0) > 0
-                    && $0.remaining != nil
-                    && $0.percentage >= 0
-            }) else {
-                return nil
-            }
-            return makePair(
-                from: models,
-                topNames: ["plan-usage"],
-                topLabelKey: "quota.metric.planUsage",
-                bottomNames: ["on-demand"],
-                bottomLabelKey: "quota.metric.onDemand",
-                requiresBoth: true
-            )
-        default:
-            return nil
-        }
-    }
-
-    private static func makePair(
-        from models: [QuotaMetric],
-        topNames: Set<String>,
-        topLabelKey: String,
-        bottomNames: Set<String>,
-        bottomLabelKey: String,
-        requiresBoth: Bool = false
-    ) -> MenuBarQuotaPair? {
-        let topPercentage = minimumPercentage(in: models, named: topNames)
-        let bottomPercentage = minimumPercentage(in: models, named: bottomNames)
-
-        if requiresBoth {
-            guard topPercentage != nil, bottomPercentage != nil else { return nil }
-        } else {
-            guard topPercentage != nil || bottomPercentage != nil else { return nil }
-        }
-
+    public static func resolve(from summary: QuotaSummary?) -> MenuBarQuotaPair? {
+        guard let pair = summary?.pair, pair.count == 2 else { return nil }
         return MenuBarQuotaPair(
-            top: MenuBarQuotaMetric(
-                labelKey: topLabelKey,
-                remainingPercentage: topPercentage ?? -1
-            ),
-            bottom: MenuBarQuotaMetric(
-                labelKey: bottomLabelKey,
-                remainingPercentage: bottomPercentage ?? -1
-            )
+            top: .init(labelKey: pair[0].displayName, remainingPercentage: pair[0].remainingPercent ?? -1),
+            bottom: .init(labelKey: pair[1].displayName, remainingPercentage: pair[1].remainingPercent ?? -1)
         )
     }
 
-    private static func minimumPercentage(in models: [QuotaMetric], named names: Set<String>) -> Double? {
-        let matching = models.filter { names.contains($0.name) }
-        guard !matching.isEmpty else { return nil }
-        return matching.lazy.map(\.percentage).filter { $0 >= 0 }.min() ?? -1
-    }
 }
 
 /// Data for displaying a single quota item in menu bar
