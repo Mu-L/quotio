@@ -366,6 +366,13 @@ fn parse(
         return Err(ProviderError::InvalidData);
     }
     let windows = parse_windows(response, now)?;
+    let verified = crate::domain::VerifiedIdentity {
+        subject: identity.user_id.clone(),
+        tenant: Some(identity.org_id.clone()),
+    };
+    if !verified.is_valid() {
+        return Err(ProviderError::InvalidData);
+    }
     Ok(ProviderUsage {
         reset_credits: None,
         antigravity_subscription: None,
@@ -375,7 +382,7 @@ fn parse(
         account_ref: None,
         provider: ProviderId("factory".into()),
         account: AccountIdentity {
-            verified: None,
+            verified: Some(verified),
             subscription_status: None,
             plan: None,
             id: format!("{}:{}", identity.user_id, identity.org_id),
@@ -929,6 +936,11 @@ mod tests {
             let context = http::fixture::context();
             let result = FactoryProvider.fetch_api(&context, &base, &base).await;
             assert_eq!(result.is_err(), changed);
+            if let Ok(usage) = result {
+                let identity = usage.account.verified.unwrap();
+                assert_eq!(identity.subject, "demo-user");
+                assert_eq!(identity.tenant.as_deref(), Some("demo-org"));
+            }
             let requests = task.await.unwrap();
             assert!(requests[0].starts_with("GET /api/cli/whoami "));
             assert!(requests[1].starts_with("GET /api/billing/limits "));
