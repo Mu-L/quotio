@@ -149,6 +149,24 @@ report_matches \
     --glob '!**/App/CompositionRoot.swift' \
     "${app_root}"
 
+# Retained account/quota flows consume the Rust contract. Legacy credential migration
+# and OS bootstrap remain explicit CompositionRoot adapters; retired modules are not wired.
+report_matches \
+    'Production graph constructed a retired provider, credential-file, or proxy adapter' \
+    '\b(FileAuthFileRepository|AgentBinaryInstallationProbe|ProxyManagementScreenModel|AntigravityAccountScreenModel|TunnelScreenModel|AgentSetupScreenModel|WarmupSettingsManager|[[:alnum:]_]*QuotaFetcher)[[:space:]]*\(' \
+    "${app_root}/App/CompositionRoot.swift"
+report_matches \
+    'Account frontend regained direct credential-file access' \
+    '\b(AuthFileRepository|AuthFileDescriptor|readCredential|readAuthFileForImport|scanAllAuthFiles)\b' \
+    "${presentation}/Accounts/AccountsScreenModel.swift"
+report_matches \
+    'Host-backed frontend contains provider endpoints, credential paths, or provider dispatch' \
+    'https?://(api\.github\.com|api\.anthropic\.com|chatgpt\.com|server\.codeium\.com|api\.x\.ai)|[.]codex/auth[.]json|[.]claude/[.]credentials[.]json|switch[[:space:]]+[^ {]*[Pp]rovider[[:space:]]*\{' \
+    "${infrastructure}/QuotioCLI/QuotioCLIBackend.swift" \
+    "${infrastructure}/QuotioCLI/QuotioCLIOAuthAuthorizer.swift" \
+    "${presentation}/Accounts/AccountsScreenModel.swift" \
+    "${presentation}/Quota/QuotaFeatureController.swift"
+
 if (( failure_count > 0 )); then
     printf 'Architecture check failed with %d violation group(s).\n' "${failure_count}" >&2
     exit 1
