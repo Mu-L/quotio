@@ -141,6 +141,32 @@ impl ApiState {
         self.snapshot.write().await.take();
         self.wake.notify_one();
     }
+
+    async fn invalidate_sources(&self, source_ids: &[String]) {
+        let previous = self.generation.fetch_add(1, Ordering::SeqCst);
+        let mut snapshot = self.snapshot.write().await;
+        if let Some((generation, report)) = snapshot.as_mut() {
+            if *generation == previous {
+                report.providers.retain(|usage| {
+                    usage
+                        .account_ref
+                        .as_ref()
+                        .is_none_or(|source| !source_ids.contains(&source.id))
+                });
+                report.failures.retain(|failure| {
+                    failure
+                        .account_ref
+                        .as_ref()
+                        .is_none_or(|source| !source_ids.contains(&source.id))
+                });
+                *generation = previous + 1;
+            } else {
+                // An earlier credential mutation already invalidated this report.
+                *snapshot = None;
+            }
+        }
+        self.wake.notify_one();
+    }
 }
 fn timestamp(now: time::OffsetDateTime) -> String {
     now.format(&time::format_description::well_known::Rfc3339)

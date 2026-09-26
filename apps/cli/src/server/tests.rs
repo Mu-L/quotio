@@ -1122,6 +1122,96 @@ async fn grok_owned_intake_is_explicit_secret_free_and_idempotent() {
 }
 
 #[tokio::test]
+async fn account_edits_preserve_unrelated_quota_and_do_not_promote_invalidated_reports() {
+    let (mut state, dir, id) = fixture().await;
+    Arc::get_mut(&mut state).unwrap().no_saved_accounts = false;
+    let mut other = Provider::Mock
+        .adapter()
+        .fetch(&state.context)
+        .await
+        .unwrap();
+    for window in &mut other.windows {
+        window.fetched_at = state.context.clock.now();
+    }
+    let mut owned = other.clone();
+    owned.provider = ProviderId("amp".into());
+    owned.account.id = "fake-identity".into();
+    owned.account_ref = Some(crate::domain::AccountRef {
+        id: id.clone(),
+        label: "old label".into(),
+        origin: Some(crate::domain::AccountOrigin::Owned),
+    });
+    *state.snapshot.write().await = Some((
+        0,
+        UsageReport {
+            schema_version: 1,
+            generated_at: state.context.clock.now(),
+            providers: vec![owned, other],
+            failures: vec![],
+        },
+    ));
+    let (_, Json(op)) = management::resolved_patch(
+        State(state.clone()),
+        Path(id.clone()),
+        key("rename-preserves-quota"),
+        ApiJson(json!({"user_label":"Renamed"})),
+    )
+    .await
+    .unwrap_or_else(|_| panic!());
+    assert_eq!(done(&state, &op.id).await.status, "completed");
+    let Json(frame) = resolved_snapshot(State(state.clone()))
+        .await
+        .unwrap_or_else(|_| panic!());
+    assert_eq!(
+        frame
+            .accounts
+            .iter()
+            .find(|a| a.provider_id == "amp")
+            .unwrap()
+            .display_name,
+        "Renamed"
+    );
+    assert_eq!(
+        frame
+            .usage
+            .iter()
+            .filter(|u| u.freshness == crate::contract::Freshness::Fresh)
+            .count(),
+        2
+    );
+    let (_, Json(op)) = management::source_patch(
+        State(state.clone()),
+        Path(id.clone()),
+        key("disable-one-source"),
+        ApiJson(json!({"enabled":false})),
+    )
+    .await
+    .unwrap_or_else(|_| panic!());
+    assert_eq!(done(&state, &op.id).await.status, "completed");
+    let snapshot = state.snapshot.read().await;
+    let (generation, report) = snapshot.as_ref().unwrap();
+    assert_eq!(*generation, state.generation.load(Ordering::SeqCst));
+    assert_eq!(report.providers.len(), 1);
+    assert_eq!(report.providers[0].provider.0, "mock");
+    drop(snapshot);
+    let (_, Json(op)) =
+        management::resolved_remove(State(state.clone()), Path(id), key("remove-one-account"))
+            .await
+            .unwrap_or_else(|_| panic!());
+    assert_eq!(done(&state, &op.id).await.status, "completed");
+    let Json(frame) = resolved_snapshot(State(state.clone()))
+        .await
+        .unwrap_or_else(|_| panic!());
+    assert_eq!(frame.accounts.len(), 1);
+    assert_eq!(frame.accounts[0].provider_id, "mock");
+    assert_eq!(frame.usage[0].freshness, crate::contract::Freshness::Fresh);
+    state.generation.fetch_add(1, Ordering::SeqCst);
+    state.invalidate_sources(&[]).await;
+    assert!(state.snapshot.read().await.is_none());
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[tokio::test]
 async fn account_http_services_are_secret_free_idempotent_and_fenced() {
     let (state, dir, id) = fixture().await;
     let Json(account_list) = management::resolved_accounts(State(state.clone()))

@@ -365,20 +365,28 @@ async fn mutate(
                         let id = api::resolved_update_once(vault, id, patch, intent)
                             .await
                             .map_err(|e| account_code(&e))?;
-                        work.invalidate().await;
+                        work.invalidate_sources(&[]).await;
                         Ok(json!({"account_id":id}))
                     }
                     Mutation::ResolvedRemove(id) => {
                         let _guard = crate::accounts::service::mutation_guard(&work.commit_guard)
                             .await
                             .map_err(|e| account_code(&e))?;
+                        let sources = api::resolved_get(vault.clone(), id.clone())
+                            .await
+                            .map_err(|e| account_code(&e))?
+                            .sources
+                            .into_iter()
+                            .map(|source| source.id)
+                            .collect::<Vec<_>>();
                         let id = api::resolved_remove_once(vault, id, intent)
                             .await
                             .map_err(|e| account_code(&e))?;
-                        work.invalidate().await;
+                        work.invalidate_sources(&sources).await;
                         Ok(json!({"account_id":id}))
                     }
                     Mutation::SourceUpdate(id, patch) => {
+                        let source_id = id.clone();
                         let patch = match patch {
                             Some(patch) => Some(
                                 api::prepare_update(vault.clone(), &work.context, &id, patch)
@@ -393,7 +401,7 @@ async fn mutate(
                         let id = api::source_update_once(vault, id, patch, intent)
                             .await
                             .map_err(|e| account_code(&e))?;
-                        work.invalidate().await;
+                        work.invalidate_sources(&[source_id]).await;
                         Ok(json!({"account_id":id}))
                     }
                     Mutation::AuthorizeVault => Ok(json!({})),
