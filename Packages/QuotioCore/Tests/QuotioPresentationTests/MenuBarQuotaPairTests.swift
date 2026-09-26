@@ -5,6 +5,13 @@ import XCTest
 @testable import QuotioPresentation
 
 final class MenuBarQuotaPairTests: XCTestCase {
+    @MainActor
+    func testPlanNamePreservesTheHostLabel() {
+        for name in ["Pro 20x", "Pro 5x", "Custom CBP Plan", "Standard"] {
+            XCTAssertEqual(ProviderQuota(planType: name).planDisplayName, name)
+        }
+    }
+
     func testPairRendersHostValuesAndPreservesUnknown() throws {
         let summary = QuotaSummary(sessionOnly: .init(lowest: 42, average: 65), combined: .init(lowest: 80, average: 90), pair: [
             .init(displayName: "Host session", remainingPercent: 42),

@@ -158,6 +158,31 @@ pub(crate) fn metric_id(window: &crate::domain::QuotaWindow) -> String {
         })
 }
 
+fn plan_display_name(provider: &str, raw: &str) -> String {
+    let normalized = raw.to_ascii_lowercase();
+    let label = match (provider, normalized.as_str()) {
+        ("codex", "pro") => "Pro 20x",
+        ("codex", "prolite" | "pro_lite" | "pro-lite" | "pro lite") => "Pro 5x",
+        ("openrouter", "openrouter-free") => "Free Tier",
+        ("openrouter", "openrouter-pay-as-you-go") => "Pay as You Go",
+        (_, "guest") => "Guest",
+        (_, "free") => "Free",
+        (_, "go") => "Go",
+        (_, "plus") => "Plus",
+        (_, "pro") => "Pro",
+        (_, "free_workspace") => "Free Workspace",
+        (_, "team") => "Team",
+        (_, "business") => "Business",
+        (_, "education") => "Education",
+        (_, "quorum") => "Quorum",
+        (_, "k12") => "K-12",
+        (_, "enterprise") => "Enterprise",
+        (_, "edu") => "Edu",
+        _ => raw,
+    };
+    label.into()
+}
+
 fn observation(
     account_id: &str,
     value: &ProviderUsage,
@@ -184,7 +209,11 @@ fn observation(
         },
         fetched_at: Some(fetched),
         expires_at: expires,
-        plan: value.account.plan.clone(),
+        plan: value
+            .account
+            .plan
+            .as_deref()
+            .map(|plan| plan_display_name(&value.provider.0, plan)),
         subscription_status: value.account.subscription_status.clone(),
         reset_credits: value
             .reset_credits
@@ -380,4 +409,22 @@ pub fn digest(snapshot: &Snapshot) -> Result<String, crate::accounts::AccountErr
     ))
     .map_err(|_| crate::accounts::AccountError::Snapshot)?;
     Ok(crate::cache::fingerprint(&[&content]))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn plan_labels_preserve_provider_specific_and_unknown_names() {
+        for (provider, raw, expected) in [
+            ("codex", "pro", "Pro 20x"),
+            ("codex", "pro_lite", "Pro 5x"),
+            ("claude", "pro", "Pro"),
+            ("openrouter", "openrouter-free", "Free Tier"),
+            ("future", "Custom CBP Plan 2x", "Custom CBP Plan 2x"),
+            ("factory", "standard", "standard"),
+        ] {
+            assert_eq!(plan_display_name(provider, raw), expected);
+        }
+    }
 }

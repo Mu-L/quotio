@@ -246,27 +246,7 @@ public extension ProviderQuota {
         return "Token expires \(formatter.string(from: tokenExpiresAt))"
     }
 
-    var planDisplayName: String? {
-        guard let plan = planType?.lowercased() else { return nil }
-        return switch plan {
-        case "openrouter-free": "openrouter.plan.freeTier".localizedStatic()
-        case "openrouter-pay-as-you-go": "openrouter.plan.payAsYouGo".localizedStatic()
-        case "guest": "Guest"
-        case "free": "Free"
-        case "go": "Go"
-        case "plus": "Plus"
-        case "pro": "Pro"
-        case "free_workspace": "Free Workspace"
-        case "team": "Team"
-        case "business": "Business"
-        case "education": "Education"
-        case "quorum": "Quorum"
-        case "k12": "K-12"
-        case "enterprise": "Enterprise"
-        case "edu": "Edu"
-        default: planType?.capitalized
-        }
-    }
+    var planDisplayName: String? { planType }
 
     var groupedModels: [GroupedModelQuota] {
         let grouped = Dictionary(grouping: models.compactMap { model in

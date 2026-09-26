@@ -687,36 +687,30 @@ private struct PlanBadgeV2Compact: View {
 
         // Check for Pro variants
         if lowercased.contains("pro") {
-            return ("Pro", .purple)
+            return (planName, .purple)
         }
 
         // Check for Plus
         if lowercased.contains("plus") {
-            return ("Plus", .blue)
+            return (planName, .blue)
         }
 
         // Check for Team
         if lowercased.contains("team") {
-            return ("Team", .orange)
+            return (planName, .orange)
         }
 
         // Check for Enterprise
         if lowercased.contains("enterprise") {
-            return ("Enterprise", .red)
+            return (planName, .red)
         }
 
         // Free/Standard
         if lowercased.contains("free") || lowercased.contains("standard") {
-            return ("Free", .secondary)
+            return (planName, .secondary)
         }
 
-        // Default: use display name
-        let displayName = planName
-            .replacingOccurrences(of: "_", with: " ")
-            .split(separator: " ")
-            .map { $0.prefix(1).uppercased() + $0.dropFirst().lowercased() }
-            .joined(separator: " ")
-        return (displayName, .secondary)
+        return (planName, .secondary)
     }
 
     var body: some View {
@@ -762,13 +756,7 @@ private struct PlanBadgeV2: View {
         }
     }
 
-    private var displayName: String {
-        planName
-            .replacingOccurrences(of: "_", with: " ")
-            .split(separator: " ")
-            .map { $0.prefix(1).uppercased() + $0.dropFirst().lowercased() }
-            .joined(separator: " ")
-    }
+    private var displayName: String { planName }
 
     var body: some View {
         HStack(spacing: 4) {
@@ -797,18 +785,18 @@ private struct SubscriptionBadgeV2: View {
 
         // Check for Ultra tier (highest priority)
         if tierId.contains("ultra") || tierName.contains("ultra") {
-            return ("Ultra", .orange)
+            return (info.tierDisplayName, .orange)
         }
 
         // Check for Pro tier
         if tierId.contains("pro") || tierName.contains("pro") {
-            return ("Pro", .purple)
+            return (info.tierDisplayName, .purple)
         }
 
         // Check for Free/Standard tier
         if tierId.contains("standard") || tierId.contains("free") ||
            tierName.contains("standard") || tierName.contains("free") {
-            return ("Free", .secondary)
+            return (info.tierDisplayName, .secondary)
         }
 
         // Fallback: use the display name from API

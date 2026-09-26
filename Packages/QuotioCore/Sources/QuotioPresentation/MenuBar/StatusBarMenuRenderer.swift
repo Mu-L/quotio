@@ -675,92 +675,34 @@ private struct MenuAccountCardView: View {
         email.masked(if: settings.hideSensitiveInfo)
     }
     
-    // Modern Tier Badge Config
     private var tierConfig: (name: String, bgColor: Color, textColor: Color)? {
-        if let info = subscriptionInfo {
-            let tierId = info.tierId.lowercased()
-            let tierName = info.tierDisplayName.lowercased()
-            
-            if tierId.contains("ultra") || tierName.contains("ultra") {
-                return ("Ultra", .orange.opacity(0.15), .orange)
-            }
-            if tierId.contains("pro") || tierName.contains("pro") {
-                return ("Pro", .blue.opacity(0.15), .blue)
-            }
-            if tierId.contains("standard") || tierId.contains("free") ||
-               tierName.contains("standard") || tierName.contains("free") {
-                return ("Free", .secondary.opacity(0.1), .secondary)
-            }
-            return (info.tierDisplayName, .secondary.opacity(0.1), .secondary)
-        }
-        
-        if provider == .codex, let planName = codexPlanDisplayName(data.planType) {
-            let config = planConfig(for: planName)
-            return (planName, config.bgColor, config.textColor)
-        }
-
-        guard let planName = data.planDisplayName else { return nil }
-        return planConfig(for: planName)
+        guard let name = data.planType ?? subscriptionInfo?.tierDisplayName else { return nil }
+        return planConfig(for: name)
     }
 
-    private func codexPlanDisplayName(_ raw: String?) -> String? {
-        guard let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
-            return nil
-        }
-
-        let exact = [
-            "pro": "Pro 20x",
-            "prolite": "Pro 5x",
-            "pro_lite": "Pro 5x",
-            "pro-lite": "Pro 5x",
-            "pro lite": "Pro 5x"
-        ]
-        if let value = exact[trimmed.lowercased()] {
-            return value
-        }
-
-        let cleaned = trimmed
-            .replacingOccurrences(of: #"(?i)\b(claude|codex|account|plan)\b"#, with: " ", options: .regularExpression)
-            .replacingOccurrences(of: "_", with: " ")
-            .replacingOccurrences(of: "-", with: " ")
-            .split(separator: " ")
-            .joined(separator: " ")
-        if let value = exact[cleaned.lowercased()] {
-            return value
-        }
-
-        let display = cleaned.split(separator: " ").map { word -> String in
-            let lower = word.lowercased()
-            if lower == "cbp" || lower == "k12" { return lower.uppercased() }
-            if word == word.uppercased(), word.contains(where: { $0.isLetter }) { return String(word) }
-            return word.prefix(1).uppercased() + word.dropFirst()
-        }.joined(separator: " ")
-        return display.isEmpty ? trimmed : display
-    }
-    
     private func planConfig(for planName: String) -> (name: String, bgColor: Color, textColor: Color) {
         let lowercased = planName.lowercased()
         
         if lowercased.contains("ultra") {
-            return ("Ultra", .orange.opacity(0.15), .orange)
+            return (planName, .orange.opacity(0.15), .orange)
         }
         if lowercased.contains("pro") {
-            return ("Pro", .blue.opacity(0.15), .blue)
+            return (planName, .blue.opacity(0.15), .blue)
         }
         if lowercased.contains("plus") {
-            return ("Plus", .blue.opacity(0.15), .blue)
+            return (planName, .blue.opacity(0.15), .blue)
         }
         if lowercased.contains("team") {
-            return ("Team", .orange.opacity(0.15), .orange)
+            return (planName, .orange.opacity(0.15), .orange)
         }
         if lowercased.contains("enterprise") {
-            return ("Enterprise", .red.opacity(0.15), .red)
+            return (planName, .red.opacity(0.15), .red)
         }
         if lowercased.contains("business") {
-            return ("Business", .red.opacity(0.15), .red)
+            return (planName, .red.opacity(0.15), .red)
         }
         if lowercased.contains("free") || lowercased.contains("standard") {
-            return ("Free", .secondary.opacity(0.1), .secondary)
+            return (planName, .secondary.opacity(0.1), .secondary)
         }
         
         return (planName, .secondary.opacity(0.1), .secondary)
