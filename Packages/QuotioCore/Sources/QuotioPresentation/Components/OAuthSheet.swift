@@ -1,18 +1,12 @@
-import AppKit
 import QuotioApplication
 import QuotioDomain
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct OAuthSheet: View {
-    @Environment(ProxyManagementScreenModel.self) private var proxyManagement
     @Environment(QuotaFeatureController.self) private var viewModel
-    @Environment(OperatingModeManager.self) private var modeManager
     let provider: QuotaProvider
     let onDismiss: () -> Void
 
-    @State private var hasStartedAuth = false
-    @State private var selectedKiroMethod: OAuthAuthorizationMethod = .kiroImport
     @State private var manualOAuthCode = ""
 
     private var isPolling: Bool {
@@ -27,9 +21,8 @@ struct OAuthSheet: View {
         viewModel.oauthState?.status == .error
     }
 
-    private var kiroAuthMethods: [OAuthAuthorizationMethod] {
-        if modeManager.isMonitorMode { return [.kiroAWSDeviceCode] }
-        return [.kiroImport, .kiroGoogle, .kiroAWSBrowser, .kiroAWSDeviceCode]
+    private var providerName: String {
+        viewModel.providers.first { $0.id == provider }?.displayName ?? provider.displayName
     }
 
     var body: some View {
@@ -37,46 +30,13 @@ struct OAuthSheet: View {
             ProviderIcon(provider: provider, size: 64)
 
             VStack(spacing: 8) {
-                Text("oauth.connect".localized() + " " + provider.displayName)
+                Text("oauth.connect".localized() + " " + providerName)
                     .font(.title2)
                     .fontWeight(.bold)
 
-                Text("oauth.authenticateWith".localized() + " " + provider.displayName)
+                Text("oauth.authenticateWith".localized() + " " + providerName)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-            }
-
-            if provider == .kiro {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("oauth.authMethod".localized())
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                    Picker("", selection: $selectedKiroMethod) {
-                        ForEach(kiroAuthMethods, id: \.self) { method in
-                            Text(method.displayName).tag(method)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-
-
-                }
-                .frame(maxWidth: 320)
-            }
-
-            if !modeManager.isMonitorMode,
-               proxyManagement.isLegacyAuthWarningNeeded(for: provider) {
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                    Text(proxyManagement.upstreamCompatibilityWarning)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: 320, alignment: .leading)
-                .padding(12)
-                .background(Color.orange.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
             }
 
             if let state = viewModel.oauthState, state.provider == provider {
@@ -84,7 +44,7 @@ struct OAuthSheet: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
 
-            if modeManager.isMonitorMode, viewModel.oauthState?.requiresManualCode == true {
+            if viewModel.oauthState?.requiresManualCode == true {
                 HStack(spacing: 8) {
                     TextField("oauth.authorizationCode".localized(), text: $manualOAuthCode)
                         .textFieldStyle(.roundedBorder)
@@ -106,12 +66,8 @@ struct OAuthSheet: View {
 
                 if isError {
                     Button {
-                        hasStartedAuth = false
                         Task {
-                            await viewModel.startOAuth(
-                                for: provider,
-                                method: provider == .kiro ? selectedKiroMethod : .providerDefault
-                            )
+                            await viewModel.startOAuth(for: provider)
                         }
                     } label: {
                         Label("oauth.retry".localized(), systemImage: "arrow.clockwise")
@@ -120,12 +76,8 @@ struct OAuthSheet: View {
                     .tint(.orange)
                 } else if !isSuccess {
                     Button {
-                        hasStartedAuth = true
                         Task {
-                            await viewModel.startOAuth(
-                                for: provider,
-                                method: provider == .kiro ? selectedKiroMethod : .providerDefault
-                            )
+                            await viewModel.startOAuth(for: provider)
                         }
                     } label: {
                         if isPolling {
@@ -152,18 +104,6 @@ struct OAuthSheet: View {
                     onDismiss()
                 }
             }
-        }
-    }
-}
-
-private extension OAuthAuthorizationMethod {
-    var displayName: String {
-        switch self {
-        case .providerDefault: "Default"
-        case .kiroGoogle: "Google OAuth"
-        case .kiroAWSDeviceCode: "AWS Builder ID (Device Code)"
-        case .kiroAWSBrowser: "AWS Builder ID (Browser)"
-        case .kiroImport: "Import from Kiro IDE"
         }
     }
 }
@@ -248,7 +188,7 @@ private struct OAuthStatusView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
-                    } else if (provider == .copilot || provider == .kiro), let message = error {
+                    } else if let message = error {
                         Text(message)
                             .font(.caption)
                             .foregroundStyle(.primary)
