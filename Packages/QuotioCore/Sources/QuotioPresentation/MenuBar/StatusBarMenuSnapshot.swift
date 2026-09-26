@@ -13,6 +13,7 @@ struct StatusBarMenuAccountSnapshot: Equatable, Sendable {
 }
 
 struct StatusBarMenuProviderSnapshot: Equatable, Sendable {
+    let displayName: String
     let provider: QuotaProvider
     let accounts: [StatusBarMenuAccountSnapshot]
     let isRefreshing: Bool
@@ -76,7 +77,8 @@ public enum StatusBarMenuSnapshotMapper {
             } ? provider : nil
         })
 
-        let providers = availableProviders.sorted { $0.displayName < $1.displayName }.map { provider in
+        func displayName(_ provider: QuotaProvider) -> String { quota.providerNames[provider] ?? provider.displayName }
+        let providers = availableProviders.sorted { displayName($0) < displayName($1) }.map { provider in
             let accounts = orderedAccounts(
                 (quota.quotas[provider] ?? [:]).filter { accountKey, _ in
                     !disabledAccounts.contains("\(provider.rawValue):\(accountKey.lowercased())")
@@ -97,10 +99,11 @@ public enum StatusBarMenuSnapshotMapper {
                 )
             }
             return StatusBarMenuProviderSnapshot(
+                displayName: displayName(provider),
                 provider: provider,
                 accounts: accounts,
                 isRefreshing: quota.refreshingProviders.contains(provider),
-                supportsScopedRefresh: provider.supportsQuotaOnlyMode
+                supportsScopedRefresh: true
             )
         }
 

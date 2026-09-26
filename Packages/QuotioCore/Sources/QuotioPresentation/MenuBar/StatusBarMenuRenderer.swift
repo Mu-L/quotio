@@ -118,7 +118,7 @@ final class StatusBarMenuRenderer {
         let providers = snapshot.providers
         if !providers.isEmpty {
             let pickerView = MenuProviderPickerView(
-                providers: providers.map(\.provider),
+                providers: providers,
                 controller: providerFilterController
             )
             menu.addItem(viewItem(for: pickerView))
@@ -127,6 +127,7 @@ final class StatusBarMenuRenderer {
             for (index, providerSnapshot) in providers.enumerated() {
                 let headerView = MenuProviderSectionHeader(
                     provider: providerSnapshot.provider,
+                    displayName: providerSnapshot.displayName,
                     isRefreshing: providerSnapshot.isRefreshing,
                     supportsScopedRefresh: providerSnapshot.supportsScopedRefresh,
                     onRefresh: {
@@ -354,6 +355,7 @@ private struct MenuHeaderView: View {
 
 private struct MenuProviderSectionHeader: View {
     let provider: QuotaProvider
+    let displayName: String
     let isRefreshing: Bool
     let supportsScopedRefresh: Bool
     let onRefresh: () -> Void
@@ -361,7 +363,7 @@ private struct MenuProviderSectionHeader: View {
     var body: some View {
         HStack(spacing: 6) {
             ProviderIconMono(provider: provider, size: 14)
-            Text(provider.displayName)
+            Text(displayName)
                 .font(.system(size: 11, weight: .semibold, design: .rounded))
                 .foregroundStyle(.secondary)
             Spacer()
@@ -389,7 +391,7 @@ private struct MenuProviderSectionHeader: View {
 // MARK: - Provider Picker View (separate from accounts list)
 
 private struct MenuProviderPickerView: View {
-    let providers: [QuotaProvider]
+    let providers: [StatusBarMenuProviderSnapshot]
     let controller: StatusBarProviderFilterController
     
     var body: some View {
@@ -399,12 +401,13 @@ private struct MenuProviderPickerView: View {
                 controller.select(nil)
             }
 
-            ForEach(providers) { provider in
+            ForEach(providers, id: \.provider) { item in
                 ProviderFilterButton(
-                    provider: provider,
-                    isSelected: controller.selectedProvider == provider
+                    provider: item.provider,
+                    displayName: item.displayName,
+                    isSelected: controller.selectedProvider == item.provider
                 ) {
-                    controller.select(provider)
+                    controller.select(item.provider)
                 }
             }
         }
@@ -450,6 +453,7 @@ private struct AllProviderFilterButton: View {
 
 private struct ProviderFilterButton: View {
     let provider: QuotaProvider
+    let displayName: String
     let isSelected: Bool
     let action: () -> Void
     
@@ -459,7 +463,7 @@ private struct ProviderFilterButton: View {
                 ProviderIconMono(provider: provider, size: 14)
                     .opacity(isSelected ? 1.0 : 0.7)
                 
-                Text(provider.shortName)
+                Text(displayName)
                     .font(.system(size: 11, weight: isSelected ? .semibold : .medium, design: .rounded))
             }
             .foregroundStyle(isSelected ? .primary : .secondary)
@@ -2273,32 +2277,6 @@ private struct MenuViewMoreAccountsView: View {
 }
 
 // MARK: - QuotaProvider Extension
-
-private extension QuotaProvider {
-    var shortName: String {
-        switch self {
-        case .claude: return "Claude"
-        case .codex: return "Codex"
-        case .cursor: return "Cursor"
-        case .copilot: return "Copilot"
-        case .trae: return "Trae"
-        case .antigravity: return "Antigravity"
-        case .qwen: return "Qwen"
-        case .iflow: return "iFlow"
-        case .vertex: return "Vertex"
-        case .kiro: return "Kiro"
-        case .factoryDroid: return "Factory Droid"
-        case .devin: return "Devin"
-        case .grok: return "Grok"
-        case .openRouter: return "OpenRouter"
-        case .amp: return "Amp"
-        case .glm: return "Z.ai"
-        case .warp: return "Warp"
-        case .clinePass: return "ClinePass"
-        default: return displayName
-        }
-    }
-}
 
 // MARK: - Menu Actions View
 

@@ -57,7 +57,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
     public func disconnect() {
         connectionID = UUID()
         client = nil
-        markFailure(for: Set(Self.supportedProviders))
+        markFailure(for: knownProviders)
     }
 
     public func states() -> AsyncStream<QuotaSnapshot> {
@@ -439,12 +439,19 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
         let catalog: QuotioHostProviders = try await client.request("v2/providers")
         guard epoch == connectionID else { throw QuotioHostClientError.disconnected }
         guard catalog.schemaVersion == 2 else { throw QuotioHostClientError.incompatible }
-        return try catalog.providers.map { value in
+        let providers = try catalog.providers.map { value in
             guard let id = QuotaProvider(rawValue: value.id) else { throw QuotioHostClientError.incompatible }
             return MonitoringProvider(id: id, displayName: value.displayName,
                 actions: Set(value.actions.filter(\.available).map(\.kind)),
                 inputs: value.capabilities.settings.map { .init(name: $0.name, fieldPath: $0.fieldPath, required: $0.required, values: $0.values) })
         }
+        guard Set(providers.map(\.id)).count == providers.count else { throw QuotioHostClientError.incompatible }
+        let names = Dictionary(uniqueKeysWithValues: providers.map { ($0.id, $0.displayName) })
+        if names != snapshot.providerNames {
+            snapshot.providerNames = names
+            publish()
+        }
+        return providers
     }
 
     public func monitoringSettings() async throws -> MonitoringSettings {
@@ -528,7 +535,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
         importedAccounts: Set<String>? = nil
     ) async {
         guard let client else {
-            markFailure(for: refreshedProviders ?? Set(Self.supportedProviders))
+            markFailure(for: refreshedProviders ?? knownProviders)
             return
         }
         let requestConnection = connectionID
@@ -546,6 +553,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
             let refreshing = snapshot.refreshingProviders
             var next = QuotioHostPresentationMapper.resolvedSnapshot(frame, bundle: localization.bundle, locale: localization.locale)
             next.refreshingProviders = refreshing.subtracting(refreshedProviders ?? [])
+            next.providerNames = snapshot.providerNames
             let accounts = frame.accounts.compactMap(Self.resolvedAccount)
             let changed = snapshot != next || reportedAccounts != accounts
             snapshot = next
@@ -557,7 +565,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
             guard activeMode == mode, connectionID == requestConnection, snapshotRequestID == requestID else { return }
             if Self.failureCategory(error) == "account_storage" { storageRequiresAuthorization = true }
             await logger?.write(.warning, message: "Quota snapshot failed=\(Self.failureCategory(error))")
-            markFailure(for: refreshedProviders ?? Set(Self.supportedProviders))
+            markFailure(for: refreshedProviders ?? knownProviders)
         }
     }
 
@@ -612,7 +620,7 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
 
     private func disabledProxyAccountIDs() -> Set<String> {
         Set((authFileState?.disabledAuthFileNames() ?? []).flatMap { name in
-            Self.supportedProviders.map(\.rawValue).map {
+            knownProviders.map(\.rawValue).map {
                 Self.sourceID(["cli_proxy_auth_file", $0, name])
             }
         })
@@ -711,10 +719,10 @@ public actor QuotioCLIBackend: AccountManaging, QuotaCoordinating, MonitoringSet
         }
     }
 
-    private static let supportedProviders: [QuotaProvider] = [
-        .claude, .codex, .antigravity, .kiro, .copilot, .cursor, .factoryDroid,
-        .devin, .grok, .openRouter, .amp, .glm, .vertex, .warp, .clinePass,
-    ]
+    private var knownProviders: Set<QuotaProvider> {
+        Set(snapshot.providerNames.keys).union(snapshot.quotas.keys)
+    }
+
 }
 
 private extension JSONEncoder {

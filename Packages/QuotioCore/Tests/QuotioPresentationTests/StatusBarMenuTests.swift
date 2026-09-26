@@ -7,6 +7,18 @@ import XCTest
 
 @MainActor
 final class StatusBarMenuSnapshotMapperTests: XCTestCase {
+    func testMenuUsesHostProviderNamesWithoutAClientProviderSwitch() throws {
+        let provider = try XCTUnwrap(QuotaProvider(rawValue: "future-provider"))
+        let snapshot = StatusBarMenuSnapshotMapper.makeSnapshot(
+            mode: .monitor, proxyPort: 8317, isProxyRunning: false,
+            tunnel: CloudflareTunnelSnapshot(), monitorAccounts: [],
+            quota: QuotaSnapshot(providerNames: [provider: "Host Provider Name"], quotas: [provider: ["account": ProviderQuota()]]),
+            installedAgents: [], activeAntigravityEmail: nil,
+            menuBarPreferences: MenuBarPreferences(), appearanceMode: .system, language: .english
+        )
+        XCTAssertEqual(snapshot.providers.first?.displayName, "Host Provider Name")
+    }
+
     func testDisabledProviderIsHiddenDespiteCachedQuota() {
         let snapshot = StatusBarMenuSnapshotMapper.makeSnapshot(
             mode: .monitor, proxyPort: 8317, isProxyRunning: false,

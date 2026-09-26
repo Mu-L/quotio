@@ -141,6 +141,12 @@ final class QuotioCLIBackendTests: XCTestCase {
         XCTAssertEqual(providers[0].actions, ["add_api_key"])
         XCTAssertEqual(providers[0].inputs.first?.fieldPath, "settings.organization")
         XCTAssertEqual(providers[0].inputs.first?.required, true)
+        QuotioCLIURLProtocol.enqueue(try hostFixture())
+        let snapshot = await backend.bootstrap(mode: .monitor)
+        XCTAssertEqual(snapshot.providerNames[providers[0].id], "Future Provider")
+        await backend.disconnect()
+        let disconnected = await backend.snapshot
+        XCTAssertEqual(disconnected.issues[providers[0].id]?.kind, .failed)
     }
 
     func testMonitoringSettingsAndDefaultScopesAreOwnedByHost() async throws {
