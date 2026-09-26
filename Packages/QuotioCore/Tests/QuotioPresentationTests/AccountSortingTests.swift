@@ -74,94 +74,20 @@ final class AccountSortingTests: XCTestCase {
         XCTAssertTrue(result.isEmpty)
     }
 
-    // MARK: - Menu bar account list
-
-    private func quota(displayName: String?) -> ProviderQuota {
-        ProviderQuota(accountDisplayName: displayName)
-    }
-
-    func testMenuBarFloatsActiveAntigravityAccountToTop() {
+    func testMenuBarSortsHostNamesWithoutMergingDuplicateDisplayNames() {
         let quotas: [String: ProviderQuota] = [
-            "alpha@example.com": quota(displayName: "alpha@example.com"),
-            "bravo@example.com": quota(displayName: "bravo@example.com"),
-            "charlie@example.com": quota(displayName: "charlie@example.com")
+            "source-b": ProviderQuota(accountDisplayName: "Zulu"),
+            "source-a": ProviderQuota(accountDisplayName: "Alpha"),
+            "source-c": ProviderQuota(accountDisplayName: "Alpha"),
         ]
-
-        let ordered = StatusBarMenuSnapshotMapper.orderedAccounts(
-            quotas,
-            provider: .antigravity,
-            activeAntigravityEmail: "charlie@example.com"
-        )
-
-        XCTAssertEqual(ordered.map(\.email), [
-            "charlie@example.com",
-            "alpha@example.com",
-            "bravo@example.com"
-        ])
+        let ordered = StatusBarMenuSnapshotMapper.orderedAccounts(quotas)
+        XCTAssertEqual(ordered.map(\.email), ["Alpha", "Alpha", "Zulu"])
+        XCTAssertEqual(ordered.map(\.accountKey), ["source-a", "source-c", "source-b"])
     }
 
-    func testMenuBarKeepsAlphabeticalOrderWhenNoAntigravityAccountIsActive() {
-        let quotas: [String: ProviderQuota] = [
-            "charlie@example.com": quota(displayName: "charlie@example.com"),
-            "alpha@example.com": quota(displayName: "alpha@example.com"),
-            "bravo@example.com": quota(displayName: "bravo@example.com")
-        ]
-
-        let ordered = StatusBarMenuSnapshotMapper.orderedAccounts(
-            quotas,
-            provider: .antigravity,
-            activeAntigravityEmail: nil
-        )
-
-        XCTAssertEqual(ordered.map(\.email), [
-            "alpha@example.com",
-            "bravo@example.com",
-            "charlie@example.com"
-        ])
-    }
-
-    func testMenuBarLeavesNonAntigravityProvidersAlphabetical() {
-        let quotas: [String: ProviderQuota] = [
-            "alpha@example.com": quota(displayName: "alpha@example.com"),
-            "charlie@example.com": quota(displayName: "charlie@example.com")
-        ]
-
-        // The same email may exist on another provider; the Antigravity "in use in the
-        // IDE" signal must not reorder that provider's list.
-        let ordered = StatusBarMenuSnapshotMapper.orderedAccounts(
-            quotas,
-            provider: .claude,
-            activeAntigravityEmail: "charlie@example.com"
-        )
-
-        XCTAssertEqual(ordered.map(\.email), [
-            "alpha@example.com",
-            "charlie@example.com"
-        ])
-    }
-
-    func testMenuBarUsesAccountKeyFallbackForActiveCheck() {
-        let quotas: [String: ProviderQuota] = [
-            "alpha@example.com": quota(displayName: nil),
-            "zulu@example.com": quota(displayName: nil)
-        ]
-
-        let ordered = StatusBarMenuSnapshotMapper.orderedAccounts(
-            quotas,
-            provider: .antigravity,
-            activeAntigravityEmail: "zulu@example.com"
-        )
-
-        XCTAssertEqual(ordered.map(\.email), ["zulu@example.com", "alpha@example.com"])
-        XCTAssertEqual(ordered.map(\.accountKey), ["zulu@example.com", "alpha@example.com"])
-    }
-
-    func testMenuBarEmptyQuotasProduceNoRows() {
-        let ordered = StatusBarMenuSnapshotMapper.orderedAccounts(
-            [:],
-            provider: .antigravity,
-            activeAntigravityEmail: "active@example.com"
-        )
-        XCTAssertTrue(ordered.isEmpty)
+    func testMenuBarUsesOpaqueKeyOnlyWhenNoHostNameIsAvailable() {
+        let ordered = StatusBarMenuSnapshotMapper.orderedAccounts(["source-id": ProviderQuota()])
+        XCTAssertEqual(ordered.first?.email, "source-id")
+        XCTAssertTrue(StatusBarMenuSnapshotMapper.orderedAccounts([:]).isEmpty)
     }
 }

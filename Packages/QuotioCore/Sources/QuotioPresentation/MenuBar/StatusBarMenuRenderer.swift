@@ -108,12 +108,6 @@ final class StatusBarMenuRenderer {
         menu.addItem(buildHeaderItem())
         menu.addItem(NSMenuItem.separator())
 
-        // 2. Network info (Proxy + Tunnel) - Local Proxy Mode only
-        if snapshot.isProxyInstalled {
-            menu.addItem(buildNetworkInfoItem())
-            menu.addItem(NSMenuItem.separator())
-        }
-
         // 3. Provider picker and account groups
         let providers = snapshot.providers
         if !providers.isEmpty {
@@ -193,30 +187,7 @@ final class StatusBarMenuRenderer {
 
     // MARK: - Network Info Item (Proxy + Tunnel combined)
 
-    private func buildNetworkInfoItem() -> NSMenuItem {
-        let networkView = MenuNetworkInfoView(
-            port: String(snapshot.proxyPort),
-            isProxyRunning: snapshot.isProxyRunning,
-            tunnelStatus: snapshot.tunnel.status,
-            tunnelURL: snapshot.tunnel.publicURL,
-            onProxyToggle: {
-                self.commands.dispatch(.toggleProxy)
-            },
-            onCopyProxyURL: {
-                self.commands.dispatch(.copyProxyURL("http://127.0.0.1:\(self.snapshot.proxyPort)"))
-            },
-            onTunnelToggle: {
-                self.commands.dispatch(.toggleTunnel(port: self.snapshot.proxyPort))
-            },
-            onCopyTunnelURL: {
-                guard let url = self.snapshot.tunnel.publicURL else { return }
-                self.commands.dispatch(.copyTunnelURL(url))
-            }
-        )
-        return viewItem(for: networkView)
-    }
-
-    // MARK: - Account Card Item (with submenu for Antigravity)
+    // MARK: - Account Card Item
 
     private func buildAccountCardItem(_ account: StatusBarMenuAccountSnapshot) -> NSMenuItem {
         let provider = account.id.provider
@@ -226,16 +197,12 @@ final class StatusBarMenuRenderer {
             data: account.quota,
             provider: provider,
             subscriptionInfo: account.subscription,
-            isActiveInIDE: account.isActiveInIDE,
             isRefreshing: account.isRefreshing,
             canRefresh: !account.isRefreshBlocked,
             settings: snapshot.displaySettings,
             onRefresh: {
                 self.commands.dispatch(.refreshAccount(account.id))
-            },
-            onUseAccount: provider == .antigravity && !account.isActiveInIDE ? {
-                self.commands.dispatch(.useAntigravityAccount(email: account.email))
-            } : nil
+            }
         )
 
         let item = viewItem(for: cardView)
@@ -507,152 +474,6 @@ private struct ProviderIconMono: View {
     }
 }
 
-// MARK: - Network Info View (Proxy + Tunnel Combined)
-
-private struct MenuNetworkInfoView: View {
-    let port: String
-    let isProxyRunning: Bool
-    let tunnelStatus: CloudflareTunnelStatus
-    let tunnelURL: String?
-    let onProxyToggle: () -> Void
-    let onCopyProxyURL: () -> Void
-    let onTunnelToggle: () -> Void
-    let onCopyTunnelURL: () -> Void
-
-    private var proxyURL: String { "http://127.0.0.1:" + port }
-
-    @State private var didCopyProxy = false
-    @State private var didCopyTunnel = false
-
-    private enum CopyTarget {
-        case proxy
-        case tunnel
-    }
-
-    var body: some View {
-        VStack(spacing: 8) {
-            // Proxy Row
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(isProxyRunning ? Color.green : Color.gray)
-                    .frame(width: 6, height: 6)
-
-                Text("providers.source.proxy".localized())
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.secondary)
-
-                if isProxyRunning {
-                    Text(proxyURL)
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-
-                    copyButton(
-                        isCopied: didCopyProxy,
-                        helpText: "action.copy".localized()
-                    ) {
-                        onCopyProxyURL()
-                        triggerCopyState(.proxy)
-                    }
-                }
-
-                Spacer()
-
-                Button(action: onProxyToggle) {
-                    Image(systemName: isProxyRunning ? "stop.fill" : "play.fill")
-                        .font(.system(size: 9))
-                        .foregroundStyle(isProxyRunning ? .red : .green)
-                }
-                .buttonStyle(.plain)
-            }
-
-            // Tunnel Row (only show when proxy is running)
-            if isProxyRunning {
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(tunnelStatus == .active ? Color.blue : Color.gray)
-                        .frame(width: 6, height: 6)
-
-                    Text(tunnelStatus == .active ? "tunnel.action.stop".localized() : "tunnel.action.start".localized())
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.secondary)
-
-                    if tunnelStatus == .active, let url = tunnelURL {
-                        Text(url.replacingOccurrences(of: "https://", with: ""))
-                            .font(.system(size: 9, design: .monospaced))
-                            .foregroundStyle(.blue)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-
-                        copyButton(
-                            isCopied: didCopyTunnel,
-                            helpText: "action.copy".localized()
-                        ) {
-                            onCopyTunnelURL()
-                            triggerCopyState(.tunnel)
-                        }
-                    } else if tunnelStatus == .starting {
-                        Text("status.starting".localized())
-                            .font(.system(size: 9))
-                            .foregroundStyle(.tertiary)
-                    }
-
-                    Spacer()
-
-                    Button(action: onTunnelToggle) {
-                        Image(systemName: tunnelStatus == .active || tunnelStatus == .starting ? "stop.fill" : "play.fill")
-                            .font(.system(size: 9))
-                            .foregroundStyle(tunnelStatus == .active ? .red : .blue)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(tunnelStatus == .starting || tunnelStatus == .stopping)
-                }
-            }
-        }
-        .padding(10)
-        .background(Color.secondary.opacity(0.05))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .padding(.horizontal, 12)
-        .padding(.vertical, 4)
-    }
-
-    private func triggerCopyState(_ target: CopyTarget) {
-        setCopied(target, value: true)
-
-        Task {
-            try? await Task.sleep(nanoseconds: 1_200_000_000)
-            await MainActor.run {
-                setCopied(target, value: false)
-            }
-        }
-    }
-
-    private func setCopied(_ target: CopyTarget, value: Bool) {
-        withAnimation(.easeInOut(duration: 0.2)) {
-            switch target {
-            case .proxy:
-                didCopyProxy = value
-            case .tunnel:
-                didCopyTunnel = value
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func copyButton(isCopied: Bool, helpText: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: isCopied ? "checkmark.circle.fill" : "doc.on.doc")
-                .font(.system(size: 10))
-                .foregroundStyle(isCopied ? .green : .secondary)
-                .scaleEffect(isCopied ? 1.05 : 1)
-                .animation(.easeInOut(duration: 0.2), value: isCopied)
-        }
-        .buttonStyle(.plain)
-        .help(helpText)
-    }
-}
-
 // MARK: Account Card View
 
 private struct MenuAccountCardView: View {
@@ -661,16 +482,12 @@ private struct MenuAccountCardView: View {
     let data: ProviderQuota
     let provider: QuotaProvider
     let subscriptionInfo: QuotaSubscriptionInfo?
-    let isActiveInIDE: Bool
     let isRefreshing: Bool
     let canRefresh: Bool
     let settings: StatusBarMenuDisplaySettings
     let onRefresh: () -> Void
-    let onUseAccount: (() -> Void)?
 
     @State private var isHovered = false
-    @State private var isUseHovered = false
-    @State private var isUsingAccount = false
     
     private var displayEmail: String {
         email.masked(if: settings.hideSensitiveInfo)
@@ -771,53 +588,9 @@ private struct MenuAccountCardView: View {
                     .clipShape(Capsule())
             }
             
-            // Active/Use Badge
-            if isActiveInIDE {
-                Text("antigravity.active".localized())
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
-                    .foregroundStyle(.green)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Color.green.opacity(0.12))
-                    .overlay(
-                        Capsule()
-                            .strokeBorder(Color.green.opacity(0.25), lineWidth: 1)
-                    )
-                    .clipShape(Capsule())
-            } else if let onUse = onUseAccount {
-                Button {
-                    isUsingAccount = true
-                    Task { @MainActor in
-                        onUse()
-                        try? await Task.sleep(nanoseconds: 650_000_000)
-                        isUsingAccount = false
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        if isUsingAccount {
-                            ProgressView()
-                                .controlSize(.mini)
-                        }
-                        Text("antigravity.useInIDE".localized() + " " + "→".localized())
-                            .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    }
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(isUseHovered ? Color.secondary.opacity(0.12) : Color.secondary.opacity(0.06))
-                    .overlay(
-                        Capsule()
-                            .strokeBorder(Color.secondary.opacity(isUseHovered ? 0.45 : 0.25), lineWidth: 1)
-                    )
-                    .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .disabled(isUsingAccount)
-                .onHover { isUseHovered = $0 }
-            }
         }
     }
-    
+
     // MARK: - Quota Content
     
     private var quotaContentSection: some View {

@@ -7,7 +7,6 @@ struct StatusBarMenuAccountSnapshot: Equatable, Sendable {
     let email: String
     let quota: ProviderQuota
     let subscription: QuotaSubscriptionInfo?
-    let isActiveInIDE: Bool
     let isRefreshing: Bool
     let isRefreshBlocked: Bool
 }
@@ -30,10 +29,6 @@ struct StatusBarMenuDisplaySettings: Equatable, Sendable {
 }
 
 public struct StatusBarMenuSnapshot: Equatable, Sendable {
-    let isProxyInstalled: Bool
-    let proxyPort: UInt16
-    let isProxyRunning: Bool
-    let tunnel: CloudflareTunnelSnapshot
     let providers: [StatusBarMenuProviderSnapshot]
     let selectedProvider: QuotaProvider?
     let isLoadingQuotas: Bool
@@ -45,19 +40,12 @@ public struct StatusBarMenuSnapshot: Equatable, Sendable {
 
 public enum StatusBarMenuSnapshotMapper {
     nonisolated public static func makeSnapshot(
-        mode: OperatingMode,
-        proxyPort: UInt16,
-        isProxyRunning: Bool,
-        tunnel: CloudflareTunnelSnapshot,
         monitorAccounts: [Account],
         quota: QuotaSnapshot,
-        installedAgents: Set<CLIAgent>,
-        activeAntigravityEmail: String?,
         menuBarPreferences: MenuBarPreferences,
         appearanceMode: AppearanceMode,
         language: AppLanguage,
-        trackingPreferences: ProviderTrackingPreferences = ProviderTrackingPreferences(),
-        isProxyInstalled: Bool = false
+        trackingPreferences: ProviderTrackingPreferences = ProviderTrackingPreferences()
     ) -> StatusBarMenuSnapshot {
         let disabledAccounts = Set(monitorAccounts.lazy.filter(\.isDisabled).map {
             "\($0.providerID.rawValue):\($0.accountKey.lowercased())"
@@ -73,9 +61,7 @@ public enum StatusBarMenuSnapshotMapper {
             let accounts = orderedAccounts(
                 (quota.quotas[provider] ?? [:]).filter { accountKey, _ in
                     !disabledAccounts.contains("\(provider.rawValue):\(accountKey.lowercased())")
-                },
-                provider: provider,
-                activeAntigravityEmail: activeAntigravityEmail
+                }
             ).map { account in
                 let accountID = QuotaAccountID(provider: provider, accountKey: account.accountKey)
                 return StatusBarMenuAccountSnapshot(
@@ -83,8 +69,6 @@ public enum StatusBarMenuSnapshotMapper {
                     email: account.email,
                     quota: account.data,
                     subscription: quota.subscriptions[provider]?[account.accountKey],
-                    isActiveInIDE: provider == .antigravity
-                        && emailsMatch(account.email, activeAntigravityEmail),
                     isRefreshing: quota.refreshingProviders.contains(provider),
                     isRefreshBlocked: !quota.canRefresh || quota.refreshingProviders.contains(provider)
                 )
@@ -99,10 +83,6 @@ public enum StatusBarMenuSnapshotMapper {
         }
 
         return StatusBarMenuSnapshot(
-            isProxyInstalled: isProxyInstalled,
-            proxyPort: proxyPort,
-            isProxyRunning: isProxyRunning,
-            tunnel: tunnel,
             providers: providers,
             selectedProvider: menuBarPreferences.selectedProvider.flatMap { selected in
                 providers.contains(where: { $0.provider == selected }) ? selected : nil
@@ -121,22 +101,12 @@ public enum StatusBarMenuSnapshotMapper {
     }
 
     nonisolated static func orderedAccounts(
-        _ quotas: [String: ProviderQuota],
-        provider: QuotaProvider,
-        activeAntigravityEmail: String?
+        _ quotas: [String: ProviderQuota]
     ) -> [(accountKey: String, email: String, data: ProviderQuota)] {
-        let sorted = quotas
-            .map { (accountKey: $0.key, email: $0.value.accountDisplayName ?? $0.key, data: $0.value) }
-            .sorted { $0.email < $1.email }
-
-        guard provider == .antigravity else { return sorted }
-        return AccountSorting.prioritizingActive(sorted) {
-            emailsMatch($0.email, activeAntigravityEmail)
-        }
-    }
-
-    nonisolated private static func emailsMatch(_ email: String, _ activeEmail: String?) -> Bool {
-        guard let activeEmail, !email.isEmpty, !activeEmail.isEmpty else { return false }
-        return email.caseInsensitiveCompare(activeEmail) == .orderedSame
+        quotas.map { (accountKey: $0.key, email: $0.value.accountDisplayName ?? $0.key, data: $0.value) }
+            .sorted {
+                if $0.email == $1.email { return $0.accountKey < $1.accountKey }
+                return $0.email.localizedStandardCompare($1.email) == .orderedAscending
+            }
     }
 }

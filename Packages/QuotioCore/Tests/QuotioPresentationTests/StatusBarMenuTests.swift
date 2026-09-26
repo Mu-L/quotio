@@ -10,10 +10,8 @@ final class StatusBarMenuSnapshotMapperTests: XCTestCase {
     func testMenuUsesHostProviderNamesWithoutAClientProviderSwitch() throws {
         let provider = try XCTUnwrap(QuotaProvider(rawValue: "future-provider"))
         let snapshot = StatusBarMenuSnapshotMapper.makeSnapshot(
-            mode: .monitor, proxyPort: 8317, isProxyRunning: false,
-            tunnel: CloudflareTunnelSnapshot(), monitorAccounts: [],
+            monitorAccounts: [],
             quota: QuotaSnapshot(providerNames: [provider: "Host Provider Name"], quotas: [provider: ["account": ProviderQuota()]]),
-            installedAgents: [], activeAntigravityEmail: nil,
             menuBarPreferences: MenuBarPreferences(), appearanceMode: .system, language: .english
         )
         XCTAssertEqual(snapshot.providers.first?.displayName, "Host Provider Name")
@@ -24,10 +22,8 @@ final class StatusBarMenuSnapshotMapperTests: XCTestCase {
 
     func testDisabledProviderIsHiddenDespiteCachedQuota() {
         let snapshot = StatusBarMenuSnapshotMapper.makeSnapshot(
-            mode: .monitor, proxyPort: 8317, isProxyRunning: false,
-            tunnel: CloudflareTunnelSnapshot(), monitorAccounts: [],
+            monitorAccounts: [],
             quota: QuotaSnapshot(quotas: [.claude: ["Work": ProviderQuota()]]),
-            installedAgents: [], activeAntigravityEmail: nil,
             menuBarPreferences: MenuBarPreferences(selectedProvider: .claude),
             appearanceMode: .system, language: .english,
             trackingPreferences: .init(disabledProviders: [.claude])
@@ -47,16 +43,6 @@ final class StatusBarMenuSnapshotMapperTests: XCTestCase {
             accountKey: "disabled@example.com",
             source: .nativeCredential,
             status: .disabled
-        )
-        let tunnel = CloudflareTunnelSnapshot(
-            status: .active,
-            publicURL: "https://example.trycloudflare.com",
-            startTime: Date(timeIntervalSince1970: 1_000),
-            installation: CloudflaredInstallation(
-                isInstalled: true,
-                path: "/usr/local/bin/cloudflared",
-                version: "2026.9.0"
-            )
         )
         let quota = QuotaSnapshot(
             canRefresh: true,
@@ -80,23 +66,13 @@ final class StatusBarMenuSnapshotMapperTests: XCTestCase {
         )
 
         let snapshot = StatusBarMenuSnapshotMapper.makeSnapshot(
-            mode: .monitor,
-            proxyPort: 8317,
-            isProxyRunning: true,
-            tunnel: tunnel,
             monitorAccounts: [enabledMonitorAccount, disabledMonitorAccount],
             quota: quota,
-            installedAgents: [],
-            activeAntigravityEmail: "zulu@example.com",
             menuBarPreferences: preferences,
             appearanceMode: .dark,
             language: .vietnamese
         )
 
-        XCTAssertFalse(snapshot.isProxyInstalled)
-        XCTAssertEqual(snapshot.proxyPort, 8317)
-        XCTAssertTrue(snapshot.isProxyRunning)
-        XCTAssertEqual(snapshot.tunnel, tunnel)
         XCTAssertEqual(snapshot.providers.map(\.provider), [.antigravity, .claude])
         XCTAssertNil(snapshot.selectedProvider)
         XCTAssertTrue(snapshot.isLoadingQuotas)
@@ -111,35 +87,26 @@ final class StatusBarMenuSnapshotMapperTests: XCTestCase {
         XCTAssertTrue(antigravity.isRefreshing)
         XCTAssertTrue(antigravity.supportsScopedRefresh)
         XCTAssertEqual(antigravity.accounts.map(\.email), [
-            "Zulu@example.com",
             "alpha@example.com",
+            "Zulu@example.com",
         ])
-        XCTAssertTrue(antigravity.accounts[0].isActiveInIDE)
         XCTAssertTrue(antigravity.accounts.allSatisfy(\.isRefreshing))
         XCTAssertTrue(antigravity.accounts.allSatisfy(\.isRefreshBlocked))
     }
 
-    func testSnapshotDoesNotRequireAnInstalledCLIAgent() {
+    func testSnapshotUsesOnlyHostProviderData() {
         let snapshot = StatusBarMenuSnapshotMapper.makeSnapshot(
-            mode: .localProxy,
-            proxyPort: 8317,
-            isProxyRunning: false,
-            tunnel: CloudflareTunnelSnapshot(),
             monitorAccounts: [],
             quota: QuotaSnapshot(quotas: [
                 .antigravity: ["antigravity": ProviderQuota()],
                 .claude: ["claude": ProviderQuota()],
                 .codex: ["codex": ProviderQuota()],
             ]),
-            installedAgents: [.codexCLI],
-            activeAntigravityEmail: nil,
             menuBarPreferences: MenuBarPreferences(selectedProvider: .claude),
             appearanceMode: .system,
-            language: .english,
-            isProxyInstalled: true
+            language: .english
         )
 
-        XCTAssertTrue(snapshot.isProxyInstalled)
         XCTAssertEqual(snapshot.providers.map(\.provider), [.antigravity, .claude, .codex])
         XCTAssertEqual(snapshot.selectedProvider, .claude)
     }
@@ -152,17 +119,11 @@ final class StatusBarMenuSnapshotMapperTests: XCTestCase {
             status: .disabled
         )
         let snapshot = StatusBarMenuSnapshotMapper.makeSnapshot(
-            mode: .monitor,
-            proxyPort: 8317,
-            isProxyRunning: false,
-            tunnel: CloudflareTunnelSnapshot(),
             monitorAccounts: [disabledAccount],
             quota: QuotaSnapshot(quotas: [
                 .claude: ["disabled@example.com": ProviderQuota()],
                 .codex: ["enabled@example.com": ProviderQuota()],
             ]),
-            installedAgents: [],
-            activeAntigravityEmail: nil,
             menuBarPreferences: MenuBarPreferences(),
             appearanceMode: .system,
             language: .english
@@ -224,10 +185,6 @@ final class StatusBarMenuRendererTests: XCTestCase {
 
     private func makeSnapshot(selectedProvider: QuotaProvider?) -> StatusBarMenuSnapshot {
         StatusBarMenuSnapshotMapper.makeSnapshot(
-            mode: .monitor,
-            proxyPort: 8317,
-            isProxyRunning: false,
-            tunnel: CloudflareTunnelSnapshot(),
             monitorAccounts: [],
             quota: QuotaSnapshot(quotas: [
                 .claude: [
@@ -237,8 +194,6 @@ final class StatusBarMenuRendererTests: XCTestCase {
                     "codex-key": ProviderQuota(accountDisplayName: "codex@example.com"),
                 ],
             ]),
-            installedAgents: [],
-            activeAntigravityEmail: nil,
             menuBarPreferences: MenuBarPreferences(selectedProvider: selectedProvider),
             appearanceMode: .system,
             language: .english
@@ -250,12 +205,6 @@ final class StatusBarMenuRendererTests: XCTestCase {
             refreshAll: {},
             refreshProvider: { _ in },
             refreshAccount: { _ in },
-            toggleProxy: {},
-            toggleTunnel: { _ in },
-            copyText: { _ in },
-            switchAntigravityAccount: { _ in },
-            isAntigravityIDERunning: { false },
-            confirmAntigravitySwitch: { _, _ in true },
             selectProvider: { _ in },
             openApp: {},
             quit: {},
@@ -269,7 +218,7 @@ final class StatusBarCommandDispatcherTests: XCTestCase {
     func testAsyncCommandsRouteAndRebuildAfterCompletion() async {
         let recorder = StatusBarCommandRecorder()
         let rebuilds = expectation(description: "menu rebuilt after async commands")
-        rebuilds.expectedFulfillmentCount = 6
+        rebuilds.expectedFulfillmentCount = 3
         let dispatcher = makeDispatcher(recorder: recorder) {
             recorder.rebuildCount += 1
             rebuilds.fulfill()
@@ -278,20 +227,14 @@ final class StatusBarCommandDispatcherTests: XCTestCase {
         dispatcher.dispatch(.refreshAll)
         dispatcher.dispatch(.refreshProvider(.claude))
         dispatcher.dispatch(.refreshAccount(QuotaAccountID(provider: .codex, accountKey: "person@example.com")))
-        dispatcher.dispatch(.toggleProxy)
-        dispatcher.dispatch(.toggleTunnel(port: 8317))
-        dispatcher.dispatch(.useAntigravityAccount(email: "active@example.com"))
 
         await fulfillment(of: [rebuilds], timeout: 1)
         XCTAssertEqual(Set(recorder.asyncCommands), Set([
             "refreshAll",
             "refreshProvider:claude",
             "refreshAccount:codex:person@example.com",
-            "toggleProxy",
-            "toggleTunnel:8317",
-            "switchAntigravity:active@example.com",
         ]))
-        XCTAssertEqual(recorder.rebuildCount, 6)
+        XCTAssertEqual(recorder.rebuildCount, 3)
     }
 
     func testSynchronousCommandsRouteWithoutUnnecessaryRebuilds() {
@@ -300,35 +243,14 @@ final class StatusBarCommandDispatcherTests: XCTestCase {
             recorder.rebuildCount += 1
         }
 
-        dispatcher.dispatch(.copyProxyURL("http://localhost:8317"))
-        dispatcher.dispatch(.copyTunnelURL("https://example.trycloudflare.com"))
         dispatcher.dispatch(.openApp)
         dispatcher.dispatch(.quit)
         dispatcher.dispatch(.selectProvider(.claude))
         dispatcher.dispatch(.selectProvider(nil))
 
-        XCTAssertEqual(recorder.copiedText, [
-            "http://localhost:8317",
-            "https://example.trycloudflare.com",
-        ])
         XCTAssertEqual(recorder.selectedProviders, [.claude, nil])
         XCTAssertEqual(recorder.openAppCount, 1)
         XCTAssertEqual(recorder.quitCount, 1)
-        XCTAssertEqual(recorder.rebuildCount, 0)
-    }
-
-    func testCancelledAntigravityConfirmationDoesNotSwitchOrRebuild() {
-        let recorder = StatusBarCommandRecorder()
-        recorder.confirmSwitch = false
-        let dispatcher = makeDispatcher(recorder: recorder) {
-            recorder.rebuildCount += 1
-        }
-
-        dispatcher.dispatch(.useAntigravityAccount(email: "person@example.com"))
-
-        XCTAssertEqual(recorder.ideRunningChecks, 1)
-        XCTAssertEqual(recorder.confirmations, ["person@example.com:true"])
-        XCTAssertTrue(recorder.asyncCommands.isEmpty)
         XCTAssertEqual(recorder.rebuildCount, 0)
     }
 
@@ -346,20 +268,6 @@ final class StatusBarCommandDispatcherTests: XCTestCase {
                     "refreshAccount:\(account.provider.rawValue):\(account.accountKey)"
                 )
             },
-            toggleProxy: { recorder.asyncCommands.append("toggleProxy") },
-            toggleTunnel: { port in recorder.asyncCommands.append("toggleTunnel:\(port)") },
-            copyText: { recorder.copiedText.append($0) },
-            switchAntigravityAccount: { email in
-                recorder.asyncCommands.append("switchAntigravity:\(email)")
-            },
-            isAntigravityIDERunning: {
-                recorder.ideRunningChecks += 1
-                return true
-            },
-            confirmAntigravitySwitch: { email, isRunning in
-                recorder.confirmations.append("\(email):\(isRunning)")
-                return recorder.confirmSwitch
-            },
             selectProvider: { recorder.selectedProviders.append($0) },
             openApp: { recorder.openAppCount += 1 },
             quit: { recorder.quitCount += 1 },
@@ -371,11 +279,7 @@ final class StatusBarCommandDispatcherTests: XCTestCase {
 @MainActor
 private final class StatusBarCommandRecorder {
     var asyncCommands: [String] = []
-    var copiedText: [String] = []
-    var confirmations: [String] = []
     var selectedProviders: [QuotaProvider?] = []
-    var confirmSwitch = true
-    var ideRunningChecks = 0
     var openAppCount = 0
     var quitCount = 0
     var rebuildCount = 0

@@ -449,8 +449,7 @@ enum CompositionRoot {
             tunnel: tunnel,
             quotioServer: quotioServer,
             quotioBackend: quotioBackend,
-            reconnectQuotioServer: reconnectQuotioServer,
-            isCLIInstalled: agentInstallationProbe.isInstalled
+            reconnectQuotioServer: reconnectQuotioServer
         )
         return AppRuntime(services: services)
     }
@@ -508,7 +507,6 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
     private let quotioServer: QuotioCLIServerProcess
     private let quotioBackend: QuotioCLIBackend
     private let reconnectQuotioServer: @MainActor @Sendable () async -> Bool
-    private let isCLIInstalled: (CLIAgent) -> Bool
 
     var hasCompletedOnboarding: Bool { modeManager.hasCompletedOnboarding }
     var showInDock: Bool { settingsScreenModel.appShellPreferences.showInDock }
@@ -551,8 +549,7 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
         tunnel: TunnelScreenModel,
         quotioServer: QuotioCLIServerProcess,
         quotioBackend: QuotioCLIBackend,
-        reconnectQuotioServer: @escaping @MainActor @Sendable () async -> Bool,
-        isCLIInstalled: @escaping (CLIAgent) -> Bool
+        reconnectQuotioServer: @escaping @MainActor @Sendable () async -> Bool
     ) {
         self.proxyManagement = proxyManagement
         self.quotaController = quotaController
@@ -591,7 +588,6 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
         self.quotioServer = quotioServer
         self.quotioBackend = quotioBackend
         self.reconnectQuotioServer = reconnectQuotioServer
-        self.isCLIInstalled = isCLIInstalled
     }
 
     func prepareForLaunch() {
@@ -618,22 +614,6 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
                 refreshAccount: { [quotaController] account in
                     await quotaController.refresh(account: account)
                 },
-                toggleProxy: { [proxyManagement] in
-                    await proxyManagement.toggleProxy()
-                },
-                toggleTunnel: { [tunnel] port in
-                    await tunnel.toggle(port: port)
-                },
-                copyText: { [pasteboard] value in
-                    pasteboard.copy(value)
-                },
-                switchAntigravityAccount: { [antigravityAccountScreenModel] email in
-                    await antigravityAccountScreenModel.switchAccount(email: email)
-                },
-                isAntigravityIDERunning: { [antigravityAccountScreenModel] in
-                    antigravityAccountScreenModel.isIDERunning
-                },
-                confirmAntigravitySwitch: AntigravitySwitchConfirmationPresenter.confirm,
                 selectProvider: { [menuBarSettings] provider in
                     menuBarSettings.selectProvider(provider)
                 },
@@ -666,8 +646,6 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
     func setStatusBarStateChangeHandler(_ handler: (@MainActor () -> Void)?) {
         quotaController.setDidChangeHandler(handler)
         quotaScreenModel.setDidChangeHandler { _ in handler?() }
-        proxyManagement.proxy.setDidChangeHandler { _ in handler?() }
-        tunnel.setDidChangeHandler { _ in handler?() }
         menuBarSettings.setDidChangeHandler { _ in handler?() }
         modeManager.setDidChangeHandler { _ in handler?() }
         appearanceManager.setDidChangeHandler { _ in handler?() }
@@ -713,28 +691,13 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
     }
 
     private var statusBarMenuSnapshot: StatusBarMenuSnapshot {
-        let knownStatuses = Dictionary(
-            uniqueKeysWithValues: proxyManagement.agentSetup.agentStatuses.map {
-                ($0.agent, $0.installed)
-            }
-        )
-        let installedAgents = Set(CLIAgent.allCases.filter { agent in
-            knownStatuses[agent] ?? isCLIInstalled(agent)
-        })
-        return StatusBarMenuSnapshotMapper.makeSnapshot(
-            mode: modeManager.currentMode,
-            proxyPort: proxyManagement.proxy.port,
-            isProxyRunning: proxyManagement.proxy.proxyStatus.running,
-            tunnel: tunnel.tunnelState,
+        StatusBarMenuSnapshotMapper.makeSnapshot(
             monitorAccounts: accountsScreenModel.accounts,
             quota: quotaScreenModel.state,
-            installedAgents: installedAgents,
-            activeAntigravityEmail: antigravityAccountScreenModel.snapshot.activeAccount?.email,
             menuBarPreferences: menuBarSettings.preferences,
             appearanceMode: appearanceManager.appearanceMode,
             language: languageManager.currentLanguage,
-            trackingPreferences: quotaController.trackingPreferences,
-            isProxyInstalled: proxyManagement.proxy.isBinaryInstalled
+            trackingPreferences: quotaController.trackingPreferences
         )
     }
 
