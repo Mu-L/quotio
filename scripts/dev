@@ -1,0 +1,145 @@
+#!/bin/bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+IOS_PROJECT="$ROOT/apps/ios/Quotio.xcodeproj"
+IOS_SCHEME="QuotioIOS"
+IOS_BUNDLE_ID="app.bytrong.quotio.ios"
+
+usage() {
+    cat <<'EOF'
+Usage:
+  ./scripts/dev cli [--] [arguments...]
+  ./scripts/dev macos [--debug|--logs|--telemetry|--verify]
+  ./scripts/dev ios-sim [simulator-udid]
+  ./scripts/dev ios-device [device-id]
+  ./scripts/dev test <cli|macos|ios|all> [simulator-udid]
+
+Run ./scripts/dev ios-sim without a UDID to use the first available iPhone Simulator.
+Run ./scripts/dev ios-device without an ID to use the first connected compatible iPhone.
+List destinations with: xcodebuild -project apps/ios/Quotio.xcodeproj -scheme QuotioIOS -showdestinations
+EOF
+}
+
+simulator_id() {
+    if [[ -n "${1:-}" ]]; then
+        printf '%s\n' "$1"
+        return
+    fi
+
+    local line id
+    while IFS= read -r line; do
+        [[ "$line" == *"Destinations incompatible"* ]] && break
+        [[ "$line" == *"platform:iOS Simulator"* && "$line" == *"name:iPhone"* ]] || continue
+        id="$(sed -nE 's/.*id:([^,}]+).*/\1/p' <<<"$line")"
+        if [[ -n "$id" ]]; then
+            printf '%s\n' "$id"
+            return
+        fi
+    done < <(xcodebuild -project "$IOS_PROJECT" -scheme "$IOS_SCHEME" -showdestinations)
+
+    echo "error: no available iPhone Simulator found" >&2
+    exit 1
+}
+
+device_id() {
+    if [[ -n "${1:-}" ]]; then
+        printf '%s\n' "$1"
+        return
+    fi
+
+    local line id
+    while IFS= read -r line; do
+        [[ "$line" == *"Destinations incompatible"* ]] && break
+        [[ "$line" == *"platform:iOS,"* && "$line" == *"arch:"* ]] || continue
+        id="$(sed -nE 's/.*id:([^,}]+).*/\1/p' <<<"$line")"
+        if [[ -n "$id" ]]; then
+            printf '%s\n' "$id"
+            return
+        fi
+    done < <(xcodebuild -project "$IOS_PROJECT" -scheme "$IOS_SCHEME" -showdestinations)
+
+    echo "error: no connected compatible iPhone found" >&2
+    exit 1
+}
+
+test_ios() {
+    local id
+    id="$(simulator_id "${1:-}")"
+    swift test --package-path "$ROOT/apps/ios"
+    swift test --package-path "$ROOT/Packages/QuotioHostClient"
+    xcodebuild -project "$IOS_PROJECT" -scheme "$IOS_SCHEME" \
+        -configuration Debug -destination "platform=iOS Simulator,id=$id" test
+}
+
+case "${1:-help}" in
+    cli)
+        shift
+        [[ "${1:-}" == "--" ]] && shift
+        cd "$ROOT/apps/cli"
+        exec cargo run -- "$@"
+        ;;
+    macos)
+        shift
+        exec "$ROOT/apps/macos/scripts/build_and_run.sh" "$@"
+        ;;
+    ios-sim)
+        id="$(simulator_id "${2:-}")"
+        derived="$ROOT/apps/ios/build/Simulator"
+        xcrun simctl boot "$id" 2>/dev/null || true
+        xcrun simctl bootstatus "$id" -b
+        xcodebuild -project "$IOS_PROJECT" -scheme "$IOS_SCHEME" \
+            -configuration Debug -destination "platform=iOS Simulator,id=$id" \
+            -derivedDataPath "$derived" build
+        app="$derived/Build/Products/Debug-iphonesimulator/QuotioIOS.app"
+        xcrun simctl install "$id" "$app"
+        xcrun simctl terminate "$id" "$IOS_BUNDLE_ID" 2>/dev/null || true
+        xcrun simctl launch "$id" "$IOS_BUNDLE_ID"
+        ;;
+    ios-device)
+        [[ -f "$ROOT/apps/ios/Config/Local.xcconfig" ]] || {
+            echo "error: copy apps/ios/Config/Local.xcconfig.example to Local.xcconfig and set DEVELOPMENT_TEAM" >&2
+            exit 2
+        }
+        id="$(device_id "${2:-}")"
+        derived="$ROOT/apps/ios/build/Device"
+        xcodebuild -project "$IOS_PROJECT" -scheme "$IOS_SCHEME" \
+            -configuration Debug -destination "platform=iOS,id=$id" \
+            -derivedDataPath "$derived" -allowProvisioningUpdates build
+        app="$derived/Build/Products/Debug-iphoneos/QuotioIOS.app"
+        xcrun devicectl device install app --device "$id" "$app"
+        xcrun devicectl device process launch --device "$id" "$IOS_BUNDLE_ID"
+        ;;
+    test)
+        case "${2:-}" in
+            cli)
+                cargo test --manifest-path "$ROOT/apps/cli/Cargo.toml" --locked --all-features
+                ;;
+            macos)
+                swift test --package-path "$ROOT/Packages/QuotioCore"
+                "$ROOT/apps/macos/scripts/check_architecture.sh"
+                xcodebuild -project "$ROOT/apps/macos/Quotio.xcodeproj" -scheme Quotio \
+                    -configuration Debug -destination 'platform=macOS' test
+                ;;
+            ios)
+                test_ios "${3:-}"
+                ;;
+            all)
+                "$0" test cli
+                "$0" test macos
+                test_ios "${3:-}"
+                ;;
+            *)
+                usage >&2
+                exit 2
+                ;;
+        esac
+        ;;
+    help|-h|--help)
+        usage
+        ;;
+    *)
+        usage >&2
+        exit 2
+        ;;
+esac

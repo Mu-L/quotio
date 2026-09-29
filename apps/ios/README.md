@@ -1,16 +1,20 @@
 # Quotio for iPhone
 
 Quotio displays host-owned quota and analytics over HTTPS on a LAN or private VPN.
-It includes native Usage, Widgets and Settings tabs and six WidgetKit families.
+It includes native Usage and Settings tabs plus six WidgetKit families.
 Provider credentials stay on the computer. The phone receives a revocable read-only
 credential, stored in Keychain. No Quotio cloud service is required.
 
 ## Build and test
 
 Open `Quotio.xcodeproj`, select `QuotioIOS` and an iOS 26+ iPhone Simulator.
-The checked-in project builds without XcodeGen. To regenerate after adding files:
+The checked-in project builds without XcodeGen. Run these commands from the
+repository root; regenerate the project after adding files:
 
 ```sh
+./scripts/dev ios-sim [SIMULATOR_UDID]
+./scripts/dev ios-device [DEVICE_ID]
+./scripts/dev test ios [SIMULATOR_UDID]
 xcodegen generate --spec apps/ios/project.yml
 swift test --package-path apps/ios
 swift test --package-path Packages/QuotioHostClient
@@ -46,7 +50,8 @@ Choose **Pair iPhone…** directly in the Quotio menu; the main window stays clo
 Select **Local network** for the same Wi-Fi/Ethernet network, or **Tailscale IP**
 with Tailscale connected on both devices. Quotio discovers active IPv4 addresses;
 if several are available, select the one reachable by your iPhone. No domain or
-reverse proxy is needed. Enable sharing, name the device and create its code.
+reverse proxy is needed. Name the iPhone and create its pairing code. Quotio enables
+sharing as part of that action when needed.
 
 Scan the QR inside the updated Quotio iPhone app, or choose **Copy pairing code**
 on Mac and **Paste** on iPhone. Confirm the address before connecting. Copy the whole
@@ -55,10 +60,10 @@ The host's private key stays in its credential vault. The phone and widgets trus
 only the paired CA for this connection, with normal hostname/expiry/signature checks.
 No certificate profile or device-wide trust installation is required.
 
-**Advanced** keeps the sharing port and optional custom HTTPS reverse proxy. Saved
-proxy setups remain available. **Change network…** in the pairing view pauses sharing
-so another network can be selected. If the host address changes, pair again from
-the new address; existing saved profiles do not discover address changes automatically.
+**Advanced** in Settings keeps the sharing port and optional custom HTTPS reverse
+proxy. Turn sharing off before changing these settings. If the host address changes,
+pair again from the new address; existing saved profiles do not discover address
+changes automatically.
 
 Use **Settings… → iPhone sharing** to review and revoke authorized devices. Closing
 the pairing view retains its current code in memory; reopening does not issue a new
@@ -94,8 +99,9 @@ These commands read the owner token from the environment. `--api` selects anothe
 loopback owner port. The add result includes the companion CA when its origin matches
 the active direct listener. Paste the sensitive JSON into Quotio iPhone, or encode it
 as a QR locally. Never share the owner token. Lost output: list/revoke the device
-and issue again. For an existing HTTPS reverse proxy, the previous version-1 pairing
-flow remains supported. No public tunnel or automatic VPN installation is included.
+and issue again. Version 2 proxy codes without a companion certificate open the
+Advanced form for explicit review before connecting. No public tunnel or automatic
+VPN installation is included.
 
 The companion listener shares the host process, scheduler and vault, and accepts
 only delegated reads. The local owner endpoint retains OAuth and OS-approval authority.

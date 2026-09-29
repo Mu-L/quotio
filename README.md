@@ -146,30 +146,34 @@ prerelease channels and supported release targets.
 ## Repository layout
 
 - [`apps/macos/`](apps/macos) — Swift and SwiftUI macOS application.
+- [`apps/ios/`](apps/ios) — native iPhone companion and WidgetKit extension.
 - [`apps/cli/`](apps/cli) — cross-platform Rust command-line client.
 - [`Packages/QuotioCore/`](Packages/QuotioCore) — shared Swift package for the Apple app.
+- [`scripts/dev`](scripts/dev) — common local build, run, and test entrypoint.
 - [`.github/workflows/`](.github/workflows) — independent CI and release pipelines for each product.
 
 ## Development
 
-Run checks from the repository root:
+Run local development commands from the repository root:
 
 ```bash
-# macOS core and architecture
-swift test --package-path Packages/QuotioCore
-./apps/macos/scripts/check_architecture.sh
+# Build and run
+./scripts/dev cli -- usage
+./scripts/dev macos --verify
+./scripts/dev ios-sim [SIMULATOR_UDID]
+./scripts/dev ios-device [DEVICE_ID]
 
-# macOS app
-xcodebuild \
-  -project apps/macos/Quotio.xcodeproj \
-  -scheme Quotio \
-  -configuration Debug \
-  -destination 'platform=macOS' \
-  test
-
-# CLI
-cargo test --manifest-path apps/cli/Cargo.toml --locked --all-features
+# Test one product or the whole repository
+./scripts/dev test cli
+./scripts/dev test macos
+./scripts/dev test ios [SIMULATOR_UDID]
+./scripts/dev test all [SIMULATOR_UDID]
 ```
+
+`ios-sim` and `ios-device` use the first compatible iPhone when you omit its ID.
+Before using `ios-device`, copy `apps/ios/Config/Local.xcconfig.example` to
+`apps/ios/Config/Local.xcconfig` and set your Apple development team. Run
+`./scripts/dev --help` for the complete command list.
 
 Use `v*` tags for macOS releases and `cli-v*` tags for CLI releases. See each
 product README for build, architecture, security, and release details.
