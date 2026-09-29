@@ -48,7 +48,7 @@ private func fixture() throws -> QuotioHostSnapshot {
     let id = String(repeating: "a", count: 43)
     let token = "qclient.\(id).\(String(repeating: "b", count: 43))"
     func payload(client: String, expiration: String) throws -> Data {
-        try JSONSerialization.data(withJSONObject: ["pairing_version": 1, "origin": "https://host.test", "host_id": "host", "client_id": client, "expires_at": expiration, "token": token])
+        try JSONSerialization.data(withJSONObject: ["pairing_version": 2, "origin": "https://host.test", "host_name": "Test Mac", "host_id": "host", "client_id": client, "expires_at": expiration, "token": token, "certificate": Data([1]).base64EncodedString()])
     }
     let now = Date(timeIntervalSince1970: 0)
     #expect(try Pairing.decode(payload(client: id, expiration: "2026-01-01T00:00:00Z"), now: now).clientID == id)
@@ -90,16 +90,17 @@ private func fixture() throws -> QuotioHostSnapshot {
     #expect(account.metrics.first?.remainingPercent == 39)
 }
 
-@Test func directPairingRequiresCertificateAndPersistsTrustAcrossReloads() throws {
+@Test func versionTwoPairingSupportsProxiesAndPersistsDirectTrust() throws {
     let id = String(repeating: "a", count: 43)
-    var json: [String: Any] = ["pairing_version": 2, "origin": "https://192.168.1.10:6768", "host_id": "host", "client_id": id,
+    var json: [String: Any] = ["pairing_version": 2, "origin": "https://192.168.1.10:6768", "host_name": "Test Mac", "host_id": "host", "client_id": id,
                              "expires_at": "2030-01-01T00:00:00Z", "token": "qclient.\(id).\(String(repeating: "b", count: 43))"]
     let now = Date(timeIntervalSince1970: 0)
-    #expect(throws: (any Error).self) { try Pairing.decode(JSONSerialization.data(withJSONObject: json), now: now) }
+    #expect(try Pairing.decode(JSONSerialization.data(withJSONObject: json), now: now).certificate == nil)
     let certificate = Data([1, 2, 3])
     json["certificate"] = certificate.base64EncodedString()
     let pairing = try Pairing.decode(JSONSerialization.data(withJSONObject: json), now: now)
     #expect(pairing.certificate == certificate)
+    #expect(pairing.hostName == "Test Mac")
     let profile = HostProfile(id: "host", name: "Mac", origin: try Connection.origin(pairing.origin), clientID: id,
                               expiresAt: pairing.expiresAt, snapshot: nil, certificate: pairing.certificate)
     #expect(try JSONDecoder().decode(HostProfile.self, from: JSONEncoder().encode(profile)).certificate == certificate)

@@ -31,6 +31,22 @@ final class CompanionScreenModelTests: XCTestCase {
         XCTAssertTrue(model.enabled)
     }
 
+    func testCreatePairingEnablesSharingAndCancelRevokesTheCredential() async throws {
+        let controller = CompanionStub()
+        controller.enabled = false
+        controller.mode = .localNetwork
+        controller.addresses = [.init(mode: .localNetwork, address: "192.168.1.10", interface: "en0")]
+        let model = CompanionScreenModel(controller: controller)
+        await model.reload()
+        await model.createPairing()
+        let id = try XCTUnwrap(model.pairing?.device.id)
+        XCTAssertTrue(model.enabled)
+        XCTAssertEqual(controller.issueCount, 1)
+        await model.cancelPairing()
+        XCTAssertNil(model.pairing)
+        XCTAssertFalse(controller.issued.contains { $0.id == id })
+    }
+
     func testRenderPairingLayouts() async throws {
         guard let output = ProcessInfo.processInfo.environment["QUOTIO_COMPANION_SNAPSHOT_DIR"] else {
             throw XCTSkip("Set QUOTIO_COMPANION_SNAPSHOT_DIR for visual verification")
@@ -44,6 +60,9 @@ final class CompanionScreenModelTests: XCTestCase {
             PresentationLocalization.updateBundle(bundle)
         }
         let controller = CompanionStub()
+        controller.mode = .localNetwork
+        controller.origin = "https://192.168.1.10:6768"
+        controller.addresses = [.init(mode: .localNetwork, address: "192.168.1.10", interface: "en0")]
         let model = CompanionScreenModel(controller: controller)
         let pasteboard = PasteboardScreenModel(writer: NoCopyPasteboard())
         await model.reload()
@@ -63,7 +82,10 @@ final class CompanionScreenModelTests: XCTestCase {
             let visibleModel = ["setup", "tailscale"].contains(surface) ? setupModel : model
             let content = surface == "settings"
                 ? AnyView(Form { CompanionSettingsSection(model: model) }.formStyle(.grouped))
-                : AnyView(CompanionPairingView(model: visibleModel, presentation: .settings))
+                : AnyView(CompanionPairingView(
+                    model: visibleModel,
+                    presentation: ["setup", "tailscale"].contains(surface) ? .menuBar : .settings
+                ))
             let view = content.environment(pasteboard)
                 .environment(\.colorScheme, appearance == .darkAqua ? .dark : .light)
                 .background(Color(nsColor: .windowBackgroundColor))
@@ -202,7 +224,7 @@ private final class CompanionStub: CompanionControlling {
         if suspendIssuance { await withCheckedContinuation { pending = $0 } }
         let device = CompanionDevice(id: "phone-\(issueCount)", label: label, scope: "read", expiresAt: .now.addingTimeInterval(3600))
         issued.append(device)
-        let payload = String(decoding: try JSONSerialization.data(withJSONObject: ["pairing_version": 1, "origin": origin, "host_id": "host-fixture", "client_id": device.id, "token": String(repeating: "x", count: 93), "expires_at": "2030-01-01T00:00:00Z"]), as: UTF8.self)
+        let payload = String(decoding: try JSONSerialization.data(withJSONObject: ["pairing_version": 2, "origin": origin, "host_name": "Test Mac", "host_id": "host-fixture", "client_id": device.id, "token": String(repeating: "x", count: 93), "expires_at": "2030-01-01T00:00:00Z", "certificate": Data([1]).base64EncodedString()]), as: UTF8.self)
         return CompanionPairing(device: device, origin: origin, token: "synthetic-token", payload: payload)
     }
     func revoke(id: String) async throws { issued.removeAll { $0.id == id } }

@@ -28,6 +28,7 @@ final class QuotioCompanionServiceTests: XCTestCase {
         let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(pairing.payload.utf8)) as? [String: Any])
         XCTAssertEqual(payload["pairing_version"] as? Int, 2)
         XCTAssertEqual(payload["certificate"] as? String, "AQID")
+        XCTAssertFalse(try XCTUnwrap(payload["host_name"] as? String).isEmpty)
         CompanionHTTPStub.state.reset(status: 200, body: #"{"enabled":false,"addresses":[]}"#)
         do {
             _ = try await service.configure(enabled: true, origin: "", port: 6768, mode: .tailscale)

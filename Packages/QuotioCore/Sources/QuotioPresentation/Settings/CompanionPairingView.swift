@@ -9,55 +9,47 @@ struct CompanionPairingView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            HStack {
-                Label("companion.pair".localized(), systemImage: "iphone")
-                    .font(.title2.weight(.semibold))
-                Spacer()
-                Button("action.close".localized(), systemImage: "xmark") { model.hidePairing(in: presentation) }
-                    .labelStyle(.iconOnly).buttonStyle(.plain)
-                    .keyboardShortcut(.cancelAction)
-            }
+            Label("companion.pairTitle".localized(), systemImage: "iphone")
+                .font(.title2.weight(.semibold))
             if let pairing = model.pairing {
                 CompanionCodeView(pairing: pairing, copyCode: { pasteboard.copy(pairing.payload) })
                     .id(pairing.device.id)
                 HStack {
-                    Text("companion.codeCreated".localized()).font(.caption).foregroundStyle(.secondary)
+                    Button("companion.cancelCode".localized(), role: .destructive) { Task { await model.cancelPairing() } }
+                        .disabled(model.busy)
                     Spacer()
                     Button("action.done".localized()) { model.finishPairing() }
                         .buttonStyle(.borderedProminent).disabled(model.busy)
                 }
             } else {
                 Text("companion.summary".localized()).foregroundStyle(.secondary)
-                if !model.enabled {
-                    CompanionConnectionSetupView(model: model).disabled(model.busy)
-                    HStack {
-                        if model.busy { ProgressView().controlSize(.small) }
-                        Spacer()
-                        Button("companion.enableContinue".localized()) { Task { await model.configure(enabled: true) } }
-                            .buttonStyle(.borderedProminent).disabled(model.busy || !model.canEnable)
-                    }
+                if model.enabled {
+                    Label("\(model.origin) · \("companion.statusOn".localized())", systemImage: "checkmark.circle.fill")
+                        .font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
                 } else {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(model.origin).font(.system(.callout, design: .monospaced)).textSelection(.enabled)
-                        Text("companion.listening".localized()).font(.caption).foregroundStyle(.secondary)
-                        TextField("companion.deviceName".localized(), text: $model.label).textFieldStyle(.roundedBorder)
-                        Label("companion.readOnly".localized(), systemImage: "eye").font(.callout)
-                        Text("companion.qrPrivate".localized()).font(.caption).foregroundStyle(.secondary)
+                    CompanionConnectionSetupView(model: model, includesAdvanced: presentation == .settings)
+                        .disabled(model.busy)
+                }
+                HStack {
+                    Text("companion.deviceName".localized())
+                    TextField("companion.deviceName".localized(), text: $model.label).textFieldStyle(.roundedBorder)
+                }
+                Label("companion.qrPrivate".localized(), systemImage: "eye").font(.caption).foregroundStyle(.secondary)
+                HStack {
+                    Button("action.cancel".localized()) { model.hidePairing(in: presentation) }
+                        .keyboardShortcut(.cancelAction)
+                    Spacer()
+                    Button(model.busy ? "companion.creatingCode".localized() : "companion.issue".localized()) {
+                        Task { await model.createPairing() }
                     }
-                    HStack {
-                        if model.busy { ProgressView().controlSize(.small) }
-                        Button("companion.changeNetwork".localized()) { Task { await model.configure(enabled: false) } }
-                            .disabled(model.busy)
-                        Spacer()
-                        Button("companion.issue".localized()) { Task { await model.issue() } }
-                            .buttonStyle(.borderedProminent).disabled(model.busy || model.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.busy || !model.canEnable || model.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
             if let failure = model.failure {
                 Label(failure.message, systemImage: "exclamationmark.triangle").foregroundStyle(.red).font(.callout)
                 if !model.busy {
-                    Button("action.retry".localized()) { Task { await model.reload() } }
+                    Button("action.retry".localized()) { Task { await model.createPairing() } }
                 }
             }
         }
@@ -95,16 +87,13 @@ private struct CompanionCodeView: View {
 
     private var instructions: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(pairing.device.label).font(.headline)
             Text("companion.scanInstruction".localized())
             Text(pairing.origin).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
             Label("companion.readOnly".localized(), systemImage: "eye").font(.callout)
             Text("\("companion.expires".localized()) \(pairing.device.expiresAt.formatted(date: .abbreviated, time: .shortened))")
                 .font(.caption).foregroundStyle(.secondary)
-            DisclosureGroup("companion.manual".localized()) {
-                Text("companion.manualHint".localized()).font(.caption).foregroundStyle(.secondary)
-                Button("companion.copyCode".localized(), action: copyCode)
-            }
+            Text("companion.manualHint".localized()).font(.caption).foregroundStyle(.secondary)
+            Button("companion.copyCode".localized(), action: copyCode)
         }
     }
 

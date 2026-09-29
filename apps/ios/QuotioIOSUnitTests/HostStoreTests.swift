@@ -35,7 +35,7 @@ private final class HostProtocol: URLProtocol, @unchecked Sendable {
     configuration.protocolClasses = [HostProtocol.self]
     let session = URLSession(configuration: configuration)
     let certificate = Data([1, 2, 3])
-    let pairingJSON = try JSONSerialization.data(withJSONObject: ["pairing_version": 2, "origin": "https://host.example.test", "host_id": hostID,
+    let pairingJSON = try JSONSerialization.data(withJSONObject: ["pairing_version": 2, "origin": "https://host.example.test", "host_name": "Synthetic Mac", "host_id": hostID,
         "client_id": clientID, "token": token, "expires_at": "2030-01-01T00:00:00Z", "certificate": certificate.base64EncodedString()])
     let pairing = try Pairing.decode(pairingJSON)
     let store = HostStore(storage: storage, keychain: keychain, makeClient: { connection in

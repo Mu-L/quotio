@@ -90,7 +90,8 @@ public final class QuotioCompanionService: CompanionControlling {
         let body = try JSONSerialization.data(withJSONObject: ["label": label, "scope": "read", "expires_in_seconds": 2592000] as [String: Any])
         let response: Response = try await request("v2/clients", method: "POST", body: body)
         guard response.schemaVersion == 2, response.client.scope == "read" else { throw CompanionFailure.requestFailed }
-        var payload: [String: Any] = ["pairing_version": current.certificate == nil ? 1 : 2, "origin": origin, "host_id": response.hostId,
+        var payload: [String: Any] = ["pairing_version": 2, "origin": origin,
+                                      "host_name": Host.current().localizedName ?? ProcessInfo.processInfo.hostName, "host_id": response.hostId,
                                                               "client_id": response.client.id, "expires_at": ISO8601DateFormatter().string(from: response.client.expiresAt),
                                                               "token": response.token]
         if let certificate = current.certificate { payload["certificate"] = certificate }

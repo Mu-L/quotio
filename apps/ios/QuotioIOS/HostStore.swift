@@ -137,6 +137,15 @@ final class HostStore {
         } catch { self.error = String(localized: "The saved credential could not be removed. Try again.") }
     }
 
+    func renameSelected(to name: String) {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let id = state.selectedHostID,
+              let index = state.hosts.firstIndex(where: { $0.id == id }),
+              !name.isEmpty else { return }
+        state.hosts[index].name = String(name.prefix(80))
+        persist()
+    }
+
     func showDemo() {
         do {
             guard let url = Bundle.main.url(forResource: "demo-snapshot", withExtension: "json") else { return }

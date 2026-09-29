@@ -7,6 +7,7 @@ struct RootView: View {
     @State private var tab = 0
     @State private var addHost = false
     @State private var accountID: String?
+    @State private var computerToRemove: HostProfile?
 
     var body: some View {
         @Bindable var store = store
@@ -22,7 +23,7 @@ struct RootView: View {
                                 }
                             }
                             ToolbarItem(placement: .topBarTrailing) {
-                                Button("Add host", systemImage: "plus") { addHost = true }
+                                Button("Add computer", systemImage: "plus") { addHost = true }
                             }
                         }
                         .navigationDestination(item: $accountID) { id in
@@ -47,11 +48,11 @@ struct RootView: View {
                                         if let expiration = host.expiresAt { Text("Expires \(expiration.formatted(date: .abbreviated, time: .omitted))").font(.caption) }
                                     }
                                     Spacer()
-                                    Button("Remove host", systemImage: "trash", role: .destructive) { store.remove(host.id) }.labelStyle(.iconOnly)
+                                    Button("Remove computer", systemImage: "trash", role: .destructive) { computerToRemove = host }.labelStyle(.iconOnly)
                                 }
                             }
-                            Button("Add host", systemImage: "plus") { addHost = true }
-                        } header: { Text("Hosts") } footer: { Text("Removing a host deletes its saved credential on this iPhone. Revoke the device on the computer to end its access everywhere.") }
+                            Button("Add computer", systemImage: "plus") { addHost = true }
+                        } header: { Text("Computers") } footer: { Text("Removing a computer deletes its saved credential on this iPhone. Revoke the device on the computer to end its access everywhere.") }
                         Section("Display") {
                             Toggle("Hide values", isOn: $store.state.hideValues).onChange(of: store.state.hideValues) { store.persist() }
                             Toggle("Show used percentage", isOn: $store.state.showUsed).onChange(of: store.state.showUsed) { store.persist() }
@@ -66,6 +67,17 @@ struct RootView: View {
         }
         .tint(.green)
         .sheet(isPresented: $addHost) { PairHostView() }
+        .confirmationDialog("Remove this computer?", isPresented: Binding(
+            get: { computerToRemove != nil }, set: { if !$0 { computerToRemove = nil } }
+        ), titleVisibility: .visible) {
+            Button("Remove computer", role: .destructive) {
+                if let computerToRemove { store.remove(computerToRemove.id) }
+                computerToRemove = nil
+            }
+            Button("Cancel", role: .cancel) { computerToRemove = nil }
+        } message: {
+            Text(computerToRemove?.name ?? "")
+        }
         .overlay {
             if scenePhase != .active && store.state.hideValues {
                 Rectangle().fill(.background).ignoresSafeArea().overlay { Label("Quotio", systemImage: "lock.fill").font(.title) }
@@ -99,8 +111,8 @@ struct RootView: View {
                     if let error = store.error { Label(error, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.secondary) }
                     if host.needsPairing {
                         ContentUnavailableView {
-                            Label("Pair this host again", systemImage: "lock.slash")
-                        } actions: { Button("Add host") { addHost = true } }
+                            Label("Pair this computer again", systemImage: "lock.slash")
+                        } actions: { Button("Pair again") { addHost = true } }
                     } else if let snapshot = host.snapshot {
                         TimelineView(.periodic(from: .now, by: 60)) { context in
                             Label {
@@ -131,7 +143,7 @@ struct RootView: View {
             } description: {
                 Text(store.error ?? String(localized: "Connect to Quotio on your computer to see usage and add widgets."))
             } actions: {
-                Button("Add host") { addHost = true }.buttonStyle(.borderedProminent)
+                Button("Add computer") { addHost = true }.buttonStyle(.borderedProminent)
                 Button("Explore demo") { store.showDemo() }
             }
         }

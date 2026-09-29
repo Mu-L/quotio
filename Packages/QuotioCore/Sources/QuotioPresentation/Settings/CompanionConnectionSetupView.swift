@@ -3,6 +3,7 @@ import SwiftUI
 
 struct CompanionConnectionSetupView: View {
     @Bindable var model: CompanionScreenModel
+    var includesAdvanced = true
     @State private var showAdvanced = false
 
     var body: some View {
@@ -25,20 +26,23 @@ struct CompanionConnectionSetupView: View {
                         .font(.system(.callout, design: .monospaced)).textSelection(.enabled)
                 }
             }
-            DisclosureGroup("companion.advanced".localized(), isExpanded: $showAdvanced) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Toggle("companion.customHTTPS".localized(), isOn: Binding(
-                        get: { model.mode == .proxy }, set: { model.mode = $0 ? .proxy : .localNetwork }
-                    ))
-                    if model.mode == .proxy {
-                        TextField("https://mac.example.com", text: $model.origin)
-                            .textFieldStyle(.roundedBorder).accessibilityLabel("companion.origin".localized())
-                        Text("companion.setupHint".localized()).font(.caption).foregroundStyle(.secondary)
+            if includesAdvanced {
+                DisclosureGroup("companion.advanced".localized(), isExpanded: $showAdvanced) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Toggle("companion.customHTTPS".localized(), isOn: Binding(
+                            get: { model.mode == .proxy }, set: { model.mode = $0 ? .proxy : .localNetwork }
+                        ))
+                        if model.mode == .proxy {
+                            TextField("https://mac.example.com", text: $model.origin)
+                                .textFieldStyle(.roundedBorder).accessibilityLabel("companion.origin".localized())
+                            Text("companion.setupHint".localized()).font(.caption).foregroundStyle(.secondary)
+                        }
+                        TextField("companion.port".localized(), value: $model.port, format: .number.grouping(.never))
+                            .textFieldStyle(.roundedBorder)
+                        Text("companion.explanation".localized()).font(.caption).foregroundStyle(.secondary)
                     }
-                    TextField("companion.port".localized(), value: $model.port, format: .number.grouping(.never))
-                        .textFieldStyle(.roundedBorder)
-                    Text("companion.explanation".localized()).font(.caption).foregroundStyle(.secondary)
-                }.padding(.top, 8)
+                    .padding(.top, 8)
+                }
             }
         }
         .onChange(of: model.mode, initial: true) { _, mode in

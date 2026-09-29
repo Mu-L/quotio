@@ -28,6 +28,11 @@ public final class CompanionScreenModel {
 
     public func presentPairing(in presentation: Presentation) {
         clearExpiredPairing()
+        if label == "iPhone" && devices.contains(where: { $0.label == label }) {
+            var number = 2
+            while devices.contains(where: { $0.label == "iPhone \(number)" }) { number += 1 }
+            label = "iPhone \(number)"
+        }
         self.presentation = presentation
     }
 
@@ -87,6 +92,17 @@ public final class CompanionScreenModel {
             devices.removeAll { $0.id == created.device.id }
             devices.append(created.device)
         }
+    }
+
+    public func createPairing() async {
+        if !enabled { await configure(enabled: true) }
+        guard enabled, failure == nil else { return }
+        await issue()
+    }
+
+    public func cancelPairing() async {
+        guard let id = pairing?.device.id else { return }
+        await revoke(id)
     }
 
     public func revoke(_ id: String) async {

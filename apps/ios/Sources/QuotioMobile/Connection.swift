@@ -9,6 +9,7 @@ public enum MobileError: Error, Sendable {
 public struct Pairing: Codable, Sendable {
     public var pairingVersion: Int
     public var origin: String
+    public var hostName: String
     public var hostID: String
     public var clientID: String
     public var expiresAt: Date
@@ -17,6 +18,7 @@ public struct Pairing: Codable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case pairingVersion = "pairing_version", origin, token, certificate
+        case hostName = "host_name"
         case hostID = "host_id", clientID = "client_id", expiresAt = "expires_at"
     }
 
@@ -25,11 +27,13 @@ public struct Pairing: Codable, Sendable {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let value = try decoder.decode(Self.self, from: data)
-        guard (value.pairingVersion == 1 && value.certificate == nil) ||
-                (value.pairingVersion == 2 && value.certificate.map { !$0.isEmpty && $0.count <= 4096 } == true) else {
+        guard value.pairingVersion == 2,
+              value.certificate.map({ !$0.isEmpty && $0.count <= 4096 }) ?? true else {
             throw MobileError.invalidConnection
         }
-        guard !value.hostID.isEmpty,
+        guard !value.hostName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              value.hostName.utf8.count <= 255,
+              !value.hostID.isEmpty,
               value.clientID == (try Connection.clientID(value.token)) else {
             throw MobileError.invalidConnection
         }

@@ -13,8 +13,11 @@ struct CompanionSettingsSection: View {
                         .font(.headline)
                     Text("companion.summary".localized()).foregroundStyle(.secondary)
                     HStack {
-                        Label(statusTitle, systemImage: model.enabled ? "checkmark.circle" : "pause.circle")
-                            .foregroundStyle(.secondary)
+                        Toggle(statusTitle, isOn: Binding(
+                            get: { model.enabled },
+                            set: { enabled in Task { await model.configure(enabled: enabled) } }
+                        ))
+                        .disabled(model.busy || !model.hasLoaded || (!model.enabled && !model.canEnable))
                         Spacer()
                         if model.busy { ProgressView().controlSize(.small) }
                         Button("companion.pair".localized()) { model.presentPairing(in: .settings) }
@@ -53,11 +56,10 @@ struct CompanionSettingsSection: View {
 
             Section("companion.connection".localized()) {
                 if model.enabled {
+                    Label(connectionTitle, systemImage: model.mode == .tailscale ? "network" : model.mode == .localNetwork ? "wifi" : "lock.shield")
                     LabeledContent("companion.origin".localized()) {
-                        Text(model.origin).font(.system(.body, design: .monospaced)).textSelection(.enabled)
+                        Text(model.origin).font(.system(.body, design: .monospaced)).foregroundStyle(.primary).textSelection(.enabled)
                     }
-                    Button("companion.disable".localized()) { Task { await model.configure(enabled: false) } }
-                        .disabled(model.busy)
                     Text("companion.disableHint".localized()).font(.caption).foregroundStyle(.secondary)
                 } else {
                     CompanionConnectionSetupView(model: model).disabled(model.busy)
@@ -90,5 +92,13 @@ struct CompanionSettingsSection: View {
     private var statusTitle: String {
         guard model.hasLoaded else { return "companion.statusUnknown".localized() }
         return (model.enabled ? "companion.statusOn" : "companion.statusOff").localized()
+    }
+
+    private var connectionTitle: String {
+        switch model.mode {
+        case .localNetwork: "companion.localNetwork".localized()
+        case .tailscale: "companion.tailscale".localized()
+        case .proxy: "companion.customHTTPS".localized()
+        }
     }
 }
