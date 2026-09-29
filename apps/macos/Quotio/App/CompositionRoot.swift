@@ -94,10 +94,13 @@ enum CompositionRoot {
             applicationSupportDirectoryName: AppIdentity.bundleIdentifier,
             accountVaultNamespace: AppIdentity.quotioCLIVaultNamespace()
         )
+        let companionService = QuotioCompanionService()
         let reconnectQuotioServer: @MainActor @Sendable () async -> Bool = {
             await quotioBackend.disconnect()
             guard let connection = try? await quotioServer.start() else { return false }
             await quotioBackend.connect(connection)
+            do { try await companionService.connect(connection) }
+            catch { Log.warning("Companion sharing could not be restored; local host remains available") }
             return true
         }
         quotioServer.onUnexpectedTermination = {
@@ -212,6 +215,7 @@ enum CompositionRoot {
             },
             reloadQuotaNetwork: { _ = await reconnectQuotioServer() }
         )
+        settingsScreenModel.companion = CompanionScreenModel(controller: companionService)
         let providerImageCache = ProviderImageCacheAdapter()
         let providerImageModel = ProviderImageScreenModel(
             loadImage: { [providerImageCache] name, size in

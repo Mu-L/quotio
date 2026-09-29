@@ -5,6 +5,8 @@ import QuotioDomain
 @MainActor
 @Observable
 public final class SettingsScreenModel {
+    public var companion: CompanionScreenModel?
+
     public private(set) var proxyPreferences: ProxyPreferences
     public private(set) var tunnelPreferences: TunnelPreferences
     public private(set) var appShellPreferences: AppShellPreferences
