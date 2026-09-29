@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(Security)
+import Security
+#endif
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
@@ -6,10 +9,12 @@ import FoundationNetworking
 public struct QuotioHostConnection: Sendable, Equatable {
     public let baseURL: URL
     public let token: String
+    public let trustedCertificate: Data?
 
-    public init(baseURL: URL, token: String) {
+    public init(baseURL: URL, token: String, trustedCertificate: Data? = nil) {
         self.baseURL = baseURL
         self.token = token
+        self.trustedCertificate = trustedCertificate
     }
 }
 
@@ -20,7 +25,40 @@ public enum QuotioHostClientError: Error, Equatable, Sendable {
     case timeout
 }
 
-private final class QuotioCLINoRedirectDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+final class QuotioCLINoRedirectDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    let connection: QuotioHostConnection
+    init(connection: QuotioHostConnection) { self.connection = connection }
+
+    #if canImport(Security)
+    func urlSession(_ session: URLSession, task: URLSessionTask,
+                    didReceive challenge: URLAuthenticationChallenge,
+                    completionHandler: @escaping @Sendable (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        guard let certificate = connection.trustedCertificate else {
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+        let space = challenge.protectionSpace
+        guard space.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              space.host == connection.baseURL.host,
+              space.port == (connection.baseURL.port ?? 443),
+              let trust = space.serverTrust,
+              Self.evaluate(trust, certificate: certificate, host: space.host) else {
+            completionHandler(.cancelAuthenticationChallenge, nil)
+            return
+        }
+        completionHandler(.useCredential, URLCredential(trust: trust))
+    }
+
+    static func evaluate(_ trust: SecTrust, certificate: Data, host: String) -> Bool {
+        guard let anchor = SecCertificateCreateWithData(nil, certificate as CFData),
+              SecTrustSetPolicies(trust, SecPolicyCreateSSL(true, host as CFString)) == errSecSuccess,
+              SecTrustSetAnchorCertificates(trust, [anchor] as CFArray) == errSecSuccess,
+              SecTrustSetAnchorCertificatesOnly(trust, true) == errSecSuccess,
+              SecTrustSetNetworkFetchAllowed(trust, false) == errSecSuccess else { return false }
+        return SecTrustEvaluateWithError(trust, nil)
+    }
+    #endif
+
     func urlSession(
         _ session: URLSession,
         task: URLSessionTask,
@@ -45,7 +83,7 @@ public struct QuotioHostHTTPClient: Sendable {
         configuration.timeoutIntervalForResource = 25
         self.session = session ?? URLSession(
             configuration: configuration,
-            delegate: QuotioCLINoRedirectDelegate(),
+            delegate: QuotioCLINoRedirectDelegate(connection: connection),
             delegateQueue: nil
         )
     }
@@ -67,9 +105,13 @@ public struct QuotioHostHTTPClient: Sendable {
 
     private func responseData(_ path: String, method: String = "GET", body: Data? = nil,
                               idempotencyKey: String? = nil, timeout: TimeInterval? = nil) async throws -> Data {
+        #if !canImport(Security)
+        guard connection.trustedCertificate == nil else { throw QuotioHostClientError.incompatible }
+        #endif
         let endpoint = connection.baseURL
         let loopback = ["127.0.0.1", "::1", "[::1]"].contains(endpoint.host ?? "")
         guard endpoint.scheme == "https" || (endpoint.scheme == "http" && loopback),
+              connection.trustedCertificate == nil || endpoint.scheme == "https",
               endpoint.host != nil, endpoint.user == nil, endpoint.password == nil,
               endpoint.query == nil, endpoint.fragment == nil,
               !connection.token.isEmpty,

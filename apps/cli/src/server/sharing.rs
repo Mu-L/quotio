@@ -253,6 +253,68 @@ pub(super) async fn update(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    #[ignore = "explicit Swift/iOS TLS smoke with synthetic credentials"]
+    async fn serve_apple_tls_smoke() {
+        let directory = std::path::PathBuf::from(
+            std::env::var("QUOTIO_TLS_SMOKE_DIR").expect("isolated output directory"),
+        );
+        std::fs::create_dir_all(&directory).unwrap();
+        let (mut state, fixture_directory, _) = crate::server::tests::fixture().await;
+        Arc::get_mut(&mut state).unwrap().no_saved_accounts = false;
+        let vault = state.vault.clone().unwrap();
+        let identity = crate::accounts::companion::identity(vault.clone())
+            .await
+            .unwrap();
+        let grant = crate::accounts::clients::create(
+            vault,
+            crate::accounts::clients::Create {
+                label: "Synthetic Apple test".into(),
+                scope: crate::accounts::clients::Scope::Read,
+                expires_in_seconds: 3600,
+            },
+            state.context.clock.now(),
+        )
+        .await
+        .unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let origin = format!("https://{address}");
+        let active = Arc::new(std::sync::atomic::AtomicBool::new(true));
+        let app = router(
+            state,
+            Arc::new(security::Policy::companion(address, &origin, active).unwrap()),
+        );
+        let handle = axum_server::Handle::new();
+        let server = tokio::spawn(
+            axum_server::from_tcp_rustls(
+                listener.into_std().unwrap(),
+                identity.tls(address.ip()).unwrap(),
+            )
+            .handle(handle.clone())
+            .serve(app.into_make_service()),
+        );
+        let file = directory.join("pairing.json");
+        std::fs::write(
+            &file,
+            serde_json::to_vec(
+                &json!({"origin":origin,"token":grant.token,"certificate":identity.certificate}),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        for _ in 0..600 {
+            if directory.join("stop").exists() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        }
+        handle.shutdown();
+        server.await.unwrap().unwrap();
+        std::fs::remove_file(file).unwrap();
+        std::fs::remove_dir_all(fixture_directory).unwrap();
+    }
+
     #[test]
     fn discovery_never_offers_public_loopback_or_wildcard_addresses() {
         for value in ["0.0.0.0", "127.0.0.1", "8.8.8.8", "::1", "::"] {

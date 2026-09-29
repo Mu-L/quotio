@@ -7,7 +7,7 @@ let package = Package(
     products: [.library(name: "QuotioHostClient", targets: ["QuotioHostClient"])],
     targets: [
         .target(name: "QuotioHostClient"),
-        .testTarget(name: "QuotioHostClientTests", dependencies: ["QuotioHostClient"]),
+        .testTarget(name: "QuotioHostClientTests", dependencies: ["QuotioHostClient"], resources: [.copy("Fixtures")]),
     ],
     swiftLanguageModes: [.v6]
 )
