@@ -40,52 +40,68 @@ Use the same team for app and widget, with App Group
 to that team's certificates and profiles. Simulator builds retain ad-hoc signing.
 Do not commit certificates, provisioning profiles, archives or signing secrets.
 
+## Connect the macOS app
+
+Choose **Pair iPhone…** directly in the Quotio menu; the main window stays closed.
+Select **Local network** for the same Wi-Fi/Ethernet network, or **Tailscale IP**
+with Tailscale connected on both devices. Quotio discovers active IPv4 addresses;
+if several are available, select the one reachable by your iPhone. No domain or
+reverse proxy is needed. Enable sharing, name the device and create its code.
+
+Scan the QR inside the updated Quotio iPhone app, or choose **Copy pairing code**
+on Mac and **Paste** on iPhone. Confirm the address before connecting. Copy the whole
+code: direct connections need its certificate as well as its device token.
+The host's private key stays in its credential vault. The phone and widgets trust
+only the paired CA for this connection, with normal hostname/expiry/signature checks.
+No certificate profile or device-wide trust installation is required.
+
+**Advanced** keeps the sharing port and optional custom HTTPS reverse proxy. Saved
+proxy setups remain available. **Change network…** in the pairing view pauses sharing
+so another network can be selected. If the host address changes, pair again from
+the new address; existing saved profiles do not discover address changes automatically.
+
+Use **Settings… → iPhone sharing** to review and revoke authorized devices. Closing
+the pairing view retains its current code in memory; reopening does not issue a new
+credential. Done clears the displayed code without revoking the device. Codes also
+clear on expiry, revocation or an endpoint change. Existing grants cannot be shown
+again once their in-memory code is cleared.
+
+Keep this Mac awake and Quotio running. Allow the sharing port through your firewall.
+Listening does not prove iPhone reachability. Automatic discovery currently uses
+private/link-local IPv4 for LAN and assigned `100.64.0.0/10` addresses for Tailscale;
+other VPNs using that range may appear. IPv6-only networks need the custom HTTPS path.
+
 ## Connect a CLI host
 
-Start a current host with saved-account storage, management enabled, an owner token
-in `QUOTIO_SERVER_TOKEN`, and an external HTTPS origin. The Rust listener stays on
-loopback. macOS uses Keychain; Linux also needs its documented vault master key.
+Start a current host with saved-account storage, management enabled and an owner
+token in `QUOTIO_SERVER_TOKEN`. Keep its owner API on loopback:
 
 ```sh
-quotio serve --manage --public-url https://computer.example --listen 127.0.0.1:6767
-quotio devices add --label iPhone --public-url https://computer.example
+quotio serve --manage --listen 127.0.0.1:6767
+```
+
+Use the local-owner [sharing API](../cli/docs/local-http-api.md#iphone-companion) to
+list network addresses and enable `local_network` or `tailscale` with the desired
+address and port. Then issue a device code using the returned `public_url`:
+
+```sh
+quotio devices add --label iPhone --public-url https://192.168.1.10:6768
 quotio devices list
 quotio devices revoke CLIENT_ID
 ```
 
-The `devices` commands read the same owner token from the environment and call the
-local owner API. The `add` output is sensitive JSON returned once. Enter its origin
-and device token in iPhone, or encode the JSON as a QR locally and scan in Quotio.
-Never share the owner token with the phone. Lost issuance output: list/revoke that
-device and issue again, rather than retrying blindly.
+These commands read the owner token from the environment. `--api` selects another
+loopback owner port. The add result includes the companion CA when its origin matches
+the active direct listener. Paste the sensitive JSON into Quotio iPhone, or encode it
+as a QR locally. Never share the owner token. Lost output: list/revoke the device
+and issue again. For an existing HTTPS reverse proxy, the previous version-1 pairing
+flow remains supported. No public tunnel or automatic VPN installation is included.
 
-Configure an HTTPS reverse proxy on the host forwarding to loopback and preserving
-Host and Authorization. Its Host must match `--public-url`. Restrict exposure to LAN
-or private VPN. Tailscale Serve is one supported deployment approach, not an app
-dependency. Plain LAN also needs a trusted certificate and matching hostname. There
-is no insecure TLS switch, automatic VPN installation or public tunnel.
-
-## Connect the macOS app
-
-Choose Pair iPhone… directly in the Quotio menu. A compact pairing view opens
-without opening the main window, including first-time address setup. Enter your
-HTTPS address, enable sharing, name the device and create its code. The local
-upstream port is under Advanced. Use Settings… → iPhone sharing to review and
-revoke authorized devices.
-Point your HTTPS proxy at that local port. Scan the code inside Quotio iPhone and
-confirm the address before connecting. Manual details let you copy the device token.
-Closing the pairing view preserves the current code in memory; reopening it does
-not issue another credential. Done clears the displayed code without revoking the
-device. Codes also disappear on expiry, revocation or an endpoint change. Existing
-grants cannot be displayed again after their in-memory code has been cleared.
-
-The companion listener shares the existing Rust process, vault and scheduler. It
-accepts delegated reads only; the original local owner listener retains native
-permission/OAuth authority. Disabling sharing stops new companion requests, including
-requests on old keep-alive connections. Already-started reads may finish.
-
-This Mac must be awake and Quotio must remain running. “Local listener ready” does
-not certify the external proxy, certificate, VPN or iPhone reachability.
+The companion listener shares the host process, scheduler and vault, and accepts
+only delegated reads. The local owner endpoint retains OAuth and OS-approval authority.
+Disabling sharing blocks new requests, including old keep-alive connections; already
+started reads may finish. Creating the direct TLS identity upgrades the vault to
+format 19, which older Quotio CLI binaries cannot read.
 
 ## Widgets, privacy and data
 

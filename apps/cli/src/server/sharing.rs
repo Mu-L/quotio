@@ -20,6 +20,7 @@ struct NetworkAddress {
     interface: String,
 }
 
+// ponytail: assigned CGNAT IPv4 hints at Tailscale; use its LocalAPI if other CGNAT VPNs need disambiguation.
 fn network_mode(ip: IpAddr) -> Option<Mode> {
     match ip {
         IpAddr::V4(ip) if ip.octets()[0] == 100 && (64..=127).contains(&ip.octets()[1]) => {

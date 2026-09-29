@@ -51,10 +51,11 @@ changes or store uploads.
 
 ## Known boundaries
 
-Sharing readiness means the local companion listener is listening. It does not test
-an external HTTPS reverse proxy. Configure that proxy separately and retain the
-original local owner endpoint for OS approval. Device codes are credentials valid
-until expiry/revocation, not one-use pairing sessions.
+Sharing readiness means the companion listener is listening; it does not test the
+firewall or iPhone reachability. Direct LAN/Tailscale modes handle TLS themselves;
+custom HTTPS proxy mode still requires configuring that proxy separately. The
+original local owner endpoint retains OS-approval authority. Device codes remain
+credentials until expiry/revocation, not one-use pairing sessions.
 
 The widget gallery describes the supported families and previews current quota;
 full pixel previews for every family and device still need device-level visual QA.
@@ -103,3 +104,38 @@ revocation, endpoint changes, persisted configuration, specific service errors,
 menu command routing without opening the app, and native popover dismissal when
 Settings takes over. Synthetic QR layouts were rendered in Light/Dark appearances.
 Physical iPhone QR scanning and LAN/VPN reachability still need device acceptance.
+
+## Direct LAN/Tailscale pairing, 2026-09-29
+
+The first-time HTTPS field is replaced with Local network and Tailscale IP choices
+in Settings and the menu popover. Assigned IPv4 addresses are discovered by the host;
+missing-network states explain what to connect. Advanced retains custom proxies.
+The read-only listener serves TLS directly on the selected interface. CA identity
+is persisted in the vault; owner tokens and management requests remain rejected.
+Version-2 pairing carries the CA to iPhone; app and widget retain it with their
+host profile. HTTPS, host identity, certificate signatures and expiry remain checked.
+
+Verified locally:
+
+- CLI library: 473 passed, 1 ignored before adding the opt-in cross-language fixture.
+- HostClient: certificate tests reject wrong CA, wrong IP and expired leaf; live
+  URLSession-to-Rust TLS succeeds with the paired root and rejects an unpaired root.
+- iOS app + widget built. The live TLS test also passed inside the Simulator app
+  with its actual ATS configuration. HostStore tests verify certificate persistence,
+  Keychain token storage, refresh and revocation. Mobile package: 7 tests passed.
+- QuotioCore full tests and architecture check passed. Later focused companion tests
+  passed after final UI adjustments. Native Light/Dark setup and pairing renders
+  were inspected; the Debug macOS app built and was relaunched.
+- Windows GNU cross-check passed with existing platform warnings. Windows runtime,
+  physical iPhone camera/LAN and an actual Tailscale tunnel remain unverified.
+
+To repeat the optional TLS smoke, create a temporary directory and set
+`QUOTIO_TLS_SMOKE_DIR` for `cargo test --manifest-path apps/cli/Cargo.toml --lib
+serve_apple_tls_smoke -- --ignored`. While that process runs, set
+`QUOTIO_TLS_SMOKE_FILE` to its `pairing.json` for the HostClient `testLiveRustTLS`
+test, or `TEST_RUNNER_QUOTIO_TLS_SMOKE_FILE` for an iOS Simulator unit-test run.
+Create a `stop` file in the directory to finish the fixture. It uses synthetic
+credentials only and removes its pairing file on normal completion.
+
+Apple references: [custom trust anchors](https://developer.apple.com/documentation/security/configuring-a-trust),
+[local-network ATS](https://developer.apple.com/documentation/bundleresources/information-property-list/nsapptransportsecurity/nsallowslocalnetworking).
