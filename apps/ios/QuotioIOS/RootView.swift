@@ -33,10 +33,7 @@ struct RootView: View {
                         }
                 }
             }
-            Tab("Widgets", systemImage: "square.grid.2x2.fill", value: 1) {
-                NavigationStack { WidgetGallery().navigationTitle("Widgets") }
-            }
-            Tab("Settings", systemImage: "slider.horizontal.3", value: 2) {
+            Tab("Settings", systemImage: "slider.horizontal.3", value: 1) {
                 NavigationStack {
                     Form {
                         Section {

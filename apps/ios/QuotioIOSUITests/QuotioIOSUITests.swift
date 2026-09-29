@@ -17,8 +17,6 @@ final class QuotioIOSUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["39%"].exists)
         app.buttons["Hide values"].tap()
         XCTAssertFalse(app.staticTexts["39%"].exists)
-        app.tabBars.buttons["Widgets"].tap()
-        XCTAssertTrue(app.staticTexts["Home Screen"].exists)
         app.tabBars.buttons["Settings"].tap()
         app.buttons["Add computer"].tap()
         XCTAssertTrue(app.buttons["Scan pairing code"].waitForExistence(timeout: 3))

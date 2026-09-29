@@ -24,7 +24,6 @@
 		80CDA913FED435577B14912A /* demo-snapshot.json in Resources */ = {isa = PBXBuildFile; fileRef = 2D7491D8145F7A95D2C65A13 /* demo-snapshot.json */; };
 		8297DCBDDBF12AE81CC76F84 /* QuotioMobile in Frameworks */ = {isa = PBXBuildFile; productRef = 37CF7D282836FB1AFC884E8F /* QuotioMobile */; };
 		9B03B7E2CDF7CA853646F223 /* QuotioHostClient in Frameworks */ = {isa = PBXBuildFile; productRef = 34A04FEE7E7842E0F07CA4FC /* QuotioHostClient */; };
-		A93809AD93AA6835FF23ED2C /* WidgetGallery.swift in Sources */ = {isa = PBXBuildFile; fileRef = E68A7BE72C051E7E79C9E03E /* WidgetGallery.swift */; };
 		BAE77C00A7B2543EEDC78DA5 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DF9E2304FA48CD5B585C0F68 /* Assets.xcassets */; };
 		D3D956BD23B2D8D59757A7B7 /* QuotioWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3D463B05841CDD484AB2B1A8 /* QuotioWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D6DCFE488213D93671FF5E95 /* HostStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB1991FB26C2CB1C0C01609D /* HostStore.swift */; };
@@ -92,7 +91,6 @@
 		CD8F82C7D3420A827E3F7A52 /* HostStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostStoreTests.swift; sourceTree = "<group>"; };
 		D70D21B697A885BAC780633A /* QuotioIOSUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotioIOSUITests.swift; sourceTree = "<group>"; };
 		DF9E2304FA48CD5B585C0F68 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		E68A7BE72C051E7E79C9E03E /* WidgetGallery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetGallery.swift; sourceTree = "<group>"; };
 		FB1991FB26C2CB1C0C01609D /* HostStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -175,7 +173,6 @@
 				BA09E3EDBA14E559A00B96E2 /* QuotioIOSApp.swift */,
 				9B33B46A0E170219219CEC63 /* RootView.swift */,
 				7AB5D75701332D9DFF0C4E20 /* UsageViews.swift */,
-				E68A7BE72C051E7E79C9E03E /* WidgetGallery.swift */,
 			);
 			path = QuotioIOS;
 			sourceTree = "<group>";
@@ -409,7 +406,6 @@
 				30C715E83FD18711402EB82B /* RootView.swift in Sources */,
 				4AD3AA436325441EE586DD64 /* SharedContainer.swift in Sources */,
 				6F357F4245EC328EB683CA4B /* UsageViews.swift in Sources */,
-				A93809AD93AA6835FF23ED2C /* WidgetGallery.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
