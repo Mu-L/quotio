@@ -2,11 +2,58 @@
 use super::*;
 use axum::Extension;
 use serde::Deserialize;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
+
+#[derive(Clone, Copy, Default, Deserialize, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+enum Mode {
+    LocalNetwork,
+    Tailscale,
+    #[default]
+    Proxy,
+}
+
+#[derive(serde::Serialize)]
+struct NetworkAddress {
+    mode: Mode,
+    address: String,
+    interface: String,
+}
+
+fn network_mode(ip: IpAddr) -> Option<Mode> {
+    match ip {
+        IpAddr::V4(ip) if ip.octets()[0] == 100 && (64..=127).contains(&ip.octets()[1]) => {
+            Some(Mode::Tailscale)
+        }
+        IpAddr::V4(ip) if ip.is_private() || ip.is_link_local() => Some(Mode::LocalNetwork),
+        _ => None,
+    }
+}
+fn addresses() -> Result<Vec<NetworkAddress>, ApiError> {
+    let interfaces = if_addrs::get_if_addrs()
+        .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "network_discovery_failed"))?;
+    let mut values: Vec<_> = interfaces
+        .into_iter()
+        .filter(|item| item.is_oper_up())
+        .filter_map(|item| {
+            network_mode(item.ip()).map(|mode| NetworkAddress {
+                mode,
+                address: item.ip().to_string(),
+                interface: item.name,
+            })
+        })
+        .collect();
+    values.sort_by(|a, b| a.address.cmp(&b.address));
+    values.dedup_by(|a, b| a.address == b.address);
+    Ok(values)
+}
 
 #[derive(Default)]
 pub(super) struct Sharing {
     listener: Option<tokio::task::JoinHandle<()>>,
+    tls_handle: Option<axum_server::Handle>,
+    certificate: Option<String>,
+    mode: Mode,
     address: Option<SocketAddr>,
     origin: Option<String>,
     active: Option<Arc<std::sync::atomic::AtomicBool>>,
@@ -21,12 +68,16 @@ impl Sharing {
     fn view(&self) -> Value {
         json!({"schema_version":2,
                "enabled":self.listener.as_ref().is_some_and(|task| !task.is_finished()),
-               "listen":self.address.map(|address| address.to_string()), "public_url":self.origin})
+               "listen":self.address.map(|address| address.to_string()), "public_url":self.origin, "mode": self.mode, "certificate": self.certificate})
     }
     pub fn stop(&mut self) {
         if let Some(active) = self.active.take() {
             active.store(false, Ordering::SeqCst);
         }
+        if let Some(handle) = self.tls_handle.take() {
+            handle.graceful_shutdown(Some(std::time::Duration::from_secs(2)));
+        }
+        self.certificate = None;
         if let Some(shutdown) = self.shutdown.take() {
             shutdown.send_replace(true);
         }
@@ -40,6 +91,8 @@ impl Sharing {
 #[serde(deny_unknown_fields)]
 pub(super) struct Update {
     enabled: bool,
+    #[serde(default)]
+    mode: Mode,
     listen: Option<SocketAddr>,
     public_url: Option<String>,
 }
@@ -55,7 +108,9 @@ pub(super) async fn get(
     Extension(principal): Extension<security::Principal>,
 ) -> Result<Json<Value>, ApiError> {
     local_owner(&principal)?;
-    Ok(Json(state.sharing.lock().await.view()))
+    let mut view = state.sharing.lock().await.view();
+    view["addresses"] = serde_json::to_value(addresses()?).expect("serializable addresses");
+    Ok(Json(view))
 }
 pub(super) async fn update(
     State(state): State<Arc<ApiState>>,
@@ -76,15 +131,31 @@ pub(super) async fn update(
     }
     let address = input
         .listen
-        .filter(|address| address.ip().is_loopback() && address.port() != 0)
+        .filter(|address| address.port() != 0)
         .ok_or(ApiError(StatusCode::BAD_REQUEST, "invalid_share_address"))?;
-    let origin = input
-        .public_url
-        .ok_or(ApiError(StatusCode::BAD_REQUEST, "invalid_public_url"))?;
+    let origin = if input.mode == Mode::Proxy {
+        if !address.ip().is_loopback() {
+            return Err(ApiError(StatusCode::BAD_REQUEST, "invalid_share_address"));
+        }
+        input
+            .public_url
+            .ok_or(ApiError(StatusCode::BAD_REQUEST, "invalid_public_url"))?
+    } else {
+        if !addresses()?.iter().any(|candidate| {
+            candidate.address == address.ip().to_string() && candidate.mode == input.mode
+        }) {
+            return Err(ApiError(
+                StatusCode::BAD_REQUEST,
+                "network_address_unavailable",
+            ));
+        }
+        format!("https://{address}")
+    };
     let active = Arc::new(std::sync::atomic::AtomicBool::new(true));
     let policy = security::Policy::companion(address, &origin, active.clone())
         .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "invalid_public_url"))?;
     if sharing.address == Some(address)
+        && sharing.mode == input.mode
         && sharing.origin.as_deref() == Some(&origin)
         && sharing
             .listener
@@ -103,22 +174,77 @@ pub(super) async fn update(
     let listener = TcpListener::bind(address)
         .await
         .map_err(|_| ApiError(StatusCode::CONFLICT, "share_port_unavailable"))?;
+    let identity = if input.mode != Mode::Proxy {
+        Some(
+            crate::accounts::companion::identity(state.vault.clone().expect("checked vault"))
+                .await
+                .map_err(|error| {
+                    ApiError(
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        management::account_code(&error),
+                    )
+                })?,
+        )
+    } else {
+        None
+    };
+    let tls = identity
+        .as_ref()
+        .map(|identity| identity.tls(address.ip()))
+        .transpose()
+        .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "sharing_tls_unavailable"))?;
     sharing.stop();
     let router = router(state.clone(), Arc::new(policy));
-    let (shutdown, mut stopped) = watch::channel(false);
-    sharing.shutdown = Some(shutdown);
     sharing.active = Some(active);
-    sharing.listener = Some(tokio::spawn(async move {
-        if axum::serve(listener, router)
-            .with_graceful_shutdown(async move {
-                let _ = stopped.wait_for(|value| *value).await;
-            })
-            .await
-            .is_err()
-        {
-            tracing::warn!("companion_listener_stopped");
-        }
-    }));
+    sharing.mode = input.mode;
+    sharing.certificate = identity
+        .as_ref()
+        .map(|identity| identity.certificate.clone());
+    sharing.listener = Some(if let Some(tls) = tls {
+        let handle = axum_server::Handle::new();
+        sharing.tls_handle = Some(handle.clone());
+        let listener = listener
+            .into_std()
+            .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "sharing_tls_unavailable"))?;
+        tokio::spawn(async move {
+            let server = axum_server::from_tcp_rustls(listener, tls.clone())
+                .handle(handle)
+                .serve(router.into_make_service());
+            tokio::pin!(server);
+            // Renew the short-lived leaf while keeping the QR-trusted CA stable.
+            let period = std::time::Duration::from_secs(30 * 24 * 60 * 60);
+            let mut renewal =
+                tokio::time::interval_at(tokio::time::Instant::now() + period, period);
+            loop {
+                tokio::select! {
+                    result = &mut server => {
+                        if result.is_err() { tracing::warn!("companion_listener_stopped"); }
+                        break;
+                    }
+                    _ = renewal.tick() => {
+                        match identity.as_ref().expect("TLS identity").tls(address.ip()) {
+                            Ok(config) => tls.reload_from_config(config.get_inner()),
+                            Err(_) => tracing::warn!("companion_certificate_renewal_failed"),
+                        }
+                    }
+                }
+            }
+        })
+    } else {
+        let (shutdown, mut stopped) = watch::channel(false);
+        sharing.shutdown = Some(shutdown);
+        tokio::spawn(async move {
+            if axum::serve(listener, router)
+                .with_graceful_shutdown(async move {
+                    let _ = stopped.wait_for(|value| *value).await;
+                })
+                .await
+                .is_err()
+            {
+                tracing::warn!("companion_listener_stopped");
+            }
+        })
+    });
     sharing.address = Some(address);
     sharing.origin = Some(origin);
     Ok(Json(sharing.view()))
@@ -127,6 +253,127 @@ pub(super) async fn update(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn discovery_never_offers_public_loopback_or_wildcard_addresses() {
+        for value in ["0.0.0.0", "127.0.0.1", "8.8.8.8", "::1", "::"] {
+            assert!(network_mode(value.parse().unwrap()).is_none());
+        }
+        assert!(matches!(
+            network_mode("192.168.1.9".parse().unwrap()),
+            Some(Mode::LocalNetwork)
+        ));
+        assert!(matches!(
+            network_mode("100.64.0.1".parse().unwrap()),
+            Some(Mode::Tailscale)
+        ));
+        assert!(network_mode("100.128.0.1".parse().unwrap()).is_none());
+    }
+
+    #[tokio::test]
+    async fn tls_requires_paired_ca_preserves_identity_and_rejects_owner_tokens() {
+        use base64::Engine;
+        let (mut state, directory, _) = crate::server::tests::fixture().await;
+        Arc::get_mut(&mut state).unwrap().no_saved_accounts = false;
+        let vault = state.vault.clone().unwrap();
+        let identity = crate::accounts::companion::identity(vault.clone())
+            .await
+            .unwrap();
+        assert_eq!(
+            identity.certificate,
+            crate::accounts::companion::identity(vault.clone())
+                .await
+                .unwrap()
+                .certificate
+        );
+        assert_eq!(vault.begin().unwrap().document.version, 19);
+        let grant = crate::accounts::clients::create(
+            vault,
+            crate::accounts::clients::Create {
+                label: "TLS phone".into(),
+                scope: crate::accounts::clients::Scope::Read,
+                expires_in_seconds: 60,
+            },
+            state.context.clock.now(),
+        )
+        .await
+        .unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let origin = format!("https://{address}");
+        let active = Arc::new(std::sync::atomic::AtomicBool::new(true));
+        let app = router(
+            state.clone(),
+            Arc::new(security::Policy::companion(address, &origin, active).unwrap()),
+        );
+        let tls = identity.tls(address.ip()).unwrap();
+        let handle = axum_server::Handle::new();
+        let server = tokio::spawn(
+            axum_server::from_tcp_rustls(listener.into_std().unwrap(), tls)
+                .handle(handle.clone())
+                .serve(app.into_make_service()),
+        );
+        let cert = base64::engine::general_purpose::STANDARD
+            .decode(&identity.certificate)
+            .unwrap();
+        let client = reqwest::Client::builder()
+            .tls_built_in_root_certs(false)
+            .add_root_certificate(reqwest::Certificate::from_der(&cert).unwrap())
+            .build()
+            .unwrap();
+        let url = format!("{origin}/v2/status");
+        assert!(
+            reqwest::Client::new()
+                .get(&url)
+                .bearer_auth(&grant.token)
+                .send()
+                .await
+                .is_err()
+        );
+        let response = client
+            .get(&url)
+            .bearer_auth(&grant.token)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 200);
+        let status: Value = response.json().await.unwrap();
+        assert_eq!(status["access_mode"], "read_only");
+        assert_eq!(
+            client
+                .get(&url)
+                .bearer_auth("synthetic-owner-secret-123456789012345")
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            401
+        );
+        assert_eq!(
+            client
+                .get(format!("{origin}/v2/sharing"))
+                .bearer_auth(&grant.token)
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            403
+        );
+        assert_eq!(
+            client
+                .post(format!("{origin}/v2/refresh"))
+                .bearer_auth(&grant.token)
+                .json(&json!({}))
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            405
+        );
+        handle.shutdown();
+        server.await.unwrap().unwrap();
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
     #[tokio::test]
     async fn companion_listener_preserves_local_owner_and_rejects_remote_authority() {
         let (mut state, directory, _) = crate::server::tests::fixture().await;
@@ -158,6 +405,14 @@ mod tests {
         drop(candidate);
         let client = reqwest::Client::new();
         let base = format!("http://{local_address}");
+        let invalid = client
+            .put(format!("{base}/v2/sharing"))
+            .bearer_auth(owner)
+            .json(&json!({"enabled":true,"mode":"local_network","listen":"0.0.0.0:6768"}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(invalid.status(), 400);
         let response = client.put(format!("{base}/v2/sharing")).bearer_auth(owner)
             .json(&json!({"enabled":true,"listen":address.to_string(),"public_url":"https://companion.example.test"}))
             .send().await.unwrap();

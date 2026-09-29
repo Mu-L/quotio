@@ -2,6 +2,7 @@ pub mod api;
 pub(crate) mod authorization;
 pub(crate) mod clients;
 pub mod command;
+pub(crate) mod companion;
 pub mod discovery;
 #[cfg(any(target_os = "linux", all(test, unix)))]
 mod encrypted_file;
@@ -350,6 +351,8 @@ pub struct MutationReceipt {
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct Document {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) companion_identity: Option<companion::Identity>,
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub(crate) client_grants: std::collections::BTreeMap<String, clients::Record>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -372,6 +375,7 @@ pub struct Document {
 impl Document {
     pub fn empty() -> Self {
         Self {
+            companion_identity: None,
             client_grants: Default::default(),
             resolved: None,
             native_discovery: None,
