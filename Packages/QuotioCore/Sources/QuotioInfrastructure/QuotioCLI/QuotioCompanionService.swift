@@ -5,6 +5,7 @@ import QuotioHostClient
 
 @MainActor
 public final class QuotioCompanionService: CompanionControlling {
+    private var activeStatus: CompanionStatus?
     private var client: QuotioHostHTTPClient?
     private let defaults: UserDefaults
     private let session: URLSession?
@@ -18,32 +19,53 @@ public final class QuotioCompanionService: CompanionControlling {
         client = QuotioHostHTTPClient(connection: connection, session: session)
         if defaults.bool(forKey: "companion.enabled") {
             _ = try await configure(enabled: true, origin: defaults.string(forKey: "companion.origin") ?? "",
-                                    port: defaults.integer(forKey: "companion.port"))
+                                    port: defaults.integer(forKey: "companion.port"), mode: savedMode, address: defaults.string(forKey: "companion.address") ?? "")
         }
     }
 
     public func status() async throws -> CompanionStatus {
         let value: CompanionStatus = try await request("v2/sharing")
         let savedPort = defaults.object(forKey: "companion.port") as? Int ?? 6768
+        activeStatus = value
         return CompanionStatus(enabled: value.enabled,
                                listen: value.listen ?? "127.0.0.1:\(savedPort)",
-                               publicUrl: value.publicUrl ?? defaults.string(forKey: "companion.origin"))
+                               publicUrl: value.publicUrl ?? defaults.string(forKey: "companion.origin"),
+                               mode: value.enabled ? value.mode : savedMode,
+                               addresses: value.addresses, certificate: value.certificate)
     }
 
-    public func configure(enabled: Bool, origin: String, port: Int) async throws -> CompanionStatus {
+    private var savedMode: CompanionConnectionMode {
+        if let raw = defaults.string(forKey: "companion.mode"), let mode = CompanionConnectionMode(rawValue: raw) { return mode }
+        return defaults.string(forKey: "companion.origin") == nil ? .localNetwork : .proxy
+    }
+
+    public func configure(enabled: Bool, origin: String, port: Int,
+                          mode: CompanionConnectionMode = .proxy, address: String = "") async throws -> CompanionStatus {
+        var input: [String: Any] = ["enabled": enabled]
         if enabled {
-            try validate(origin: origin)
             guard (1...65535).contains(port) else { throw CompanionFailure.invalidPort }
+            input["mode"] = mode.rawValue
+            if mode == .proxy {
+                try validate(origin: origin)
+                input["listen"] = "127.0.0.1:\(port)"
+                input["public_url"] = origin
+            } else {
+                let available = try await status().addresses ?? []
+                guard let selected = available.first(where: { $0.mode == mode && $0.address == address })
+                    ?? available.first(where: { $0.mode == mode }) else { throw CompanionFailure.networkUnavailable }
+                input["listen"] = "\(selected.address):\(port)"
+                input["public_url"] = NSNull()
+            }
         }
-        let input: [String: Any] = enabled
-            ? ["enabled": true, "listen": "127.0.0.1:\(port)", "public_url": origin]
-            : ["enabled": false]
         let body = try JSONSerialization.data(withJSONObject: input)
         let status: CompanionStatus = try await request("v2/sharing", method: "PUT", body: body)
+        activeStatus = status
         defaults.set(enabled, forKey: "companion.enabled")
         if enabled {
-            defaults.set(origin, forKey: "companion.origin")
+            defaults.set(status.publicUrl, forKey: "companion.origin")
             defaults.set(port, forKey: "companion.port")
+            defaults.set(mode.rawValue, forKey: "companion.mode")
+            defaults.set(status.listen?.split(separator: ":").first.map(String.init), forKey: "companion.address")
         }
         return status
     }
@@ -62,13 +84,17 @@ public final class QuotioCompanionService: CompanionControlling {
             let token: String
         }
         try validate(origin: origin)
+        guard let current = activeStatus, current.enabled, current.publicUrl == origin else { throw CompanionFailure.hostUnavailable }
+        guard current.mode == nil || current.mode == .proxy || current.certificate != nil else { throw CompanionFailure.requestFailed }
         guard !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CompanionFailure.invalidLabel }
         let body = try JSONSerialization.data(withJSONObject: ["label": label, "scope": "read", "expires_in_seconds": 2592000] as [String: Any])
         let response: Response = try await request("v2/clients", method: "POST", body: body)
         guard response.schemaVersion == 2, response.client.scope == "read" else { throw CompanionFailure.requestFailed }
-        let data = try JSONSerialization.data(withJSONObject: ["pairing_version": 1, "origin": origin, "host_id": response.hostId,
+        var payload: [String: Any] = ["pairing_version": current.certificate == nil ? 1 : 2, "origin": origin, "host_id": response.hostId,
                                                               "client_id": response.client.id, "expires_at": ISO8601DateFormatter().string(from: response.client.expiresAt),
-                                                              "token": response.token], options: [.sortedKeys])
+                                                              "token": response.token]
+        if let certificate = current.certificate { payload["certificate"] = certificate }
+        let data = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
         return CompanionPairing(device: response.client, origin: origin, token: response.token, payload: String(decoding: data, as: UTF8.self))
     }
 
@@ -100,6 +126,8 @@ public final class QuotioCompanionService: CompanionControlling {
 
     private static func failure(_ error: Error) -> CompanionFailure {
         switch error {
+        case QuotioHostClientError.response(_, "network_address_unavailable"),
+             QuotioHostClientError.response(_, "network_discovery_failed"): .networkUnavailable
         case QuotioHostClientError.response(_, "share_port_unavailable"): .portInUse
         case QuotioHostClientError.response(_, "disable_sharing_before_changing_origin"): .mustDisable
         case QuotioHostClientError.response(_, "invalid_public_url"): .invalidOrigin

@@ -43,7 +43,7 @@ final class CompanionPopoverPresenterTests: XCTestCase {
 private final class PopoverCompanionStub: CompanionControlling {
     var issueCount = 0
     func status() async throws -> CompanionStatus { CompanionStatus(enabled: false, listen: nil, publicUrl: nil) }
-    func configure(enabled: Bool, origin: String, port: Int) async throws -> CompanionStatus { throw CompanionFailure.requestFailed }
+    func configure(enabled: Bool, origin: String, port: Int, mode: CompanionConnectionMode, address: String) async throws -> CompanionStatus { throw CompanionFailure.requestFailed }
     func devices() async throws -> [CompanionDevice] { [] }
     func issue(label: String, origin: String) async throws -> CompanionPairing {
         issueCount += 1

@@ -6,6 +6,12 @@ import QuotioDomain
 @MainActor @Observable
 public final class CompanionScreenModel {
     public enum Presentation: Equatable { case settings, menuBar }
+    public var mode: CompanionConnectionMode = .localNetwork
+    public var address = ""
+    public private(set) var addresses: [CompanionNetworkAddress] = []
+    public var availableAddresses: [CompanionNetworkAddress] { addresses.filter { $0.mode == mode } }
+    public var selectedAddress: String { availableAddresses.first(where: { $0.address == address })?.address ?? availableAddresses.first?.address ?? "" }
+    public var canEnable: Bool { mode == .proxy ? !origin.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty : !selectedAddress.isEmpty }
     public var origin = ""
     public var port = 6768
     public var label = "iPhone"
@@ -45,7 +51,10 @@ public final class CompanionScreenModel {
         await perform {
             let status = try await controller.status()
             let devices = try await controller.devices()
+            addresses = status.addresses ?? []
             if status.enabled || !hasLoaded {
+                mode = status.mode ?? .proxy
+                if let listen = status.listen { address = String(listen.split(separator: ":").first ?? "") }
                 if let value = status.publicUrl { origin = value }
                 if let value = status.listen?.split(separator: ":").last, let port = Int(value) { self.port = port }
             }
@@ -59,7 +68,7 @@ public final class CompanionScreenModel {
 
     public func configure(enabled: Bool) async {
         await perform {
-            let status = try await controller.configure(enabled: enabled, origin: origin.trimmingCharacters(in: .whitespacesAndNewlines), port: port)
+            let status = try await controller.configure(enabled: enabled, origin: origin.trimmingCharacters(in: .whitespacesAndNewlines), port: port, mode: mode, address: selectedAddress)
             self.enabled = status.enabled
             if let value = status.publicUrl { origin = value }
             hasLoaded = true
@@ -110,6 +119,7 @@ extension CompanionFailure {
         case .portInUse: "companion.error.portBusy"
         case .mustDisable: "companion.error.disable"
         case .permissionDenied: "companion.error.permission"
+        case .networkUnavailable: "companion.error.network"
         case .requestFailed: "companion.error"
         }
         return key.localized()

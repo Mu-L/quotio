@@ -8,6 +8,29 @@ import QuotioDomain
 
 @MainActor
 final class CompanionScreenModelTests: XCTestCase {
+    func testNetworkChoicesNeedNoHTTPSInputAndRecoverWhenTailscaleAppears() async {
+        let controller = CompanionStub()
+        controller.enabled = false
+        controller.origin = ""
+        controller.mode = .localNetwork
+        controller.addresses = [.init(mode: .localNetwork, address: "192.168.1.10", interface: "en0")]
+        let model = CompanionScreenModel(controller: controller)
+        await model.reload()
+        XCTAssertEqual(model.mode, .localNetwork)
+        XCTAssertEqual(model.selectedAddress, "192.168.1.10")
+        XCTAssertTrue(model.canEnable)
+        model.mode = .tailscale
+        XCTAssertFalse(model.canEnable)
+        controller.addresses.append(.init(mode: .tailscale, address: "100.64.0.2", interface: "utun4"))
+        await model.reload()
+        XCTAssertEqual(model.mode, .tailscale)
+        XCTAssertTrue(model.canEnable)
+        await model.configure(enabled: true)
+        XCTAssertEqual(controller.mode, .tailscale)
+        XCTAssertEqual(model.origin, "https://100.64.0.2:6768")
+        XCTAssertTrue(model.enabled)
+    }
+
     func testRenderPairingLayouts() async throws {
         guard let output = ProcessInfo.processInfo.environment["QUOTIO_COMPANION_SNAPSHOT_DIR"] else {
             throw XCTSkip("Set QUOTIO_COMPANION_SNAPSHOT_DIR for visual verification")
@@ -26,13 +49,21 @@ final class CompanionScreenModelTests: XCTestCase {
         await model.reload()
         await model.issue()
         let layouts: [(String, CGFloat, NSAppearance.Name)] = [
+            ("setup", 400, .darkAqua), ("setup", 640, .aqua), ("tailscale", 400, .darkAqua),
             ("pairing", 400, .darkAqua), ("pairing", 640, .aqua),
             ("settings", 760, .darkAqua), ("settings", 760, .aqua),
         ]
         for (surface, width, appearance) in layouts {
+            let setupController = CompanionStub()
+            let setupModel = CompanionScreenModel(controller: setupController)
+            setupController.enabled = false
+            setupController.mode = surface == "tailscale" ? .tailscale : .localNetwork
+            setupController.addresses = [.init(mode: .localNetwork, address: "192.168.1.10", interface: "en0")]
+            await setupModel.reload()
+            let visibleModel = ["setup", "tailscale"].contains(surface) ? setupModel : model
             let content = surface == "settings"
                 ? AnyView(Form { CompanionSettingsSection(model: model) }.formStyle(.grouped))
-                : AnyView(CompanionPairingView(model: model, presentation: .settings))
+                : AnyView(CompanionPairingView(model: visibleModel, presentation: .settings))
             let view = content.environment(pasteboard)
                 .environment(\.colorScheme, appearance == .darkAqua ? .dark : .light)
                 .background(Color(nsColor: .windowBackgroundColor))
@@ -147,18 +178,21 @@ private final class CompanionStub: CompanionControlling {
     var issueCount = 0
     var enabled = true
     var origin = "https://host.example.test"
+    var mode: CompanionConnectionMode = .proxy
+    var addresses: [CompanionNetworkAddress] = []
     var issued: [CompanionDevice] = []
     var suspendIssuance = false
     var pending: CheckedContinuation<Void, Never>?
 
     func status() async throws -> CompanionStatus {
         if fail { throw CompanionFailure.hostUnavailable }
-        return CompanionStatus(enabled: enabled, listen: "127.0.0.1:6768", publicUrl: origin)
+        return CompanionStatus(enabled: enabled, listen: "127.0.0.1:6768", publicUrl: origin, mode: mode, addresses: addresses)
     }
-    func configure(enabled: Bool, origin: String, port: Int) async throws -> CompanionStatus {
+    func configure(enabled: Bool, origin: String, port: Int, mode: CompanionConnectionMode, address: String) async throws -> CompanionStatus {
         if fail { throw CompanionFailure.hostUnavailable }
         self.enabled = enabled
-        self.origin = origin
+        self.mode = mode
+        self.origin = mode == .proxy ? origin : "https://\(address):\(port)"
         return try await status()
     }
     func devices() async throws -> [CompanionDevice] { issued }

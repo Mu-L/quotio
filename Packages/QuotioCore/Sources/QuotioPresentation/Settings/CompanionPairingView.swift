@@ -18,7 +18,7 @@ struct CompanionPairingView: View {
                     .keyboardShortcut(.cancelAction)
             }
             if let pairing = model.pairing {
-                CompanionCodeView(pairing: pairing, copyToken: { pasteboard.copy(pairing.token) })
+                CompanionCodeView(pairing: pairing, copyCode: { pasteboard.copy(pairing.payload) })
                     .id(pairing.device.id)
                 HStack {
                     Text("companion.codeCreated".localized()).font(.caption).foregroundStyle(.secondary)
@@ -29,23 +29,12 @@ struct CompanionPairingView: View {
             } else {
                 Text("companion.summary".localized()).foregroundStyle(.secondary)
                 if !model.enabled {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("companion.origin".localized()).font(.headline)
-                        TextField("https://mac.example.com", text: $model.origin)
-                            .textFieldStyle(.roundedBorder)
-                            .accessibilityLabel("companion.origin".localized())
-                        Text("companion.setupHint".localized()).font(.caption).foregroundStyle(.secondary)
-                        DisclosureGroup("companion.advanced".localized()) {
-                            TextField("companion.port".localized(), value: $model.port, format: .number.grouping(.never))
-                                .textFieldStyle(.roundedBorder)
-                            Text("companion.explanation".localized()).font(.caption).foregroundStyle(.secondary)
-                        }
-                    }.disabled(model.busy)
+                    CompanionConnectionSetupView(model: model).disabled(model.busy)
                     HStack {
                         if model.busy { ProgressView().controlSize(.small) }
                         Spacer()
                         Button("companion.enableContinue".localized()) { Task { await model.configure(enabled: true) } }
-                            .buttonStyle(.borderedProminent).disabled(model.busy || model.origin.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            .buttonStyle(.borderedProminent).disabled(model.busy || !model.canEnable)
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 10) {
@@ -57,6 +46,8 @@ struct CompanionPairingView: View {
                     }
                     HStack {
                         if model.busy { ProgressView().controlSize(.small) }
+                        Button("companion.changeNetwork".localized()) { Task { await model.configure(enabled: false) } }
+                            .disabled(model.busy)
                         Spacer()
                         Button("companion.issue".localized()) { Task { await model.issue() } }
                             .buttonStyle(.borderedProminent).disabled(model.busy || model.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -84,7 +75,7 @@ struct CompanionPairingView: View {
 
 private struct CompanionCodeView: View {
     let pairing: CompanionPairing
-    let copyToken: () -> Void
+    let copyCode: () -> Void
     @State private var image: CGImage?
 
     var body: some View {
@@ -112,7 +103,7 @@ private struct CompanionCodeView: View {
                 .font(.caption).foregroundStyle(.secondary)
             DisclosureGroup("companion.manual".localized()) {
                 Text("companion.manualHint".localized()).font(.caption).foregroundStyle(.secondary)
-                Button("companion.copyToken".localized(), action: copyToken)
+                Button("companion.copyCode".localized(), action: copyCode)
             }
         }
     }

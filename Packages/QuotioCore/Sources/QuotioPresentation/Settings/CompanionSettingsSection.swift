@@ -52,24 +52,18 @@ struct CompanionSettingsSection: View {
             }
 
             Section("companion.connection".localized()) {
-                if model.origin.isEmpty {
-                    Text("companion.setupHint".localized()).foregroundStyle(.secondary)
-                } else {
+                if model.enabled {
                     LabeledContent("companion.origin".localized()) {
                         Text(model.origin).font(.system(.body, design: .monospaced)).textSelection(.enabled)
                     }
-                }
-                if model.enabled {
                     Button("companion.disable".localized()) { Task { await model.configure(enabled: false) } }
                         .disabled(model.busy)
                     Text("companion.disableHint".localized()).font(.caption).foregroundStyle(.secondary)
-                }
-                DisclosureGroup("companion.advanced".localized()) {
-                    TextField("companion.port".localized(), value: $model.port, format: .number.grouping(.never))
-                        .disabled(model.busy || model.enabled)
-                    Text("companion.explanation".localized()).font(.caption).foregroundStyle(.secondary)
+                } else {
+                    CompanionConnectionSetupView(model: model).disabled(model.busy)
                 }
             }
+
             if let failure = model.failure {
                 Section { Label(failure.message, systemImage: "exclamationmark.triangle").foregroundStyle(.red) }
             }
