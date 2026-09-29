@@ -78,3 +78,42 @@ jobs:
           node --test distribution/npm.test.cjs
           python3 scripts/test-package-release.py
           shellcheck scripts/ci-sign-macos.sh
+
+  windows:
+    name: Native Windows companion host
+    runs-on: windows-2025
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Check all Windows targets
+        run: cargo check --locked --all-targets --all-features
+      - name: Test DPAPI, host contract, device grants and listener isolation
+        run: |
+          cargo test --locked windows_vault
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --locked companion_listener
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --locked credentials_survive_restart
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --locked --test contract --test devices
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --locked --test server_management
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build native executable and smoke test
+        run: |
+          cargo build --locked --release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./target/release/quotio.exe usage --provider mock --no-saved-accounts --format json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-FileHash ./target/release/quotio.exe -Algorithm SHA256 | Format-List | Out-File ./target/release/quotio.exe.sha256
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: quotio-windows-x86_64
+          path: |
+            apps/cli/target/release/quotio.exe
+            apps/cli/target/release/quotio.exe.sha256
+          if-no-files-found: error
