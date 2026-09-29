@@ -25,9 +25,15 @@ final class CompanionScreenModelTests: XCTestCase {
         let pasteboard = PasteboardScreenModel(writer: NoCopyPasteboard())
         await model.reload()
         await model.issue()
-        for (width, appearance) in [(CGFloat(400), NSAppearance.Name.darkAqua), (CGFloat(640), .aqua)] {
-            let view = CompanionPairingView(model: model, presentation: .settings)
-                .environment(pasteboard)
+        let layouts: [(String, CGFloat, NSAppearance.Name)] = [
+            ("pairing", 400, .darkAqua), ("pairing", 640, .aqua),
+            ("settings", 760, .darkAqua), ("settings", 760, .aqua),
+        ]
+        for (surface, width, appearance) in layouts {
+            let content = surface == "settings"
+                ? AnyView(Form { CompanionSettingsSection(model: model) }.formStyle(.grouped))
+                : AnyView(CompanionPairingView(model: model, presentation: .settings))
+            let view = content.environment(pasteboard)
                 .environment(\.colorScheme, appearance == .darkAqua ? .dark : .light)
                 .background(Color(nsColor: .windowBackgroundColor))
             let host = NSHostingView(rootView: view)
@@ -39,7 +45,7 @@ final class CompanionScreenModelTests: XCTestCase {
             let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
             host.cacheDisplay(in: host.bounds, to: bitmap)
             let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
-            try png.write(to: URL(fileURLWithPath: output).appendingPathComponent("pairing-\(Int(width)).png"))
+            try png.write(to: URL(fileURLWithPath: output).appendingPathComponent("\(surface)-\(Int(width))-\(appearance == .darkAqua ? "dark" : "light").png"))
         }
         XCTAssertEqual(controller.issueCount, 1)
     }

@@ -67,11 +67,17 @@ is no insecure TLS switch, automatic VPN installation or public tunnel.
 
 ## Connect the macOS app
 
-Choose Settings… in the Quotio menu, then iPhone sharing in the window sidebar.
-Configure the HTTPS origin and local upstream port, enable sharing, then create
-a device code.
+Choose Pair iPhone… directly in the Quotio menu. A compact pairing view opens
+without opening the main window, including first-time address setup. Enter your
+HTTPS address, enable sharing, name the device and create its code. The local
+upstream port is under Advanced. Use Settings… → iPhone sharing to review and
+revoke authorized devices.
 Point your HTTPS proxy at that local port. Scan the code inside Quotio iPhone and
-confirm the address before connecting. Manual details are available in the code sheet.
+confirm the address before connecting. Manual details let you copy the device token.
+Closing the pairing view preserves the current code in memory; reopening it does
+not issue another credential. Done clears the displayed code without revoking the
+device. Codes also disappear on expiry, revocation or an endpoint change. Existing
+grants cannot be displayed again after their in-memory code has been cleared.
 
 The companion listener shares the existing Rust process, vault and scheduler. It
 accepts delegated reads only; the original local owner listener retains native

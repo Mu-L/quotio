@@ -44,6 +44,9 @@ final class QuotioCompanionServiceTests: XCTestCase {
         let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(pairing.payload.utf8)) as? [String: Any])
         XCTAssertEqual(payload["client_id"] as? String, pairing.device.id)
         XCTAssertEqual(payload["origin"] as? String, pairing.origin)
+        CompanionHTTPStub.state.cancelRequests()
+        do { _ = try await service.status(); XCTFail("Cancelled view refresh must propagate cancellation") }
+        catch is CancellationError { }
     }
 }
 
@@ -53,8 +56,10 @@ private final class CompanionHTTPStub: URLProtocol, @unchecked Sendable {
         private var status = 200
         private var body = Data()
         private var captured: [URLRequest] = []
-        func reset(status: Int, body: String) { lock.withLock { self.status = status; self.body = Data(body.utf8); captured = [] } }
-        func receive(_ request: URLRequest) -> (Int, Data) { lock.withLock { captured.append(request); return (status, body) } }
+        private var cancelled = false
+        func cancelRequests() { lock.withLock { cancelled = true } }
+        func reset(status: Int, body: String) { lock.withLock { self.status = status; self.body = Data(body.utf8); captured = []; cancelled = false } }
+        func receive(_ request: URLRequest) -> (Int, Data, Bool) { lock.withLock { captured.append(request); return (status, body, cancelled) } }
         func requests() -> [URLRequest] { lock.withLock { captured } }
     }
     static let state = State()
@@ -74,7 +79,11 @@ private final class CompanionHTTPStub: URLProtocol, @unchecked Sendable {
             }
             captured.httpBody = bytes
         }
-        let (status, body) = Self.state.receive(captured)
+        let (status, body, cancelled) = Self.state.receive(captured)
+        if cancelled {
+            client?.urlProtocol(self, didFailWithError: URLError(.cancelled))
+            return
+        }
         client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: body)
         client?.urlProtocolDidFinishLoading(self)

@@ -228,6 +228,7 @@ final class StatusBarMenuRendererTests: XCTestCase {
             refreshProvider: { _ in },
             refreshAccount: { _ in },
             selectProvider: { _ in },
+            pairIPhone: {},
             openApp: {},
             quit: {},
             menuNeedsRebuild: {}
@@ -237,6 +238,16 @@ final class StatusBarMenuRendererTests: XCTestCase {
 
 @MainActor
 final class StatusBarCommandDispatcherTests: XCTestCase {
+    func testPairingDoesNotOpenMainWindowOrRefreshQuota() {
+        let recorder = StatusBarCommandRecorder()
+        let dispatcher = makeDispatcher(recorder: recorder) { recorder.rebuildCount += 1 }
+        dispatcher.dispatch(.pairIPhone)
+        XCTAssertEqual(recorder.pairIPhoneCount, 1)
+        XCTAssertEqual(recorder.openAppCount, 0)
+        XCTAssertEqual(recorder.rebuildCount, 0)
+        XCTAssertTrue(recorder.asyncCommands.isEmpty)
+    }
+
     func testAsyncCommandsRouteAndRebuildAfterCompletion() async {
         let recorder = StatusBarCommandRecorder()
         let rebuilds = expectation(description: "menu rebuilt after async commands")
@@ -291,6 +302,7 @@ final class StatusBarCommandDispatcherTests: XCTestCase {
                 )
             },
             selectProvider: { recorder.selectedProviders.append($0) },
+            pairIPhone: { recorder.pairIPhoneCount += 1 },
             openApp: { recorder.openAppCount += 1 },
             quit: { recorder.quitCount += 1 },
             menuNeedsRebuild: menuNeedsRebuild
@@ -302,6 +314,7 @@ final class StatusBarCommandDispatcherTests: XCTestCase {
 private final class StatusBarCommandRecorder {
     var asyncCommands: [String] = []
     var selectedProviders: [QuotaProvider?] = []
+    var pairIPhoneCount = 0
     var openAppCount = 0
     var quitCount = 0
     var rebuildCount = 0

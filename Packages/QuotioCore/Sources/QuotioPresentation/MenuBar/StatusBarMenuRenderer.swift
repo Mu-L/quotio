@@ -262,6 +262,7 @@ final class StatusBarMenuRenderer {
             canRefresh: snapshot.canRefresh,
             isLoading: snapshot.isLoadingQuotas,
             onRefresh: { self.commands.dispatch(.refreshAll) },
+            onPairIPhone: { self.commands.dispatch(.pairIPhone) },
             onOpenApp: { self.commands.dispatch(.openApp) },
             onQuit: { self.commands.dispatch(.quit) }
         )
@@ -1915,6 +1916,7 @@ private struct MenuActionsView: View {
     let canRefresh: Bool
     let isLoading: Bool
     let onRefresh: () -> Void
+    let onPairIPhone: () -> Void
     let onOpenApp: () -> Void
     let onQuit: () -> Void
 
@@ -1928,6 +1930,12 @@ private struct MenuActionsView: View {
             )
             .disabled(isLoading || !canRefresh)
             
+            MenuBarActionButton(
+                icon: "iphone",
+                title: "companion.pair".localized(),
+                action: onPairIPhone
+            )
+
             MenuBarActionButton(
                 icon: "macwindow",
                 title: "action.openApp".localized(),

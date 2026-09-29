@@ -7,6 +7,7 @@ enum StatusBarCommand: Equatable {
     case refreshProvider(QuotaProvider)
     case refreshAccount(QuotaAccountID)
     case selectProvider(QuotaProvider?)
+    case pairIPhone
     case openApp
     case quit
 }
@@ -17,6 +18,7 @@ public struct StatusBarCommandHandlers {
     fileprivate let refreshProvider: @MainActor @Sendable (QuotaProvider) async -> Void
     fileprivate let refreshAccount: @MainActor @Sendable (QuotaAccountID) async -> Void
     fileprivate let selectProvider: (QuotaProvider?) -> Void
+    fileprivate let pairIPhone: () -> Void
     fileprivate let openApp: () -> Void
     fileprivate let quit: () -> Void
     fileprivate let menuNeedsRebuild: () -> Void
@@ -26,6 +28,7 @@ public struct StatusBarCommandHandlers {
         refreshProvider: @escaping @MainActor @Sendable (QuotaProvider) async -> Void,
         refreshAccount: @escaping @MainActor @Sendable (QuotaAccountID) async -> Void,
         selectProvider: @escaping (QuotaProvider?) -> Void,
+        pairIPhone: @escaping () -> Void,
         openApp: @escaping () -> Void,
         quit: @escaping () -> Void,
         menuNeedsRebuild: @escaping () -> Void
@@ -34,6 +37,7 @@ public struct StatusBarCommandHandlers {
         self.refreshProvider = refreshProvider
         self.refreshAccount = refreshAccount
         self.selectProvider = selectProvider
+        self.pairIPhone = pairIPhone
         self.openApp = openApp
         self.quit = quit
         self.menuNeedsRebuild = menuNeedsRebuild
@@ -58,6 +62,8 @@ public final class StatusBarCommandDispatcher {
             perform { [handlers] in await handlers.refreshAccount(account) }
         case .selectProvider(let provider):
             handlers.selectProvider(provider)
+        case .pairIPhone:
+            handlers.pairIPhone()
         case .openApp:
             handlers.openApp()
         case .quit:

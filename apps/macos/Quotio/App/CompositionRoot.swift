@@ -384,6 +384,10 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
                 selectProvider: { [menuBarSettings] provider in
                     menuBarSettings.selectProvider(provider)
                 },
+                pairIPhone: { [weak statusBarManager, settingsScreenModel, pasteboard] in
+                    guard let companion = settingsScreenModel.companion else { return }
+                    statusBarManager?.presentCompanionPairing(model: companion, pasteboard: pasteboard)
+                },
                 openApp: { [weak statusBarManager, settingsScreenModel, windowPresenter, navigationScreenModel] in
                     if settingsScreenModel.appShellPreferences.showInDock {
                         statusBarManager?.closeMenu()

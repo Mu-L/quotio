@@ -84,7 +84,10 @@ public final class QuotioCompanionService: CompanionControlling {
     private func request<T: Decodable & Sendable>(_ path: String, method: String = "GET", body: Data? = nil) async throws -> T {
         guard let client else { throw CompanionFailure.hostUnavailable }
         do { return try await client.request(path, method: method, body: body) }
-        catch { throw Self.failure(error) }
+        catch {
+            if error is CancellationError || (error as? URLError)?.code == .cancelled { throw CancellationError() }
+            throw Self.failure(error)
+        }
     }
 
     private func validate(origin: String) throws {

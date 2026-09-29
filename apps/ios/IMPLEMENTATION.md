@@ -84,3 +84,22 @@ The full concurrent Rust suite had one Cursor WAL snapshot-cleanup failure in
 unchanged provider code. That test passed in isolation. This is recorded separately
 from the passing affected checks; the full-suite run was not green. Native Windows
 execution remains pending CI.
+
+## Sharing UX and menu-bar pairing, 2026-09-29
+
+The active iPhone sharing page now separates host state, authorized devices and
+connection settings. Pairing is available directly from the menu bar in an AppKit
+popover using the same SwiftUI flow and model as Settings. Opening it does not open
+the main window or issue a token. First-time HTTPS setup is available in the popover;
+the upstream port is under Advanced. Device grants remain read-only with their actual
+expiry; this does not introduce one-use pairing links or online-device tracking.
+
+The old unused SettingsScreen and ten orphaned components were removed. Still-used
+settings sections and the proxy version manager were moved into dedicated files
+without changing their view bodies. Tests passed before and after cleanup.
+
+New tests cover retained in-flight issuance, no duplicate grant on reopen, expiry,
+revocation, endpoint changes, persisted configuration, specific service errors,
+menu command routing without opening the app, and native popover dismissal when
+Settings takes over. Synthetic QR layouts were rendered in Light/Dark appearances.
+Physical iPhone QR scanning and LAN/VPN reachability still need device acceptance.

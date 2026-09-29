@@ -31,6 +31,9 @@ public final class StatusBarManager: NSObject, NSMenuDelegate {
     
     private var statusItem: NSStatusItem?
     private var menu: NSMenu?
+    private var isMenuTracking = false
+    private var pendingCompanionPresentation: (() -> Void)?
+    private let companionPresenter = CompanionPopoverPresenter()
     private var menuContentVersion: Int = 0
     private var isRebuildingMenu = false
     private var hasPendingMenuRebuild = false
@@ -206,14 +209,35 @@ public final class StatusBarManager: NSObject, NSMenuDelegate {
     // MARK: - NSMenuDelegate
     
     public func menuWillOpen(_ menu: NSMenu) {
+        isMenuTracking = true
         hasPendingMenuRebuild = false
         renderStatusBar()
         performMenuRebuild(using: menu)
     }
     
     public func menuDidClose(_ menu: NSMenu) {
+        isMenuTracking = false
         DispatchQueue.main.async { [weak self] in
-            self?.renderStatusBar()
+            guard let self else { return }
+            renderStatusBar()
+            let present = pendingCompanionPresentation
+            pendingCompanionPresentation = nil
+            present?()
+        }
+    }
+
+    public func presentCompanionPairing(model: CompanionScreenModel, pasteboard: PasteboardScreenModel) {
+        let present = { [weak self] in
+            guard let self, let button = statusItem?.button else { return }
+            companionPresenter.show(relativeTo: button, model: model, pasteboard: pasteboard,
+                                    appearance: configuration?.appearanceMode.appKitAppearance,
+                                    locale: configuration?.language.locale ?? .current)
+        }
+        if isMenuTracking {
+            pendingCompanionPresentation = present
+            closeMenu()
+        } else {
+            present()
         }
     }
     
@@ -284,6 +308,9 @@ public final class StatusBarManager: NSObject, NSMenuDelegate {
     }
     
     func removeStatusItem() {
+        pendingCompanionPresentation = nil
+        isMenuTracking = false
+        companionPresenter.close()
         appearanceObservation = nil
         if let item = statusItem {
             NSStatusBar.system.removeStatusItem(item)
