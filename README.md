@@ -184,3 +184,7 @@ to provide the context needed to investigate your request.
 ## License
 
 Quotio is available under the [MIT License](LICENSE).
+
+### iPhone companion
+
+The native iOS companion and widgets live in [apps/ios](apps/ios/README.md). It connects to Quotio hosts over HTTPS on a LAN or private VPN with a read-only device credential. Physical-device, Windows runtime and TestFlight acceptance are still pending; see the iOS README for setup and verification.

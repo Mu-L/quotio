@@ -1,0 +1,2 @@
+// Release does not implicitly consume machine-specific settings.
+// For a locally signed archive, pass -xcconfig Config/Local.xcconfig.

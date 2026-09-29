@@ -1,0 +1,3 @@
+.build/
+.swiftpm/
+Config/Local.xcconfig
