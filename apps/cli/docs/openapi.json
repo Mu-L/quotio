@@ -10,6 +10,66 @@
     }
   ],
   "paths": {
+  "/v2/sharing": {
+    "get": {
+      "summary": "Read companion listener state, local owner only",
+      "responses": {
+        "200": {
+          "description": "Companion listener status. Does not imply external HTTPS reachability.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompanionSharing"
+              }
+            }
+          }
+        },
+        "403": {
+          "description": "Requires a local owner."
+        },
+        "409": {
+          "description": "Port unavailable or disable before changing origin."
+        },
+        "503": {
+          "description": "Account storage unavailable."
+        }
+      }
+    },
+    "put": {
+      "summary": "Configure a read-only companion listener, local owner only",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CompanionSharingUpdate"
+            }
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "description": "Companion listener status. Does not imply external HTTPS reachability.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompanionSharing"
+              }
+            }
+          }
+        },
+        "403": {
+          "description": "Requires a local owner."
+        },
+        "409": {
+          "description": "Port unavailable or disable before changing origin."
+        },
+        "503": {
+          "description": "Account storage unavailable."
+        }
+      }
+    }
+  },
     "/v2/clients/{id}": {
       "delete": {
         "summary": "Revoke a client credential (owner only)",
@@ -1910,6 +1970,62 @@
       }
     },
     "schemas": {
+  "CompanionSharing": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "schema_version",
+      "enabled",
+      "listen",
+      "public_url"
+    ],
+    "properties": {
+      "schema_version": {
+        "const": 2
+      },
+      "enabled": {
+        "type": "boolean"
+      },
+      "listen": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "public_url": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    }
+  },
+  "CompanionSharingUpdate": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "enabled"
+    ],
+    "properties": {
+      "enabled": {
+        "type": "boolean"
+      },
+      "listen": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Loopback address with a nonzero port, required when enabling."
+      },
+      "public_url": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Exact HTTPS reverse-proxy origin, required when enabling."
+      }
+    }
+  },
       "ClientList": {
         "type": "object",
         "additionalProperties": false,

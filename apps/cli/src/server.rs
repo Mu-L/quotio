@@ -8,6 +8,7 @@ mod native;
 mod openapi;
 mod operations;
 mod security;
+mod sharing;
 #[cfg(test)]
 mod tests;
 use crate::{
@@ -103,6 +104,7 @@ struct RefreshStatus {
     next_refresh_at: Option<String>,
 }
 struct ApiState {
+    sharing: Mutex<sharing::Sharing>,
     settings: RwLock<SettingsView>,
     store: SettingsStore,
     snapshot: RwLock<Option<(u64, UsageReport)>>,
@@ -356,6 +358,7 @@ fn router(state: Arc<ApiState>, policy: Arc<security::Policy>) -> Router {
         state.context.clock.clone(),
     );
     Router::new()
+        .route("/v2/sharing", get(sharing::get).put(sharing::update))
         .route("/v2/clients", get(clients::list).post(clients::create))
         .route("/v2/clients/{id}", axum::routing::delete(clients::revoke))
         .route("/openapi.json", get(openapi::document))
@@ -1094,6 +1097,7 @@ pub async fn run(args: ServeArgs) -> Result<(), ServerError> {
         )
     });
     let state = Arc::new(ApiState {
+        sharing: Mutex::new(sharing::Sharing::default()),
         discovery: Default::default(),
         native_scan_lock: Mutex::new(()),
         settings: RwLock::new(view),
@@ -1174,6 +1178,7 @@ pub async fn run(args: ServeArgs) -> Result<(), ServerError> {
         }=>{stop.send_replace(true);let _=tokio::time::timeout(Duration::from_secs(2),&mut server).await;Ok(())}
     };
     stop.send_replace(true);
+    state.sharing.lock().await.stop();
     worker.abort();
     for job in state.jobs.lock().expect("job tracker").iter() {
         job.abort();

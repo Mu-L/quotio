@@ -49,6 +49,8 @@ pub enum Command {
     },
     /// Add, select, list or remove accounts managed by Quotio
     Accounts(AccountsArgs),
+    /// Issue, list or revoke read-only companion-device credentials
+    Devices(DevicesArgs),
     /// Collect quota for detected or explicitly selected providers
     Usage(UsageArgs),
     /// Serve cached usage through a local read-only HTTP API
@@ -329,4 +331,29 @@ pub struct ServeArgs {
     /// Allow this exact browser origin; repeat for multiple origins
     #[arg(long)]
     pub allow_origin: Vec<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct DevicesArgs {
+    /// Local host owner API; QUOTIO_SERVER_TOKEN stays on this computer
+    #[arg(long, default_value = "http://127.0.0.1:6767")]
+    pub api: String,
+    #[command(subcommand)]
+    pub command: DeviceCommand,
+}
+#[derive(Debug, Subcommand)]
+pub enum DeviceCommand {
+    /// Print a sensitive pairing JSON once; keep it private
+    Add {
+        #[arg(long)]
+        label: String,
+        #[arg(long)]
+        public_url: String,
+        #[arg(long, default_value_t = 2592000, value_parser = clap::value_parser!(u64).range(1..=31536000))]
+        expires_in_seconds: u64,
+    },
+    List,
+    Revoke {
+        id: String,
+    },
 }

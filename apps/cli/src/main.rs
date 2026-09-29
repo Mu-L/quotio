@@ -228,6 +228,13 @@ async fn run() -> ExitCode {
                 .collect(),
             0,
         ),
+        Command::Devices(args) => match quotio::devices::run(args).await {
+            Ok(value) => (value.to_string(), 0),
+            Err(code) => {
+                eprintln!("Device request failed: {code}");
+                return ExitCode::from(3);
+            }
+        },
         Command::Accounts(args) => {
             let http = match reqwest::Client::builder()
                 .redirect(reqwest::redirect::Policy::none())

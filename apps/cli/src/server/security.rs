@@ -59,6 +59,8 @@ fn public_read(path: &str) -> bool {
 pub struct Policy {
     pub manage: bool,
     host_user: bool,
+    delegated_only: bool,
+    companion_active: Option<Arc<std::sync::atomic::AtomicBool>>,
     hosts: Vec<String>,
     origins: Vec<String>,
     token: Option<hmac::Key>,
@@ -66,6 +68,25 @@ pub struct Policy {
     authentication: Semaphore,
 }
 impl Policy {
+    pub(super) fn companion(
+        address: SocketAddr,
+        origin: &str,
+        active: Arc<std::sync::atomic::AtomicBool>,
+    ) -> Result<Self, &'static str> {
+        // The key only satisfies the authenticated-policy invariant. Owner
+        // authentication is explicitly disabled on this listener.
+        let mut policy = Self::new(
+            address,
+            false,
+            Some(origin),
+            &[],
+            Some("companion-policy-owner-disabled-key".into()),
+        )?;
+        policy.delegated_only = true;
+        policy.companion_active = Some(active);
+        Ok(policy)
+    }
+
     pub fn new(
         address: SocketAddr,
         manage: bool,
@@ -108,6 +129,8 @@ impl Policy {
         Ok(Self {
             manage,
             host_user: public_url.is_none(),
+            delegated_only: false,
+            companion_active: None,
             hosts,
             origins,
             token,
@@ -181,6 +204,13 @@ pub async fn guard(
     mut request: Request,
     next: Next,
 ) -> Response {
+    if policy
+        .companion_active
+        .as_ref()
+        .is_some_and(|active| !active.load(std::sync::atomic::Ordering::SeqCst))
+    {
+        return error(StatusCode::SERVICE_UNAVAILABLE, "sharing_disabled");
+    }
     let origin = one(request.headers(), "origin")
         .filter(|origin| policy.origins.iter().any(|o| o == origin))
         .map(str::to_owned);
@@ -214,7 +244,7 @@ pub async fn guard(
         }
     } else {
         let principal: Result<Option<Principal>, &'static str> =
-            if authorized(&request, policy.token.as_ref()) {
+            if !policy.delegated_only && authorized(&request, policy.token.as_ref()) {
                 Ok(Some(Principal {
                     id: if policy.token.is_some() {
                         "owner"

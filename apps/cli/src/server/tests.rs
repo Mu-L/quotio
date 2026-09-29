@@ -54,6 +54,7 @@ pub(super) async fn fixture() -> (Arc<ApiState>, std::path::PathBuf, String) {
     );
     (
         Arc::new(ApiState {
+            sharing: Mutex::new(sharing::Sharing::default()),
             discovery: Default::default(),
             native_scan_lock: Mutex::new(()),
             settings: RwLock::new(view),

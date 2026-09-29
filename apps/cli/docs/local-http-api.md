@@ -241,3 +241,26 @@ After initialization the helper emits one stdout record:
 Validate the version, owned child PID and loopback address, then authenticate
 `/v2/status`. The record means the listener is bound, not that quota has loaded.
 Keep stdin open: EOF, read failure or unexpected extra input ends the session.
+
+## iPhone companion
+
+The local owner can `GET /v2/sharing` or `PUT /v2/sharing` with
+`{"enabled":true,"listen":"127.0.0.1:6768","public_url":"https://computer.example"}`.
+This starts a second loopback listener sharing the existing scheduler, vault and
+snapshot. Configure your own HTTPS reverse proxy on LAN/private VPN. It accepts
+only delegated device reads, never the owner token. Set `{"enabled":false}` to stop
+sharing. Already-started reads may finish; subsequent keep-alive requests cannot
+bypass disabling. The original listener keeps its local approval authority.
+
+This route requires a local owner, management mode and saved-account storage.
+A port conflict leaves the working endpoint unchanged. Disable sharing before
+changing the origin on the same port. Settings are runtime state; the macOS app
+stores its preferences and restores sharing when it reconnects its helper.
+Listener readiness does not prove external TLS or VPN reachability.
+
+Use `quotio devices add --label iPhone --public-url https://computer.example` to
+issue a read credential from the local CLI host. It reads `QUOTIO_SERVER_TOKEN`
+from the environment; `--api` may select another loopback port. Output is sensitive
+pairing JSON with version 1, origin, host ID, client ID, expiration and token.
+`quotio devices list` and `quotio devices revoke CLIENT_ID` manage grants locally.
+See [iOS setup](../../ios/README.md).

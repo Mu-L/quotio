@@ -3,6 +3,7 @@ pub mod cache;
 pub mod cli;
 pub mod config;
 pub mod contract;
+pub mod devices;
 pub mod domain;
 pub mod error;
 pub mod fetch;
