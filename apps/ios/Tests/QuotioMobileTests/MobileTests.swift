@@ -109,3 +109,17 @@ private func fixture() throws -> QuotioHostSnapshot {
     json["certificate"] = ""
     #expect(throws: (any Error).self) { try Pairing.decode(JSONSerialization.data(withJSONObject: json), now: now) }
 }
+
+@Test func savingStateExcludesOnlyTheOwnedFileFromBackup() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let keys: Set<URLResourceKey> = [.isExcludedFromBackupKey]
+    let original = try directory.resourceValues(forKeys: keys).isExcludedFromBackup
+    let storage = MobileStorage(directory: directory)
+    try storage.save(MobileState())
+    // iOS owns App Group root metadata. Saving must not try to modify that container.
+    #expect(try directory.resourceValues(forKeys: keys).isExcludedFromBackup == original)
+    #expect(try directory.appendingPathComponent("state.json").resourceValues(forKeys: keys).isExcludedFromBackup == true)
+    #expect(try storage.load().hosts.isEmpty)
+}

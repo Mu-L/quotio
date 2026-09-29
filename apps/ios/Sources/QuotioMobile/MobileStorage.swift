@@ -30,7 +30,8 @@ public struct MobileStorage: Sendable {
         #else
         try data.write(to: directory.appendingPathComponent("state.json"), options: .atomic)
         #endif
-        var excluded = directory
+        // iOS owns the App Group root. Only change metadata on the file we own.
+        var excluded = directory.appendingPathComponent("state.json")
         var values = URLResourceValues()
         values.isExcludedFromBackup = true
         try excluded.setResourceValues(values)

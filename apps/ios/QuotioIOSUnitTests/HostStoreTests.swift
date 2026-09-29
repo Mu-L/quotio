@@ -70,3 +70,19 @@ private final class HostProtocol: URLProtocol, @unchecked Sendable {
     let unpaired = QuotioHostHTTPClient(connection: .init(baseURL: fixture.origin, token: fixture.token))
     await #expect(throws: (any Error).self) { try await unpaired.status() }
 }
+
+@Test @MainActor func sharedContainerStorageChangesOnlyOwnedFileMetadata() throws {
+    let group = try #require(Bundle.main.object(forInfoDictionaryKey: "QuotioAppGroup") as? String)
+    let root = try #require(FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group))
+    let directory = root.appendingPathComponent("quotio-storage-test-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let keys: Set<URLResourceKey> = [.isExcludedFromBackupKey]
+    let original = try directory.resourceValues(forKeys: keys).isExcludedFromBackup
+    let storage = MobileStorage(directory: directory)
+    try storage.save(MobileState())
+    #expect(try directory.resourceValues(forKeys: keys).isExcludedFromBackup == original)
+    #expect(try directory.appendingPathComponent("state.json").resourceValues(forKeys: keys).isExcludedFromBackup == true)
+    #expect(try storage.load().hosts.isEmpty)
+    #expect(HostStore.message(CocoaError(.fileWriteNoPermission)) == String(localized: "Changes could not be saved. Try again."))
+}

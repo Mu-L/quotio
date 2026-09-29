@@ -161,6 +161,8 @@ final class HostStore {
         case MobileError.expiredCredential, QuotioHostClientError.response(401, _): String(localized: "This device credential is no longer valid. Pair the host again.")
         case QuotioHostClientError.incompatible: String(localized: "This host uses an unsupported API. Update Quotio on the computer.")
         case QuotioHostClientError.response(503, _): String(localized: "The host is busy or its credential storage is locked. Retry after checking the host.")
+        case let error as CocoaError where [.fileWriteNoPermission, .fileWriteOutOfSpace, .fileWriteVolumeReadOnly].contains(error.code):
+            String(localized: "Changes could not be saved. Try again.")
         case is KeychainError: String(localized: "Secure storage is unavailable. Unlock your iPhone and try again.")
         default: String(localized: "Could not connect. Check the host, VPN and HTTPS certificate, then try again.")
         }
