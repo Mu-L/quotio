@@ -17,6 +17,13 @@ struct AppSettingsPage: View {
             switch page {
             case .updates, .about: AboutSettingsPage()
             case .proxy: CLIProxySettingsPage()
+            case .companion:
+                Form {
+                    if let companion = settings.companion {
+                        CompanionSettingsSection(model: companion)
+                    }
+                }
+                .formStyle(.grouped)
             default:
                 Form {
                     AccountStorageAccessSection()

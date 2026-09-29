@@ -42,11 +42,12 @@ public struct RootNavigationView: View {
 }
 
 extension NavigationPage {
-    static let settingsPages: [Self] = [.general, .menuBar, .notifications, .privacy, .proxy, .updates]
+    static let settingsPages: [Self] = [.general, .companion, .menuBar, .notifications, .privacy, .proxy, .updates]
 
     @MainActor var settingsTitle: String {
         switch self {
         case .general, .settings: "settings.general".localized()
+        case .companion: "companion.title".localized()
         case .menuBar: "connections.menuBar".localized()
         case .notifications: "settings.notifications.title".localized()
         case .privacy: "connections.privacy".localized()

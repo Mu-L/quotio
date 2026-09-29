@@ -6,6 +6,13 @@ import QuotioDomain
 
 @MainActor
 final class CompanionScreenModelTests: XCTestCase {
+    func testCompanionIsReachableFromSettingsSidebar() throws {
+        let page = try XCTUnwrap(NavigationPage(rawValue: "iPhone Sharing"))
+        XCTAssertTrue(NavigationPage.settingsPages.contains(page))
+        XCTAssertEqual(page.icon, "iphone")
+        XCTAssertEqual(page.settingsTitle, "companion.title".localized())
+    }
+
     func testPairingFailureClearsOldCodeAndFailedConfigurationPreservesState() async throws {
         let controller = CompanionStub()
         let model = CompanionScreenModel(controller: controller)

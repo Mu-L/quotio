@@ -10,6 +10,7 @@ public enum AppConstants {
 
 public enum NavigationPage: String, CaseIterable, Identifiable, Sendable {
     case general = "General"
+    case companion = "iPhone Sharing"
     case menuBar = "Menu Bar"
     case notifications = "Notifications"
     case privacy = "Privacy"
@@ -29,6 +30,7 @@ public enum NavigationPage: String, CaseIterable, Identifiable, Sendable {
     public var icon: String {
         switch self {
         case .general: "gearshape"
+        case .companion: "iphone"
         case .menuBar: "menubar.rectangle"
         case .notifications: "bell"
         case .privacy: "hand.raised"

@@ -13,7 +13,6 @@ public struct SettingsScreen: View {
     @Environment(ProxyManagementScreenModel.self) private var viewModel
     @Environment(OperatingModeManager.self) private var modeManager
     @Environment(LanguageManager.self) private var languageManager
-    @Environment(SettingsScreenModel.self) private var settingsModel
 
     public var body: some View {
         TabView {
@@ -51,7 +50,6 @@ public struct SettingsScreen: View {
             .tabItem { Label("connections.privacy".localized(), systemImage: "lock") }
 
             Form {
-                if let companion = settingsModel.companion { CompanionSettingsSection(model: companion) }
                 LocalProxyServerSection()
                 ProxySettingsSection()
                 LocalPathsSection()

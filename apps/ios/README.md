@@ -67,8 +67,9 @@ is no insecure TLS switch, automatic VPN installation or public tunnel.
 
 ## Connect the macOS app
 
-In Quotio macOS Settings, open the gateway tab and iPhone sharing. Configure the
-HTTPS origin and local upstream port, enable sharing, then create a device code.
+Choose Settings… in the Quotio menu, then iPhone sharing in the window sidebar.
+Configure the HTTPS origin and local upstream port, enable sharing, then create
+a device code.
 Point your HTTPS proxy at that local port. Scan the code inside Quotio iPhone and
 confirm the address before connecting. Manual details are available in the code sheet.
 
