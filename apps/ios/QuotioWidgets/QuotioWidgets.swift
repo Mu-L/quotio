@@ -78,7 +78,7 @@ struct QuotaProvider: AppIntentTimelineProvider {
                 do {
                     guard let token = try SharedContainer.keychain.read(host.id) else { throw MobileError.expiredCredential }
                     // Use the shared client's no-redirect session; its request timeout bounds the widget read.
-                    let client = QuotioHostHTTPClient(connection: .init(baseURL: host.origin, token: token))
+                    let client = QuotioHostHTTPClient(connection: .init(baseURL: host.origin, token: token, trustedCertificate: host.certificate))
                     let remote: QuotioHostSnapshot = try await client.request("v2/snapshot", timeout: 8)
                     try remote.validate()
                     guard remote.host.id == host.id else { throw MobileError.wrongHost }
@@ -93,7 +93,7 @@ struct QuotaProvider: AppIntentTimelineProvider {
             }
             // Re-read deletion/privacy changes after the network suspension.
             let latest = try storage.load()
-            guard latest.hosts.contains(where: { $0.id == host.id && $0.clientID == host.clientID && $0.origin == host.origin && !$0.needsPairing }) else {
+            guard latest.hosts.contains(where: { $0.id == host.id && $0.clientID == host.clientID && $0.origin == host.origin && $0.certificate == host.certificate && !$0.needsPairing }) else {
                 result.message = String(localized: "Host removed"); return result
             }
             result.hidden = latest.hideValues

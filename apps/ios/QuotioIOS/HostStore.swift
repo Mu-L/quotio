@@ -58,7 +58,10 @@ final class HostStore {
         guard canSave else { throw MobileError.invalidCache }
         let url = try Connection.origin(origin)
         let id = try Connection.clientID(token)
-        let client = makeClient(.init(baseURL: url, token: token))
+        if let pairing {
+            guard pairing.origin == origin, pairing.token == token else { throw MobileError.invalidConnection }
+        }
+        let client = makeClient(.init(baseURL: url, token: token, trustedCertificate: pairing?.certificate))
         let status = try await client.status()
         let snapshot = try await client.snapshot()
         let catalog: QuotioHostProviders = try await client.request("v2/providers")
@@ -69,7 +72,7 @@ final class HostStore {
         let profile = HostProfile(id: snapshot.host.id,
                                   name: name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? url.host! : String(name.prefix(80)),
                                   origin: url, clientID: id, expiresAt: pairing?.expiresAt,
-                                  snapshot: MobileSnapshot(snapshot, providerNames: names))
+                                  snapshot: MobileSnapshot(snapshot, providerNames: names), certificate: pairing?.certificate)
         guard let storage else { throw MobileError.invalidCache }
         let oldToken = try keychain.read(profile.id)
         try keychain.save(token, host: profile.id)
@@ -98,7 +101,7 @@ final class HostStore {
         do {
             guard host.expiresAt.map({ $0 > .now }) ?? true,
                   let token = try keychain.read(host.id) else { throw MobileError.expiredCredential }
-            let client = makeClient(.init(baseURL: host.origin, token: token))
+            let client = makeClient(.init(baseURL: host.origin, token: token, trustedCertificate: host.certificate))
             let snapshot = try await client.snapshot()
             try Task.checkCancellation()
             guard generation == epoch, state.selectedHostID == host.id,

@@ -109,12 +109,14 @@ public struct HostProfile: Codable, Sendable, Identifiable {
     public var clientID: String
     public var expiresAt: Date?
     public var snapshot: MobileSnapshot?
+    public var certificate: Data?
     public var needsPairing: Bool = false
     public var pinnedAccountIDs: Set<String> = []
 
-    public init(id: String, name: String, origin: URL, clientID: String, expiresAt: Date?, snapshot: MobileSnapshot?) {
+    public init(id: String, name: String, origin: URL, clientID: String, expiresAt: Date?, snapshot: MobileSnapshot?, certificate: Data? = nil) {
         self.id = id; self.name = name; self.origin = origin; self.clientID = clientID
         self.expiresAt = expiresAt; self.snapshot = snapshot
+        self.certificate = certificate
     }
 
     public mutating func accept(_ snapshot: MobileSnapshot) throws {

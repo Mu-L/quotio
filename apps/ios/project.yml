@@ -44,6 +44,8 @@ targets:
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         NSCameraUsageDescription: Scan a Quotio device code from your computer to connect this iPhone.
         NSLocalNetworkUsageDescription: Connect to Quotio on your computer to display quota and usage.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
         QuotioAppGroup: $(QUOTIO_APP_GROUP)
         QuotioKeychainGroup: $(QUOTIO_KEYCHAIN_GROUP)
         CFBundleURLTypes:
@@ -70,6 +72,8 @@ targets:
       path: Config/WidgetInfo.plist
       properties:
         CFBundleDisplayName: Quotio
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
         QuotioAppGroup: $(QUOTIO_APP_GROUP)
         QuotioKeychainGroup: $(QUOTIO_KEYCHAIN_GROUP)
         NSExtension:

@@ -19,7 +19,7 @@ struct PairHostView: View {
         NavigationStack {
             Form {
                 Section {
-                    Text("On your computer, issue a read-only device credential in Quotio. Connect through your LAN or private VPN using HTTPS.")
+                    Text("On your computer, choose Local network or Tailscale IP in Quotio, then scan or paste the pairing code here.")
                     Button("Scan QR code", systemImage: "qrcode.viewfinder") {
                         Task {
                             if !DataScannerViewController.isSupported { error = String(localized: "QR scanning is unavailable. Enter the connection below.") }
@@ -27,6 +27,13 @@ struct PairHostView: View {
                             else { error = String(localized: "Camera access is off. Enter the connection below, or enable Camera in Settings.") }
                         }
                     }
+                }
+                Section {
+                    PasteButton(payloadType: String.self) { values in
+                        if let text = values.first { acceptCode(text) }
+                    }
+                    Text("Use Copy pairing code on your computer to include the secure connection details.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
                 Section {
                     TextField("Host name", text: $name).textContentType(.nickname)
@@ -60,15 +67,18 @@ struct PairHostView: View {
                 .sheet(isPresented: $scanner) {
                     QRScanner { text in
                         scanner = false
-                        do {
-                            let decoded = try Pairing.decode(Data(text.utf8))
-                            origin = decoded.origin; token = decoded.token
-                            payload = decoded; error = nil
-                        } catch { self.error = String(localized: "This is not a valid Quotio device code, or it has expired.") }
+                        acceptCode(text)
                     }.ignoresSafeArea()
                         .overlay(alignment: .bottom) { Button("Cancel") { scanner = false }.buttonStyle(.borderedProminent).padding(30) }
                 }
         }.onDisappear { task?.cancel(); token = ""; payload = nil }
+    }
+    private func acceptCode(_ text: String) {
+        do {
+            let decoded = try Pairing.decode(Data(text.utf8))
+            origin = decoded.origin; token = decoded.token
+            payload = decoded; error = nil
+        } catch { self.error = String(localized: "This is not a valid Quotio device code, or it has expired.") }
     }
 }
 

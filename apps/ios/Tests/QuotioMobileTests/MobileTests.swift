@@ -89,3 +89,23 @@ private func fixture() throws -> QuotioHostSnapshot {
     #expect(account.isStale(at: Date(timeIntervalSince1970: 2_000_000_000)))
     #expect(account.metrics.first?.remainingPercent == 39)
 }
+
+@Test func directPairingRequiresCertificateAndPersistsTrustAcrossReloads() throws {
+    let id = String(repeating: "a", count: 43)
+    var json: [String: Any] = ["pairing_version": 2, "origin": "https://192.168.1.10:6768", "host_id": "host", "client_id": id,
+                             "expires_at": "2030-01-01T00:00:00Z", "token": "qclient.\(id).\(String(repeating: "b", count: 43))"]
+    let now = Date(timeIntervalSince1970: 0)
+    #expect(throws: (any Error).self) { try Pairing.decode(JSONSerialization.data(withJSONObject: json), now: now) }
+    let certificate = Data([1, 2, 3])
+    json["certificate"] = certificate.base64EncodedString()
+    let pairing = try Pairing.decode(JSONSerialization.data(withJSONObject: json), now: now)
+    #expect(pairing.certificate == certificate)
+    let profile = HostProfile(id: "host", name: "Mac", origin: try Connection.origin(pairing.origin), clientID: id,
+                              expiresAt: pairing.expiresAt, snapshot: nil, certificate: pairing.certificate)
+    #expect(try JSONDecoder().decode(HostProfile.self, from: JSONEncoder().encode(profile)).certificate == certificate)
+    json["pairing_version"] = 1
+    #expect(throws: (any Error).self) { try Pairing.decode(JSONSerialization.data(withJSONObject: json), now: now) }
+    json["pairing_version"] = 2
+    json["certificate"] = ""
+    #expect(throws: (any Error).self) { try Pairing.decode(JSONSerialization.data(withJSONObject: json), now: now) }
+}

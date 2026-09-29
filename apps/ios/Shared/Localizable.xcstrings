@@ -1513,34 +1513,6 @@
         }
       }
     },
-    "On your computer, issue a read-only device credential in Quotio. Connect through your LAN or private VPN using HTTPS.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "On your computer, issue a read-only device credential in Quotio. Connect through your LAN or private VPN using HTTPS."
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cấp quyền thiết bị chỉ đọc trong Quotio trên máy tính. Kết nối qua LAN hoặc VPN riêng bằng HTTPS."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Créez un accès en lecture seule dans Quotio sur votre ordinateur. Connectez-vous par HTTPS via le réseau local ou votre VPN privé."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在电脑上的 Quotio 中创建只读设备凭据。通过局域网或私有 VPN 使用 HTTPS 连接。"
-          }
-        }
-      }
-    },
     "Open Quotio to connect": {
       "localizations": {
         "en": {
@@ -3189,6 +3161,62 @@
           "stringUnit": {
             "state": "translated",
             "value": "••••"
+          }
+        }
+      }
+    },
+    "On your computer, choose Local network or Tailscale IP in Quotio, then scan or paste the pairing code here.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On your computer, choose Local network or Tailscale IP in Quotio, then scan or paste the pairing code here."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trên máy tính, chọn Mạng nội bộ hoặc Tailscale IP trong Quotio, rồi quét hoặc dán mã ghép đôi vào đây."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sur votre ordinateur, choisissez Réseau local ou IP Tailscale dans Quotio, puis scannez ou collez le code de jumelage ici."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在电脑的 Quotio 中选择局域网或 Tailscale IP，然后在此扫描或粘贴配对码。"
+          }
+        }
+      }
+    },
+    "Use Copy pairing code on your computer to include the secure connection details.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use Copy pairing code on your computer to include the secure connection details."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dùng Sao chép mã ghép đôi trên máy tính để lấy đầy đủ thông tin kết nối bảo mật."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utilisez Copier le code de jumelage sur votre ordinateur pour inclure les détails de connexion sécurisée."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在电脑上使用复制配对码，以包含安全连接信息。"
           }
         }
       }

@@ -34,9 +34,17 @@ private final class HostProtocol: URLProtocol, @unchecked Sendable {
     let configuration = URLSessionConfiguration.ephemeral
     configuration.protocolClasses = [HostProtocol.self]
     let session = URLSession(configuration: configuration)
-    let store = HostStore(storage: storage, keychain: keychain, makeClient: { QuotioHostHTTPClient(connection: $0, session: session) })
-    try await store.pair(name: "Synthetic host", origin: "https://host.example.test", token: token, pairing: nil)
+    let certificate = Data([1, 2, 3])
+    let pairingJSON = try JSONSerialization.data(withJSONObject: ["pairing_version": 2, "origin": "https://host.example.test", "host_id": hostID,
+        "client_id": clientID, "token": token, "expires_at": "2030-01-01T00:00:00Z", "certificate": certificate.base64EncodedString()])
+    let pairing = try Pairing.decode(pairingJSON)
+    let store = HostStore(storage: storage, keychain: keychain, makeClient: { connection in
+        #expect(connection.trustedCertificate == certificate)
+        return QuotioHostHTTPClient(connection: connection, session: session)
+    })
+    try await store.pair(name: "Synthetic host", origin: "https://host.example.test", token: token, pairing: pairing)
     #expect(store.selected?.id == hostID)
+    #expect(try storage.load().hosts.first?.certificate == certificate)
     #expect(try keychain.read(hostID) == token)
     #expect(try storage.load().hosts.first?.snapshot != nil)
     let persisted = try String(contentsOf: directory.appendingPathComponent("state.json"), encoding: .utf8)
@@ -49,4 +57,16 @@ private final class HostProtocol: URLProtocol, @unchecked Sendable {
     store.remove(hostID)
     #expect(try keychain.read(hostID) == nil)
     #expect(try storage.load().hosts.isEmpty)
+}
+
+@Test(.enabled(if: ProcessInfo.processInfo.environment["QUOTIO_TLS_SMOKE_FILE"] != nil))
+@MainActor func liveRustTLSUsesPairedTrustWithAppTransportSecurity() async throws {
+    let path = try #require(ProcessInfo.processInfo.environment["QUOTIO_TLS_SMOKE_FILE"])
+    struct Fixture: Decodable { let origin: URL; let token: String; let certificate: Data }
+    let fixture = try JSONDecoder().decode(Fixture.self, from: Data(contentsOf: URL(fileURLWithPath: path)))
+    let client = QuotioHostHTTPClient(connection: .init(baseURL: fixture.origin, token: fixture.token, trustedCertificate: fixture.certificate))
+    let status = try await client.status()
+    #expect(status.accessMode == "read_only")
+    let unpaired = QuotioHostHTTPClient(connection: .init(baseURL: fixture.origin, token: fixture.token))
+    await #expect(throws: (any Error).self) { try await unpaired.status() }
 }
