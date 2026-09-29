@@ -57,6 +57,16 @@ public struct QuotioHostHTTPClient: Sendable {
         idempotencyKey: String? = nil,
         timeout: TimeInterval? = nil
     ) async throws -> T {
+        let data = try await responseData(path, method: method, body: body, idempotencyKey: idempotencyKey, timeout: timeout)
+        return try makeQuotioHostDecoder().decode(T.self, from: data)
+    }
+
+    public func delete(_ path: String) async throws {
+        _ = try await responseData(path, method: "DELETE")
+    }
+
+    private func responseData(_ path: String, method: String = "GET", body: Data? = nil,
+                              idempotencyKey: String? = nil, timeout: TimeInterval? = nil) async throws -> Data {
         let endpoint = connection.baseURL
         let loopback = ["127.0.0.1", "::1", "[::1]"].contains(endpoint.host ?? "")
         guard endpoint.scheme == "https" || (endpoint.scheme == "http" && loopback),
@@ -86,7 +96,7 @@ public struct QuotioHostHTTPClient: Sendable {
             let code = (try? JSONDecoder().decode(Failure.self, from: data).error) ?? "request_failed"
             throw QuotioHostClientError.response(http.statusCode, code)
         }
-        return try makeQuotioHostDecoder().decode(T.self, from: data)
+        return data
     }
 
     public func snapshot() async throws -> QuotioHostSnapshot {

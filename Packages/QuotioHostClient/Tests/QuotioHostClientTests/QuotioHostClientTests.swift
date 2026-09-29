@@ -55,6 +55,26 @@ final class QuotioHostClientTests: XCTestCase {
         XCTAssertThrowsError(try QuotioHostSnapshot.decode(JSONSerialization.data(withJSONObject: disabled)))
     }
 
+    func testCompanionStatusRejectsUnsupportedAPIAndRevocationAcceptsNoContent() async throws {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [Stub.self]
+        let client = QuotioHostHTTPClient(
+            connection: .init(baseURL: URL(string: "https://host.example.test")!, token: "synthetic-device-token"),
+            session: URLSession(configuration: config)
+        )
+        Stub.state.reset(Data(#"{"schema_version":2,"api_version":2,"client_id":"phone","access_mode":"read_only","ready":true,"refreshing":false}"#.utf8))
+        let status = try await client.status()
+        XCTAssertEqual(status.clientId, "phone")
+        XCTAssertEqual(status.accessMode, "read_only")
+        Stub.state.reset(Data(#"{"schema_version":2,"api_version":3,"client_id":"phone","access_mode":"read_only","ready":true,"refreshing":false}"#.utf8))
+        do { _ = try await client.status(); XCTFail("Unsupported API must be rejected") }
+        catch QuotioHostClientError.incompatible {}
+        Stub.state.reset(Data())
+        try await client.delete("v2/clients/phone")
+        XCTAssertEqual(Stub.state.requests().last?.httpMethod, "DELETE")
+        XCTAssertEqual(Stub.state.requests().last?.url?.path, "/v2/clients/phone")
+    }
+
     func testHostConnectionsKeepCredentialsSeparateAndRejectUnsafeTransport() async throws {
         Stub.state.reset(try fixture())
         let config = URLSessionConfiguration.ephemeral
@@ -95,7 +115,7 @@ private final class Stub: URLProtocol, @unchecked Sendable {
     override func startLoading() {
         let body = Self.state.receive(request)
         let revoked = request.url?.host == "revoked.example.test"
-        let response = HTTPURLResponse(url: request.url!, statusCode: revoked ? 401 : 200, httpVersion: "HTTP/1.1", headerFields: nil)!
+        let response = HTTPURLResponse(url: request.url!, statusCode: revoked ? 401 : request.httpMethod == "DELETE" ? 204 : 200, httpVersion: "HTTP/1.1", headerFields: nil)!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: revoked ? Data(#"{"error":"unauthorized"}"#.utf8) : body)
         client?.urlProtocolDidFinishLoading(self)
