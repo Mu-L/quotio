@@ -61,6 +61,25 @@ pub async fn run(args: DevicesArgs) -> Result<Value, &'static str> {
             )
         }
     };
+    // Read trust before issuing: a failed metadata read must not lose a newly created grant.
+    let mut certificate = None;
+    if let Some(origin) = &origin {
+        let response = client
+            .get(base.join("v2/sharing").map_err(|_| "invalid_local_api")?)
+            .bearer_auth(&token)
+            .send()
+            .await
+            .map_err(|_| "host_unavailable")?;
+        if response.status().is_success() {
+            let sharing: Value = response.json().await.map_err(|_| "invalid_host_response")?;
+            if sharing["enabled"] == true && sharing["public_url"].as_str() == Some(origin.as_str())
+            {
+                certificate = sharing["certificate"].as_str().map(str::to_owned);
+            }
+        } else if !matches!(response.status().as_u16(), 403 | 404) {
+            return Err("device_request_rejected");
+        }
+    }
     let mut request = client
         .request(method, base.join(&path).map_err(|_| "invalid_local_api")?)
         .bearer_auth(token);
@@ -84,10 +103,13 @@ pub async fn run(args: DevicesArgs) -> Result<Value, &'static str> {
         {
             return Err("invalid_host_response");
         }
-        return Ok(
-            json!({"pairing_version":1,"origin":origin,"host_id":value["host_id"],
-                         "client_id":value["client"]["id"],"expires_at":value["client"]["expires_at"],"token":value["token"]}),
-        );
+        let mut pairing = json!({"pairing_version":if certificate.is_some() { 2 } else { 1 },
+            "origin":origin,"host_id":value["host_id"],"client_id":value["client"]["id"],
+            "expires_at":value["client"]["expires_at"],"token":value["token"]});
+        if let Some(certificate) = certificate {
+            pairing["certificate"] = certificate.into();
+        }
+        return Ok(pairing);
     }
     Ok(value)
 }

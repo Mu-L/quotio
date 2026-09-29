@@ -1997,6 +1997,47 @@
           "string",
           "null"
         ]
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "local_network",
+          "tailscale",
+          "proxy"
+        ]
+      },
+      "certificate": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Base64 DER companion CA for pairing v2; null for proxy mode."
+      },
+      "addresses": {
+        "type": "array",
+        "description": "Present in GET responses. Active private IPv4 interfaces.",
+        "items": {
+          "type": "object",
+          "required": [
+            "mode",
+            "address",
+            "interface"
+          ],
+          "properties": {
+            "mode": {
+              "enum": [
+                "local_network",
+                "tailscale"
+              ]
+            },
+            "address": {
+              "type": "string"
+            },
+            "interface": {
+              "type": "string"
+            }
+          }
+        }
       }
     }
   },
@@ -2015,14 +2056,23 @@
           "string",
           "null"
         ],
-        "description": "Loopback address with a nonzero port, required when enabling."
+        "description": "Assigned private IPv4 address and nonzero port for direct modes; loopback only for proxy mode."
       },
       "public_url": {
         "type": [
           "string",
           "null"
         ],
-        "description": "Exact HTTPS reverse-proxy origin, required when enabling."
+        "description": "Required HTTPS reverse-proxy origin in proxy mode; derived from listen in direct modes."
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "local_network",
+          "tailscale",
+          "proxy"
+        ],
+        "default": "proxy"
       }
     }
   },

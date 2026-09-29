@@ -16,6 +16,7 @@ async fn device_commands_issue_once_list_revoke_and_refuse_remote_owner_transpor
     let issued = Arc::new(AtomicUsize::new(0));
     let count = issued.clone();
     let router = Router::new()
+        .route("/v2/sharing", get(|| async { Json(json!({"enabled":true,"public_url":"https://192.168.1.10:6768","certificate":"AQID"})) }))
         .route(
             "/v2/clients",
             get(|| async { Json(json!({"schema_version":2,"clients":[{"id":"phone"}]})) }).post(
@@ -74,6 +75,26 @@ async fn device_commands_issue_once_list_revoke_and_refuse_remote_owner_transpor
         assert!(!String::from_utf8_lossy(&output.stderr).contains(OWNER));
     }
     assert_eq!(issued.load(Ordering::SeqCst), 1);
+    let direct = tokio::process::Command::new(env!("CARGO_BIN_EXE_quotio"))
+        .args([
+            "devices",
+            "--api",
+            &origin,
+            "add",
+            "--label",
+            "iPhone",
+            "--public-url",
+            "https://192.168.1.10:6768",
+        ])
+        .env("QUOTIO_SERVER_TOKEN", OWNER)
+        .output()
+        .await
+        .unwrap();
+    assert!(direct.status.success());
+    let value: Value = serde_json::from_slice(&direct.stdout).unwrap();
+    assert_eq!(value["pairing_version"], 2);
+    assert_eq!(value["certificate"], "AQID");
+    assert_eq!(issued.load(Ordering::SeqCst), 2);
     let refused = tokio::process::Command::new(env!("CARGO_BIN_EXE_quotio"))
         .args(["devices", "--api", "https://remote.example.test", "list"])
         .env("QUOTIO_SERVER_TOKEN", OWNER)
