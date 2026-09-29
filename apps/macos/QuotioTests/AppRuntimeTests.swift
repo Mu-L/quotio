@@ -113,7 +113,6 @@ private final class FakeAppRuntimeServices: AppRuntimeServices {
     var notificationSettingsModel: NotificationSettingsScreenModel {
         dependencies.notificationSettingsModel
     }
-    var telemetryConsentModel: TelemetryConsentScreenModel { dependencies.telemetryConsentModel }
     var applicationUpdateModel: ApplicationUpdateScreenModel { dependencies.applicationUpdateModel }
     var credentialMigrationModel: CredentialMigrationScreenModel { dependencies.credentialMigrationModel }
 

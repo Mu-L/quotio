@@ -157,13 +157,6 @@ enum CompositionRoot {
         let notificationSettingsModel = NotificationSettingsScreenModel(
             controller: notificationController
         )
-        let telemetryController = TelemetryController(
-            repository: UserDefaultsTelemetryPreferencesRepository(),
-            tracker: PostHogTelemetryAdapter(),
-            contextProvider: BundleTelemetryRuntimeContextProvider(),
-            updatePreferencesRepository: updatePreferences
-        )
-        let telemetryConsentModel = TelemetryConsentScreenModel(controller: telemetryController)
         let legacyMigration = QuotioCLILegacyAccountMigration(
             credentials: KeychainCredentialDataStore(
                 service: AppIdentity.keychainService(suffix: "monitor-auth"),
@@ -240,11 +233,9 @@ enum CompositionRoot {
             languageManager: languageManager,
             launchAtLoginModel: launchAtLoginModel,
             notificationSettingsModel: notificationSettingsModel,
-            telemetryConsentModel: telemetryConsentModel,
             applicationUpdateModel: applicationUpdateModel,
             credentialMigrationModel: credentialMigrationModel,
             notificationController: notificationController,
-            telemetryController: telemetryController,
             applicationUpdateController: applicationUpdateController,
             applicationPlatform: applicationPlatform,
             quotioServer: quotioServer,
@@ -285,12 +276,10 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
     let languageManager: LanguageManager
     let launchAtLoginModel: LaunchAtLoginScreenModel
     let notificationSettingsModel: NotificationSettingsScreenModel
-    let telemetryConsentModel: TelemetryConsentScreenModel
     let applicationUpdateModel: ApplicationUpdateScreenModel
     let credentialMigrationModel: CredentialMigrationScreenModel
 
     private let notificationController: NotificationController
-    private let telemetryController: TelemetryController
     private let applicationUpdateController: ApplicationUpdateController
     private let applicationPlatform: AppKitApplicationPlatformAdapter
     private let quotioServer: QuotioCLIServerProcess
@@ -318,11 +307,9 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
         languageManager: LanguageManager,
         launchAtLoginModel: LaunchAtLoginScreenModel,
         notificationSettingsModel: NotificationSettingsScreenModel,
-        telemetryConsentModel: TelemetryConsentScreenModel,
         applicationUpdateModel: ApplicationUpdateScreenModel,
         credentialMigrationModel: CredentialMigrationScreenModel,
         notificationController: NotificationController,
-        telemetryController: TelemetryController,
         applicationUpdateController: ApplicationUpdateController,
         applicationPlatform: AppKitApplicationPlatformAdapter,
         quotioServer: QuotioCLIServerProcess,
@@ -345,11 +332,9 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
         self.languageManager = languageManager
         self.launchAtLoginModel = launchAtLoginModel
         self.notificationSettingsModel = notificationSettingsModel
-        self.telemetryConsentModel = telemetryConsentModel
         self.applicationUpdateModel = applicationUpdateModel
         self.credentialMigrationModel = credentialMigrationModel
         self.notificationController = notificationController
-        self.telemetryController = telemetryController
         self.applicationUpdateController = applicationUpdateController
         self.applicationPlatform = applicationPlatform
         self.quotioServer = quotioServer
@@ -358,7 +343,6 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
     }
 
     func prepareForLaunch() {
-        telemetryController.prepareForLaunch()
         Task { [notificationController] in
             await notificationController.requestAuthorization()
         }

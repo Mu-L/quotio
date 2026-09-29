@@ -333,22 +333,6 @@ public struct UpdatePreferences: Equatable, Sendable {
     }
 }
 
-public struct TelemetryPreferences: Equatable, Sendable {
-    public var shareAnonymousUsage: Bool
-    public var anonymousInstallID: String?
-    public var hasSentFirstOptInLaunch: Bool
-
-    public init(
-        shareAnonymousUsage: Bool = false,
-        anonymousInstallID: String? = nil,
-        hasSentFirstOptInLaunch: Bool = false
-    ) {
-        self.shareAnonymousUsage = shareAnonymousUsage
-        self.anonymousInstallID = anonymousInstallID
-        self.hasSentFirstOptInLaunch = hasSentFirstOptInLaunch
-    }
-}
-
 public struct NotificationPreferences: Equatable, Sendable {
     public var notificationsEnabled: Bool
     public var quotaAlertThreshold: Double

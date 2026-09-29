@@ -83,7 +83,6 @@ struct QuotioApp: App {
             .environment(runtime.launchAtLoginModel)
             .environment(runtime.applicationUpdateModel)
             .environment(runtime.notificationSettingsModel)
-            .environment(runtime.telemetryConsentModel)
             .environment(runtime.credentialMigrationModel)
             .environment(runtime.providerImageModel)
             .environment(runtime.platformActions)

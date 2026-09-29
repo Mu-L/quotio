@@ -189,8 +189,6 @@ jobs:
 
       - name: Build DMG, ZIP, and appcast
         env:
-          POSTHOG_PROJECT_TOKEN: ${{ secrets.POSTHOG_PROJECT_TOKEN }}
-          POSTHOG_HOST: ${{ vars.POSTHOG_HOST || 'https://us.i.posthog.com' }}
           SIGNING_ENABLED: ${{ steps.signing.outputs.enabled }}
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
           VERSION: ${{ steps.version.outputs.VERSION }}

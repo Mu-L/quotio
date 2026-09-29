@@ -364,12 +364,6 @@ ARCHIVE_ARGS=(
     CODE_SIGNING_REQUIRED=NO
     CODE_SIGNING_ALLOWED=NO
 )
-if [ -n "${POSTHOG_PROJECT_TOKEN:-}" ]; then
-    ARCHIVE_ARGS+=("POSTHOG_PROJECT_TOKEN=${POSTHOG_PROJECT_TOKEN}")
-fi
-if [ -n "${POSTHOG_HOST:-}" ]; then
-    ARCHIVE_ARGS+=("POSTHOG_HOST=${POSTHOG_HOST}")
-fi
 
 xcodebuild "${ARCHIVE_ARGS[@]}" 2>&1 | tee "${BUILD_DIR}/release-build.log"
 

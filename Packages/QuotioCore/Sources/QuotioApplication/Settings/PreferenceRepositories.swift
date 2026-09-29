@@ -40,11 +40,6 @@ public protocol UpdatePreferencesRepository: Sendable {
     func save(_ preferences: UpdatePreferences)
 }
 
-public protocol TelemetryPreferencesRepository: Sendable {
-    func load() -> TelemetryPreferences
-    func save(_ preferences: TelemetryPreferences)
-}
-
 public protocol NotificationPreferencesRepository: Sendable {
     func load() -> NotificationPreferences
     func save(_ preferences: NotificationPreferences)

@@ -65,28 +65,6 @@ public protocol ProxyUpdateNotificationRecording: Sendable {
 }
 
 @MainActor
-public protocol TelemetryTracking: AnyObject, Sendable {
-    func configure() -> Bool
-    func identify(_ anonymousInstallID: String, properties: [String: String])
-    func capture(_ payload: TelemetryPayload)
-    func flush()
-    func stopAndReset()
-}
-
-public protocol TelemetryRuntimeContextProviding: Sendable {
-    func context(updateChannel: UpdateChannel) -> TelemetryRuntimeContext?
-}
-
-@MainActor
-public protocol TelemetryControlling: AnyObject, Sendable {
-    var preferences: TelemetryPreferences { get }
-
-    func prepareForLaunch()
-    func setConsent(_ consented: Bool)
-    func setDidChangeHandler(_ handler: (@MainActor (TelemetryPreferences) -> Void)?)
-}
-
-@MainActor
 public protocol LaunchAtLoginRegistering: AnyObject, Sendable {
     var status: LaunchAtLoginStatus { get }
     var isInApplicationsFolder: Bool { get }

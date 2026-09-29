@@ -255,32 +255,6 @@ public final class UserDefaultsUpdatePreferencesRepository: UpdatePreferencesRep
     }
 }
 
-public final class UserDefaultsTelemetryPreferencesRepository: TelemetryPreferencesRepository, @unchecked Sendable {
-    private let defaults: UserDefaults
-
-    public init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
-    }
-
-    public func load() -> TelemetryPreferences {
-        TelemetryPreferences(
-            shareAnonymousUsage: defaults.bool(forKey: "shareAnonymousUsage"),
-            anonymousInstallID: defaults.string(forKey: "anonymousInstallID"),
-            hasSentFirstOptInLaunch: defaults.bool(forKey: "telemetry.hasSentFirstOptInLaunch")
-        )
-    }
-
-    public func save(_ preferences: TelemetryPreferences) {
-        defaults.set(preferences.shareAnonymousUsage, forKey: "shareAnonymousUsage")
-        if let anonymousInstallID = preferences.anonymousInstallID {
-            defaults.set(anonymousInstallID, forKey: "anonymousInstallID")
-        } else {
-            defaults.removeObject(forKey: "anonymousInstallID")
-        }
-        defaults.set(preferences.hasSentFirstOptInLaunch, forKey: "telemetry.hasSentFirstOptInLaunch")
-    }
-}
-
 public final class UserDefaultsNotificationPreferencesRepository: NotificationPreferencesRepository, @unchecked Sendable {
     private let defaults: UserDefaults
 

@@ -20,7 +20,6 @@ protocol AppRuntimeServices: AnyObject, Sendable {
     var settingsScreenModel: SettingsScreenModel { get }
     var launchAtLoginModel: LaunchAtLoginScreenModel { get }
     var notificationSettingsModel: NotificationSettingsScreenModel { get }
-    var telemetryConsentModel: TelemetryConsentScreenModel { get }
     var applicationUpdateModel: ApplicationUpdateScreenModel { get }
     var credentialMigrationModel: CredentialMigrationScreenModel { get }
     var hasCompletedOnboarding: Bool { get }
@@ -70,7 +69,6 @@ final class AppRuntime {
     var notificationSettingsModel: NotificationSettingsScreenModel {
         services.notificationSettingsModel
     }
-    var telemetryConsentModel: TelemetryConsentScreenModel { services.telemetryConsentModel }
     var applicationUpdateModel: ApplicationUpdateScreenModel { services.applicationUpdateModel }
     var credentialMigrationModel: CredentialMigrationScreenModel { services.credentialMigrationModel }
     var showInDock: Bool { services.showInDock }

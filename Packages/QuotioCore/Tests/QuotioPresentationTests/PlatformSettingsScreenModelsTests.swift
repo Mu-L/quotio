@@ -37,16 +37,11 @@ final class PlatformSettingsScreenModelsTests: XCTestCase {
         XCTAssertFalse(controller.snapshot.preferences.notifyOnCooling)
     }
 
-    func testTelemetryAndLaunchAtLoginModelsForwardUserIntent() {
-        let telemetry = TelemetryControllerFake()
-        let telemetryModel = TelemetryConsentScreenModel(controller: telemetry)
-        telemetryModel.setConsent(true)
-
+    func testLaunchAtLoginModelForwardsUserIntent() {
         let launch = LaunchAtLoginControllerFake()
         let launchModel = LaunchAtLoginScreenModel(controller: launch)
         XCTAssertTrue(launchModel.setEnabled(true))
 
-        XCTAssertTrue(telemetry.preferences.shareAnonymousUsage)
         XCTAssertEqual(launch.snapshot.status, .enabled)
     }
 
@@ -105,21 +100,6 @@ private final class NotificationControllerFake: NotificationRequesting {
     }
     func setDidChangeHandler(
         _ handler: (@MainActor (NotificationSettingsSnapshot) -> Void)?
-    ) { self.handler = handler }
-}
-
-@MainActor
-private final class TelemetryControllerFake: TelemetryControlling {
-    var preferences = TelemetryPreferences()
-    private var handler: (@MainActor (TelemetryPreferences) -> Void)?
-
-    func prepareForLaunch() {}
-    func setConsent(_ consented: Bool) {
-        preferences.shareAnonymousUsage = consented
-        handler?(preferences)
-    }
-    func setDidChangeHandler(
-        _ handler: (@MainActor (TelemetryPreferences) -> Void)?
     ) { self.handler = handler }
 }
 

@@ -45,81 +45,6 @@ final class PlatformControllersTests: XCTestCase {
         XCTAssertEqual(snapshots.last?.isChecking, true)
     }
 
-    func testTelemetryDoesNotTouchTrackerWithoutExplicitConsent() {
-        let preferences = PlatformPreferencesFake(telemetry: TelemetryPreferences(
-            shareAnonymousUsage: false,
-            anonymousInstallID: "00000000-0000-0000-0000-000000000001",
-            hasSentFirstOptInLaunch: true
-        ))
-        let tracker = TelemetryTrackerFake()
-        let controller = TelemetryController(
-            repository: preferences,
-            tracker: tracker,
-            contextProvider: TelemetryContextProviderFake(),
-            updatePreferencesRepository: preferences
-        )
-
-        controller.prepareForLaunch()
-
-        XCTAssertEqual(tracker.operations, [])
-        XCTAssertNil(preferences.telemetry.anonymousInstallID)
-        XCTAssertFalse(preferences.telemetry.hasSentFirstOptInLaunch)
-    }
-
-    func testTelemetryConsentConfiguresBeforeIdentifyCaptureAndFlush() {
-        let installID = "00000000-0000-0000-0000-000000000001"
-        let preferences = PlatformPreferencesFake(telemetry: TelemetryPreferences(
-            shareAnonymousUsage: false,
-            anonymousInstallID: installID
-        ))
-        let tracker = TelemetryTrackerFake()
-        let controller = TelemetryController(
-            repository: preferences,
-            tracker: tracker,
-            contextProvider: TelemetryContextProviderFake(),
-            updatePreferencesRepository: preferences
-        )
-
-        controller.setConsent(true)
-
-        XCTAssertEqual(tracker.operations, [
-            "configure",
-            "identify:\(installID)",
-            "capture:first_opted_in_launch",
-            "capture:app_started",
-            "capture:app_version_active",
-            "flush",
-        ])
-        XCTAssertTrue(preferences.telemetry.shareAnonymousUsage)
-        XCTAssertTrue(preferences.telemetry.hasSentFirstOptInLaunch)
-
-        controller.setConsent(false)
-
-        XCTAssertEqual(tracker.operations.last, "stopAndReset")
-        XCTAssertNil(preferences.telemetry.anonymousInstallID)
-        XCTAssertFalse(preferences.telemetry.hasSentFirstOptInLaunch)
-    }
-
-    func testTelemetryDoesNotCreateInstallIdentifierWhenTrackerCannotConfigure() {
-        let preferences = PlatformPreferencesFake(telemetry: TelemetryPreferences(
-            shareAnonymousUsage: true
-        ))
-        let tracker = TelemetryTrackerFake()
-        tracker.configureResult = false
-        let controller = TelemetryController(
-            repository: preferences,
-            tracker: tracker,
-            contextProvider: TelemetryContextProviderFake(),
-            updatePreferencesRepository: preferences
-        )
-
-        controller.prepareForLaunch()
-
-        XCTAssertEqual(tracker.operations, ["configure"])
-        XCTAssertNil(preferences.telemetry.anonymousInstallID)
-        XCTAssertFalse(preferences.telemetry.hasSentFirstOptInLaunch)
-    }
-
     func testNotificationAuthorizationPreferenceThresholdAndDeduplication() async {
         let preferences = PlatformPreferencesFake()
         let delivery = NotificationDeliveryFake(authorizationStatus: .authorized)
@@ -328,58 +253,24 @@ private final class UpdaterIconFake: UpdaterIconApplying {
 
 private final class PlatformPreferencesFake:
     UpdatePreferencesRepository,
-    TelemetryPreferencesRepository,
     NotificationPreferencesRepository,
     @unchecked Sendable
 {
     var update: UpdatePreferences
-    var telemetry: TelemetryPreferences
     var notification: NotificationPreferences
 
     init(
         update: UpdatePreferences = UpdatePreferences(),
-        telemetry: TelemetryPreferences = TelemetryPreferences(),
         notification: NotificationPreferences = NotificationPreferences()
     ) {
         self.update = update
-        self.telemetry = telemetry
         self.notification = notification
     }
 
     func load() -> UpdatePreferences { update }
     func save(_ preferences: UpdatePreferences) { update = preferences }
-    func load() -> TelemetryPreferences { telemetry }
-    func save(_ preferences: TelemetryPreferences) { telemetry = preferences }
     func load() -> NotificationPreferences { notification }
     func save(_ preferences: NotificationPreferences) { notification = preferences }
-}
-
-@MainActor
-private final class TelemetryTrackerFake: TelemetryTracking {
-    private(set) var operations: [String] = []
-    var configureResult = true
-
-    func configure() -> Bool { operations.append("configure"); return configureResult }
-    func identify(_ anonymousInstallID: String, properties: [String: String]) {
-        operations.append("identify:\(anonymousInstallID)")
-    }
-    func capture(_ payload: TelemetryPayload) {
-        operations.append("capture:\(payload.event.rawValue)")
-    }
-    func flush() { operations.append("flush") }
-    func stopAndReset() { operations.append("stopAndReset") }
-}
-
-private struct TelemetryContextProviderFake: TelemetryRuntimeContextProviding {
-    func context(updateChannel: UpdateChannel) -> TelemetryRuntimeContext? {
-        TelemetryRuntimeContext(
-            appVersion: "1.2.3",
-            buildNumber: "45",
-            bundleIdentifier: "com.example.quotio",
-            macOSVersion: "Version 26.0",
-            updateChannel: updateChannel
-        )
-    }
 }
 
 @MainActor

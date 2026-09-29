@@ -163,7 +163,6 @@ final class UserDefaultsPreferenceRepositoriesTests: XCTestCase {
         let appearance = UserDefaultsAppearancePreferencesRepository(defaults: defaults).load()
         let language = UserDefaultsLanguagePreferencesRepository(defaults: defaults).load()
         let update = UserDefaultsUpdatePreferencesRepository(defaults: defaults).load()
-        let telemetry = UserDefaultsTelemetryPreferencesRepository(defaults: defaults).load()
         let notifications = UserDefaultsNotificationPreferencesRepository(defaults: defaults).load()
         let proxy = UserDefaultsProxyPreferencesRepository(defaults: defaults).load()
         let tunnel = UserDefaultsTunnelPreferencesRepository(defaults: defaults).load()
@@ -177,7 +176,6 @@ final class UserDefaultsPreferenceRepositoriesTests: XCTestCase {
         XCTAssertEqual(appearance, AppearancePreferences())
         XCTAssertEqual(language, LanguagePreferences())
         XCTAssertEqual(update, UpdatePreferences())
-        XCTAssertEqual(telemetry, TelemetryPreferences())
         XCTAssertEqual(notifications, NotificationPreferences())
         XCTAssertEqual(proxy, ProxyPreferences())
         XCTAssertEqual(tunnel, TunnelPreferences())
@@ -240,15 +238,6 @@ final class UserDefaultsPreferenceRepositoriesTests: XCTestCase {
         let updateRepository = UserDefaultsUpdatePreferencesRepository(defaults: defaults)
         updateRepository.save(UpdatePreferences(channel: .beta))
         XCTAssertEqual(updateRepository.load(), UpdatePreferences(channel: .beta))
-
-        let telemetryPreferences = TelemetryPreferences(
-            shareAnonymousUsage: true,
-            anonymousInstallID: "install-id",
-            hasSentFirstOptInLaunch: true
-        )
-        let telemetryRepository = UserDefaultsTelemetryPreferencesRepository(defaults: defaults)
-        telemetryRepository.save(telemetryPreferences)
-        XCTAssertEqual(telemetryRepository.load(), telemetryPreferences)
 
         let notificationPreferences = NotificationPreferences(
             notificationsEnabled: false,

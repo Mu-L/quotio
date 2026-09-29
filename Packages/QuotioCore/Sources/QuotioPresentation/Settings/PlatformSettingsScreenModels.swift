@@ -70,25 +70,6 @@ public final class NotificationSettingsScreenModel {
 
 @MainActor
 @Observable
-public final class TelemetryConsentScreenModel {
-    public private(set) var preferences: TelemetryPreferences
-    private let controller: any TelemetryControlling
-
-    public init(controller: any TelemetryControlling) {
-        self.controller = controller
-        self.preferences = controller.preferences
-        controller.setDidChangeHandler { [weak self] preferences in
-            self?.preferences = preferences
-        }
-    }
-
-    public func setConsent(_ consented: Bool) {
-        controller.setConsent(consented)
-    }
-}
-
-@MainActor
-@Observable
 public final class LaunchAtLoginScreenModel {
     public private(set) var snapshot: LaunchAtLoginSnapshot
     public private(set) var errorMessage: String?

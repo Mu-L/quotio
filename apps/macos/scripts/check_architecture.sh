@@ -80,7 +80,7 @@ for directory in "${domain}" "${application}" "${infrastructure}" "${presentatio
     fi
 done
 
-lower_layer_forbidden_imports='^[[:space:]]*(@preconcurrency[[:space:]]+)?import[[:space:]]+(SwiftUI|AppKit|Observation|QuotioInfrastructure|QuotioPresentation|Security|Sparkle|PostHog)([[:space:].]|$)'
+lower_layer_forbidden_imports='^[[:space:]]*(@preconcurrency[[:space:]]+)?import[[:space:]]+(SwiftUI|AppKit|Observation|QuotioInfrastructure|QuotioPresentation|Security|Sparkle)([[:space:].]|$)'
 direct_io='\b(UserDefaults|URLSession|FileManager|FileHandle|Process)\b[[:space:]]*(\.|\()|\bData[[:space:]]*\([[:space:]]*contentsOf:|\bSec(Item|Keychain|Access|Certificate|Identity|Key|Trust)[[:alnum:]_]*[[:space:]]*\('
 temporary_bridge_symbols='\b(LegacyAppRuntimeServices|CustomProviderTransportError|AIProvider|MonitorAccount|MonitorAccountSource|ModelQuota|ProviderQuotaData|SubscriptionTier|PrivacyNotice|SubscriptionInfo)\b'
 cross_module_typealias='^[[:space:]]*public[[:space:]]+typealias[[:space:]]+[[:alnum:]_]+[[:space:]]*=[[:space:]]*Quotio(Domain|Application|Infrastructure|Presentation)\.'
@@ -112,7 +112,7 @@ report_matches \
     "${application}/Agents" "${infrastructure}/Agents"
 report_matches \
     'Presentation imported Infrastructure or a third-party infrastructure SDK' \
-    '^[[:space:]]*(@preconcurrency[[:space:]]+)?import[[:space:]]+(QuotioInfrastructure|Security|Sparkle|PostHog)([[:space:].]|$)' \
+    '^[[:space:]]*(@preconcurrency[[:space:]]+)?import[[:space:]]+(QuotioInfrastructure|Security|Sparkle)([[:space:].]|$)' \
     "${presentation}"
 report_matches \
     'Presentation performed direct persistence, network, process, filesystem, or Security I/O' \

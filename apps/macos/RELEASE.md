@@ -25,7 +25,6 @@ GitHub Actions reads release credentials only from repository secrets:
 | `APP_STORE_CONNECT_KEY_ID` | App Store Connect API key ID |
 | `APP_STORE_CONNECT_ISSUER_ID` | App Store Connect API issuer ID |
 | `SPARKLE_PRIVATE_KEY` | Sparkle EdDSA signing key |
-| `POSTHOG_PROJECT_TOKEN` | Optional PostHog project token embedded at build time |
 | `TAP_TOKEN` | Dispatch the stable release to the Homebrew tap |
 
 The five Apple signing secrets are an optional all-or-none group. When all five are absent, the workflow still builds the existing ad-hoc artifacts, which keeps forks usable without access to the upstream credentials. When any Apple signing secret is set, all five must be set so a partially configured release cannot silently fall back to ad-hoc signing.
