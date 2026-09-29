@@ -13,6 +13,8 @@ pub mod service;
 pub mod sources;
 pub mod staging;
 pub mod vault;
+#[cfg(windows)]
+pub(crate) mod windows_vault;
 use crate::{cli::Provider, error::ProviderError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

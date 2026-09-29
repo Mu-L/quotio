@@ -102,9 +102,10 @@ ThisDeviceOnly, available after first unlock, and do not sync through iCloud.
 
 ## Windows and release status
 
-The native Windows backend and CI are being developed separately and remain
-uncommitted pending runtime verification. Cross-compilation on macOS is not a DPAPI
-or Windows-device test. Do not advertise Windows support before those checks pass.
+The native Windows backend includes per-user DPAPI storage, file locking and
+atomic replacement. Runtime verification remains pending on Windows. Cross-compilation
+on macOS is not a DPAPI or Windows-device test; do not advertise Windows support
+before those checks pass.
 
 Before TestFlight: supply the signing team and group provisioning, validate on a
 physical iPhone over LAN and VPN, exercise widget timing outside developer mode,

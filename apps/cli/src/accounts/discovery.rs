@@ -819,8 +819,11 @@ mod tests {
                 .is_empty()
         );
         std::fs::remove_file(&path).unwrap();
-        std::os::unix::fs::symlink("/dev/zero", &path).unwrap();
-        assert!(source.resolve().await.is_err());
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink("/dev/zero", &path).unwrap();
+            assert!(source.resolve().await.is_err());
+        }
         std::fs::remove_dir_all(dir).unwrap();
     }
     #[tokio::test]

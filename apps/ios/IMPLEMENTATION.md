@@ -16,8 +16,8 @@ changes or store uploads.
 - macOS Settings sharing controls, QR/manual credential details and device revocation.
 - CLI `devices add/list/revoke`; local-only sharing API with a second read-only
   listener sharing one scheduler/vault. Disable also blocks old keep-alive requests.
-- Windows DPAPI and CI work remains uncommitted pending runtime verification. It is
-  not part of the committed iOS/macOS companion implementation.
+- Windows DPAPI storage, OS file locking and replacement are included with
+  platform-specific tests. Native Windows runtime verification remains pending.
 - iOS CI for model and simulator tests; checked-in Xcode project and generator spec.
 
 ## Checks
@@ -39,9 +39,9 @@ changes or store uploads.
 
 ## Pending external acceptance
 
-- Windows runtime verification before committing the prepared backend/CI work. The
-  user has no Windows host available. Cross-compilation alone does not establish
-  native-Windows support or release readiness.
+- Run the storage and host tests on Windows CI. The user has no Windows host
+  available. Cross-compilation alone does not establish native-Windows support
+  or release readiness.
 - Physical iPhone LAN/VPN/TLS and camera, widget scheduling while locked, sleep/wake,
   actual accessibility inspection and native-provider acceptance on each host OS.
 - Final opaque iOS App Store icon, distribution export, TestFlight processing and
@@ -73,3 +73,14 @@ verification, the requested team, App Group and shared Keychain entitlements pas
 for both bundles and the Release archive. The signed development archive is at
 `/private/tmp/QuotioIOS-signed-20260929.xcarchive`. This is not an App Store distribution
 export and was not uploaded. Real-device acceptance remains pending.
+
+## Windows commit verification, 2026-09-29
+
+Windows GNU cross-check passed for all targets/features. The affected cache,
+contract, device-command, server-management, vault and settings checks passed on
+macOS: 57 passed and 1 ignored. Formatting and diff checks passed.
+
+The full concurrent Rust suite had one Cursor WAL snapshot-cleanup failure in
+unchanged provider code. That test passed in isolation. This is recorded separately
+from the passing affected checks; the full-suite run was not green. Native Windows
+execution remains pending CI.

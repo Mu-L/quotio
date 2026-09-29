@@ -39,7 +39,7 @@ impl VaultNamespace {
         format!("accounts-{}.lock", self.0)
     }
 
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", windows))]
     fn vault_name(&self) -> String {
         format!("vault-{}", self.0)
     }
@@ -204,6 +204,8 @@ impl Backend for Keychain {
 pub struct VaultLock {
     file: File,
     _process_lock: ProcessLock,
+    #[cfg(windows)]
+    _directory_guards: Vec<File>,
 }
 struct ProcessLock {
     held: Arc<AtomicBool>,
@@ -302,11 +304,19 @@ impl Vault {
             Ok(backend) => Arc::new(backend),
             Err(_) => Arc::new(Locked),
         };
-        #[cfg(not(target_os = "linux"))]
+        #[cfg(not(any(target_os = "linux", windows)))]
         let backend: Arc<dyn Backend> = Arc::new(match namespace {
             Some(namespace) => Keychain::isolated(_interactive, namespace),
             None => Keychain::production(_interactive),
         });
+        #[cfg(windows)]
+        let backend: Arc<dyn Backend> = Arc::new(super::windows_vault::WindowsVault::new(
+            directory.join(
+                namespace
+                    .map(VaultNamespace::vault_name)
+                    .unwrap_or_else(|| "vault".into()),
+            ),
+        ));
         let lock_name = namespace
             .map(VaultNamespace::lock_name)
             .unwrap_or_else(|| "accounts.lock".into());
@@ -437,14 +447,28 @@ impl Vault {
         })
     }
 }
-fn acquire(path: &std::path::Path) -> Result<VaultLock, AccountError> {
+pub(crate) fn acquire(path: &std::path::Path) -> Result<VaultLock, AccountError> {
+    #[cfg(windows)]
+    let absolute = std::path::absolute(path).map_err(|_| AccountError::Storage)?;
+    #[cfg(windows)]
+    let path = absolute.as_path();
     // `flock` behavior for separate descriptors in one process varies by platform.
     // Pair it with a process-local guard so tasks cannot enter the same lock scope.
     let process_lock = acquire_process_lock(path)?;
     let parent = path.parent().ok_or(AccountError::Storage)?;
+    #[cfg(not(windows))]
     std::fs::create_dir_all(parent).map_err(|_| AccountError::Storage)?;
+    #[cfg(windows)]
+    let directory_guards = super::windows_vault::directory_guards(parent)?;
     let mut options = OpenOptions::new();
     options.read(true).write(true).create(true).truncate(false);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options
+            .share_mode(0)
+            .custom_flags(windows_sys::Win32::Storage::FileSystem::FILE_FLAG_OPEN_REPARSE_POINT);
+    }
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
@@ -452,7 +476,26 @@ fn acquire(path: &std::path::Path) -> Result<VaultLock, AccountError> {
             .mode(0o600)
             .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_NONBLOCK);
     }
-    let lock = options.open(path).map_err(|_| AccountError::Storage)?;
+    let lock = options.open(path).map_err(|error| {
+        if cfg!(windows) && error.raw_os_error() == Some(32) {
+            AccountError::Busy
+        } else {
+            AccountError::Storage
+        }
+    })?;
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        if lock
+            .metadata()
+            .map_err(|_| AccountError::Storage)?
+            .file_attributes()
+            & windows_sys::Win32::Storage::FileSystem::FILE_ATTRIBUTE_REPARSE_POINT
+            != 0
+        {
+            return Err(AccountError::Storage);
+        }
+    }
     if !lock
         .metadata()
         .map_err(|_| AccountError::Storage)?
@@ -468,13 +511,15 @@ fn acquire(path: &std::path::Path) -> Result<VaultLock, AccountError> {
             return Err(AccountError::Busy);
         }
     }
-    #[cfg(not(unix))]
+    #[cfg(not(any(unix, windows)))]
     {
         return Err(AccountError::Unsupported);
     }
     Ok(VaultLock {
         file: lock,
         _process_lock: process_lock,
+        #[cfg(windows)]
+        _directory_guards: directory_guards,
     })
 }
 impl Transaction {

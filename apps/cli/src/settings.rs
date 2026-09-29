@@ -164,37 +164,51 @@ impl SettingsStore {
             .parent()
             .filter(|p| !p.as_os_str().is_empty())
             .unwrap_or(std::path::Path::new("."));
+        #[cfg(not(windows))]
         fs::create_dir_all(parent).map_err(|_| SettingsError::Storage)?;
-        let mut options = OpenOptions::new();
-        options.create(true).read(true).write(true).truncate(false);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            options
-                .mode(0o600)
-                .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
-        }
-        let lock = options
-            .open(self.path.with_extension("toml.lock"))
-            .map_err(|_| SettingsError::Storage)?;
-        if !lock
-            .metadata()
-            .map_err(|_| SettingsError::Storage)?
-            .is_file()
-        {
-            return Err(SettingsError::Storage);
-        }
-        #[cfg(unix)]
-        {
-            use std::os::fd::AsRawFd;
-            if unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
-                return Err(SettingsError::Busy);
+        #[cfg(windows)]
+        let _lock = crate::accounts::vault::acquire(&self.path.with_extension("toml.lock"))
+            .map_err(|error| {
+                if matches!(error, crate::accounts::AccountError::Busy) {
+                    SettingsError::Busy
+                } else {
+                    SettingsError::Storage
+                }
+            })?;
+        #[cfg(not(windows))]
+        let _lock = {
+            let mut options = OpenOptions::new();
+            options.create(true).read(true).write(true).truncate(false);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options
+                    .mode(0o600)
+                    .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
             }
-        }
-        #[cfg(not(unix))]
-        {
-            return Err(SettingsError::Storage);
-        }
+            let lock = options
+                .open(self.path.with_extension("toml.lock"))
+                .map_err(|_| SettingsError::Storage)?;
+            if !lock
+                .metadata()
+                .map_err(|_| SettingsError::Storage)?
+                .is_file()
+            {
+                return Err(SettingsError::Storage);
+            }
+            #[cfg(unix)]
+            {
+                use std::os::fd::AsRawFd;
+                if unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
+                    return Err(SettingsError::Busy);
+                }
+            }
+            #[cfg(not(unix))]
+            {
+                return Err(SettingsError::Storage);
+            }
+            lock
+        };
         let (mut config, revision, _) = self.read()?;
         if patch.revision != revision {
             return Err(SettingsError::Conflict);
@@ -243,8 +257,16 @@ impl SettingsStore {
             let mut file = opts.open(&temporary)?;
             file.write_all(text.as_bytes())?;
             file.sync_all()?;
-            fs::rename(&temporary, &self.path)?;
-            File::open(parent)?.sync_all()
+            drop(file);
+            #[cfg(windows)]
+            {
+                crate::accounts::windows_vault::replace(&temporary, &self.path)
+            }
+            #[cfg(not(windows))]
+            {
+                fs::rename(&temporary, &self.path)?;
+                File::open(parent)?.sync_all()
+            }
         })();
         if result.is_err() {
             let _ = fs::remove_file(&temporary);

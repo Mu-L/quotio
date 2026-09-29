@@ -417,11 +417,26 @@ fn read(path: &Path) -> io::Result<Option<CachedObservation>> {
         use std::os::unix::fs::OpenOptionsExt;
         options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
     }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options.custom_flags(windows_sys::Win32::Storage::FileSystem::FILE_FLAG_OPEN_REPARSE_POINT);
+    }
     let file = match options.open(path) {
         Ok(file) => file,
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(e),
     };
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        if file.metadata()?.file_attributes()
+            & windows_sys::Win32::Storage::FileSystem::FILE_ATTRIBUTE_REPARSE_POINT
+            != 0
+        {
+            return Err(io::ErrorKind::InvalidData.into());
+        }
+    }
     if !file.metadata()?.is_file() {
         return Err(io::ErrorKind::InvalidData.into());
     }
@@ -436,45 +451,70 @@ fn read(path: &Path) -> io::Result<Option<CachedObservation>> {
 }
 struct LockedEntry {
     path: PathBuf,
+    #[cfg(not(windows))]
     _lock: File,
+    #[cfg(windows)]
+    _lock: crate::accounts::vault::VaultLock,
 }
 impl LockedEntry {
     fn open(directory: &Path, key: &str) -> io::Result<Self> {
-        let mut builder = std::fs::DirBuilder::new();
-        builder.recursive(true);
-        #[cfg(unix)]
+        #[cfg(windows)]
         {
-            use std::os::unix::fs::DirBuilderExt;
-            builder.mode(0o700);
+            let lock = crate::accounts::vault::acquire(&directory.join(format!("{key}.lock")))
+                .map_err(|error| {
+                    if matches!(error, crate::accounts::AccountError::Busy) {
+                        io::Error::from(io::ErrorKind::WouldBlock)
+                    } else {
+                        io::Error::from(io::ErrorKind::PermissionDenied)
+                    }
+                })?;
+            Ok(Self {
+                path: directory.join(format!("{key}.json")),
+                _lock: lock,
+            })
         }
-        builder.create(directory)?;
-        let mut options = OpenOptions::new();
-        options.read(true).write(true).create(true).truncate(false);
-        #[cfg(unix)]
+        #[cfg(not(windows))]
         {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
-        }
-        let lock = options.open(directory.join(format!("{key}.lock")))?;
-        #[cfg(unix)]
-        {
-            use std::os::fd::AsRawFd;
-            if unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
-                return Err(io::Error::last_os_error());
+            let mut builder = std::fs::DirBuilder::new();
+            builder.recursive(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::DirBuilderExt;
+                builder.mode(0o700);
             }
+            builder.create(directory)?;
+            let mut options = OpenOptions::new();
+            options.read(true).write(true).create(true).truncate(false);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+            }
+            let lock = options.open(directory.join(format!("{key}.lock")))?;
+            #[cfg(unix)]
+            {
+                use std::os::fd::AsRawFd;
+                if unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
+                    return Err(io::Error::last_os_error());
+                }
+            }
+            #[cfg(not(unix))]
+            return Err(io::ErrorKind::Unsupported.into());
+            #[cfg(unix)]
+            Ok(Self {
+                path: directory.join(format!("{key}.json")),
+                _lock: lock,
+            })
         }
-        #[cfg(not(unix))]
-        return Err(io::ErrorKind::Unsupported.into());
-        #[cfg(unix)]
-        Ok(Self {
-            path: directory.join(format!("{key}.json")),
-            _lock: lock,
-        })
     }
+
     fn write(self, usage: &CachedObservation) -> io::Result<()> {
         // The per-entry OS lock covers read, fetch and rename. It is released on
         // cancellation/crash and never unlinked, so waiters lock the same inode.
-        let temp = self.path.with_extension("tmp");
+        let temp = self.path.with_extension(format!(
+            "{}.tmp",
+            crate::accounts::random_string().map_err(|_| io::ErrorKind::Other)?
+        ));
         let result = (|| {
             let mut options = OpenOptions::new();
             options.write(true).create(true).truncate(true);
@@ -483,12 +523,27 @@ impl LockedEntry {
                 use std::os::unix::fs::OpenOptionsExt;
                 options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
             }
+            #[cfg(windows)]
+            {
+                use std::os::windows::fs::OpenOptionsExt;
+                options.create_new(true).share_mode(0).custom_flags(
+                    windows_sys::Win32::Storage::FileSystem::FILE_FLAG_OPEN_REPARSE_POINT,
+                );
+            }
             let mut file = options.open(&temp)?;
             serde_json::to_writer(&mut file, usage).map_err(|_| io::ErrorKind::InvalidData)?;
             file.flush()?;
             file.sync_all()?;
-            std::fs::rename(&temp, &self.path)?;
-            File::open(self.path.parent().unwrap())?.sync_all()
+            drop(file);
+            #[cfg(windows)]
+            {
+                crate::accounts::windows_vault::replace(&temp, &self.path)
+            }
+            #[cfg(not(windows))]
+            {
+                std::fs::rename(&temp, &self.path)?;
+                File::open(self.path.parent().unwrap())?.sync_all()
+            }
         })();
         if result.is_err() {
             let _ = std::fs::remove_file(temp);
