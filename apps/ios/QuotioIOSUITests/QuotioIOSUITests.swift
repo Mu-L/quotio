@@ -1,6 +1,10 @@
 import XCTest
 
 final class QuotioIOSUITests: XCTestCase {
+    private func card(_ app: XCUIApplication, containing text: String) -> XCUIElement {
+        app.buttons.containing(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
+    }
+
     @MainActor func testFirstLaunchHasWorkingSharedStorage() {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
@@ -13,10 +17,13 @@ final class QuotioIOSUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--demo", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
-        XCTAssertTrue(app.staticTexts["Demo data"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["39%"].exists)
+        XCTAssertTrue(app.buttons["Demo Mac"].waitForExistence(timeout: 10))
+        XCTAssertTrue(card(app, containing: "39 percent remaining").exists)
+        // Healthy state shows no connection banner.
+        XCTAssertFalse(app.buttons["Retry"].exists)
         app.buttons["Hide values"].tap()
-        XCTAssertFalse(app.staticTexts["39%"].exists)
+        XCTAssertFalse(card(app, containing: "39 percent remaining").exists)
+        XCTAssertTrue(card(app, containing: "Values hidden").exists)
         app.tabBars.buttons["Settings"].tap()
         app.buttons["Add computer"].tap()
         XCTAssertTrue(app.buttons["Scan pairing code"].waitForExistence(timeout: 3))
@@ -27,5 +34,44 @@ final class QuotioIOSUITests: XCTestCase {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    @MainActor func testDemoShowsMenuBarParityAndLastCardClearsTabBar() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        XCTAssertTrue(app.buttons["Demo Mac"].waitForExistence(timeout: 10))
+        // Credits, truncated percent, plan and grouped quotas from the menu bar are visible.
+        let amp = card(app, containing: "Plan Megawatt")
+        for _ in 0..<3 where !amp.isHittable { app.swipeUp() }
+        XCTAssertTrue(amp.label.contains("Orb usage, 47 percent remaining"), amp.label)
+        XCTAssertTrue(amp.label.contains("$136.57"), amp.label)
+        let factory = card(app, containing: "Factory")
+        for _ in 0..<4 where !factory.isHittable { app.swipeUp() }
+        XCTAssertTrue(factory.label.contains("Standard"), factory.label)
+        XCTAssertTrue(factory.label.contains("Core"), factory.label)
+        XCTAssertTrue(factory.label.contains("0 percent remaining"), factory.label)
+
+        for _ in 0..<6 { app.swipeUp() }
+        let last = card(app, containing: "Not loaded yet")
+        XCTAssertTrue(last.waitForExistence(timeout: 3))
+        XCTAssertLessThanOrEqual(last.frame.maxY, app.tabBars.firstMatch.frame.minY)
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Bottom of usage list"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    @MainActor func testOfflineShowsExactlyOneConnectionMessage() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo", "--offline", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        XCTAssertTrue(app.buttons["Retry"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.buttons.matching(identifier: "Retry").count, 1)
+        XCTAssertEqual(app.staticTexts.matching(NSPredicate(format: "label == %@", "Can't reach your Mac")).count, 1)
+        // Cards keep the last good data and do not repeat the error.
+        XCTAssertTrue(card(app, containing: "39 percent remaining").exists)
+        app.staticTexts["Can't reach your Mac"].tap()
+        XCTAssertTrue(app.staticTexts["Make sure your Mac is awake and Quotio is running."].waitForExistence(timeout: 3))
     }
 }

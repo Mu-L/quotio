@@ -1,28 +1,143 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "%@ cap": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"%@ cap"}},"vi":{"stringUnit":{"state":"translated","value":"Giới hạn %@"}},"fr":{"stringUnit":{"state":"translated","value":"Plafond %@"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"上限 %@"}}}},
+    "%@ credits": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"%@ credits"}},"vi":{"stringUnit":{"state":"translated","value":"%@ tín dụng"}},"fr":{"stringUnit":{"state":"translated","value":"%@ crédits"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"%@ 积分"}}}},
+    "%@ of %@ left": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"%@ of %@ left"}},"vi":{"stringUnit":{"state":"translated","value":"Còn %@ / %@"}},"fr":{"stringUnit":{"state":"translated","value":"%@ sur %@ restants"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"剩余 %@ / %@"}}}},
+    "%@ requests": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"%@ requests"}},"vi":{"stringUnit":{"state":"translated","value":"%@ yêu cầu"}},"fr":{"stringUnit":{"state":"translated","value":"%@ requêtes"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"%@ 次请求"}}}},
+    "%@ searches": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"%@ searches"}},"vi":{"stringUnit":{"state":"translated","value":"%@ lượt tìm kiếm"}},"fr":{"stringUnit":{"state":"translated","value":"%@ recherches"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"%@ 次搜索"}}}},
+    "%@ spent": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"%@ spent"}},"vi":{"stringUnit":{"state":"translated","value":"Đã dùng %@"}},"fr":{"stringUnit":{"state":"translated","value":"%@ dépensés"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"已花费 %@"}}}},
+    "%lld percent remaining": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"%lld percent remaining"}},"vi":{"stringUnit":{"state":"translated","value":"còn %lld phần trăm"}},"fr":{"stringUnit":{"state":"translated","value":"%lld pour cent restants"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"剩余百分之 %lld"}}}},
+    "%lld percent used": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"%lld percent used"}},"vi":{"stringUnit":{"state":"translated","value":"đã dùng %lld phần trăm"}},"fr":{"stringUnit":{"state":"translated","value":"%lld pour cent utilisés"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"已用百分之 %lld"}}}},
+    "%llu days": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"%llu days"}},"vi":{"stringUnit":{"state":"translated","value":"%llu ngày"}},"fr":{"stringUnit":{"state":"translated","value":"%llu jours"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"%llu 天"}}}},
+    "+%@/h": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"+%@/h"}},"vi":{"stringUnit":{"state":"translated","value":"+%@/giờ"}},"fr":{"stringUnit":{"state":"translated","value":"+%@/h"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"+%@/小时"}}}},
     "1. On your Mac, open Quotio and choose Pair iPhone.\n2. Choose Local network or Tailscale IP, then create a pairing code.\n3. Scan or paste the code here.": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"1. On your Mac, open Quotio and choose Pair iPhone.\n2. Choose Local network or Tailscale IP, then create a pairing code.\n3. Scan or paste the code here."}},"vi":{"stringUnit":{"state":"translated","value":"1. Trên Mac, mở Quotio và chọn Ghép nối iPhone.\n2. Chọn Mạng nội bộ hoặc Tailscale IP, rồi tạo mã ghép nối.\n3. Quét hoặc dán mã vào đây."}},"fr":{"stringUnit":{"state":"translated","value":"1. Sur votre Mac, ouvrez Quotio et choisissez Associer un iPhone.\n2. Choisissez Réseau local ou IP Tailscale, puis créez un code de jumelage.\n3. Scannez ou collez le code ici."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"1. 在 Mac 上打开 Quotio，然后选择配对 iPhone。\n2. 选择局域网或 Tailscale IP，然后创建配对码。\n3. 在此扫描或粘贴配对码。"}}}},
+    "5h window": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"5h window"}},"vi":{"stringUnit":{"state":"translated","value":"Khung 5 giờ"}},"fr":{"stringUnit":{"state":"translated","value":"Fenêtre 5 h"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"5 小时窗口"}}}},
+    "About": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"About"}},"vi":{"stringUnit":{"state":"translated","value":"Giới thiệu"}},"fr":{"stringUnit":{"state":"translated","value":"À propos"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"关于"}}}},
     "Access expires %@": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Access expires %@"}},"vi":{"stringUnit":{"state":"translated","value":"Quyền truy cập hết hạn %@"}},"fr":{"stringUnit":{"state":"translated","value":"L’accès expire %@"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"访问权限到期时间：%@"}}}},
+    "Account": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Account"}},"vi":{"stringUnit":{"state":"translated","value":"Tài khoản"}},"fr":{"stringUnit":{"state":"translated","value":"Compte"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"账户"}}}},
+    "Active": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Active"}},"vi":{"stringUnit":{"state":"translated","value":"Đang hoạt động"}},"fr":{"stringUnit":{"state":"translated","value":"Actif"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"正常"}}}},
+    "Activity": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Activity"}},"vi":{"stringUnit":{"state":"translated","value":"Hoạt động"}},"fr":{"stringUnit":{"state":"translated","value":"Activité"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"活动"}}}},
+    "Add an account in Quotio on your Mac.": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Add an account in Quotio on your Mac."}},"vi":{"stringUnit":{"state":"translated","value":"Thêm tài khoản trong Quotio trên Mac."}},"fr":{"stringUnit":{"state":"translated","value":"Ajoutez un compte dans Quotio sur votre Mac."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"请在 Mac 上的 Quotio 中添加账户。"}}}},
     "Add computer": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Add computer"}},"vi":{"stringUnit":{"state":"translated","value":"Thêm máy tính"}},"fr":{"stringUnit":{"state":"translated","value":"Ajouter un ordinateur"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"添加电脑"}}}},
     "Advanced: HTTPS proxy": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Advanced: HTTPS proxy"}},"vi":{"stringUnit":{"state":"translated","value":"Nâng cao: HTTPS proxy"}},"fr":{"stringUnit":{"state":"translated","value":"Avancé : proxy HTTPS"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"高级：HTTPS 代理"}}}},
+    "Agent usage": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Agent usage"}},"vi":{"stringUnit":{"state":"translated","value":"Dùng agent"}},"fr":{"stringUnit":{"state":"translated","value":"Utilisation agent"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"Agent 用量"}}}},
+    "All": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"All"}},"vi":{"stringUnit":{"state":"translated","value":"Tất cả"}},"fr":{"stringUnit":{"state":"translated","value":"Tous"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"全部"}}}},
+    "Available": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Available"}},"vi":{"stringUnit":{"state":"translated","value":"Khả dụng"}},"fr":{"stringUnit":{"state":"translated","value":"Disponibles"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"可用"}}}},
+    "Balances": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Balances"}},"vi":{"stringUnit":{"state":"translated","value":"Số dư"}},"fr":{"stringUnit":{"state":"translated","value":"Soldes"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"余额"}}}},
+    "Billing mode": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Billing mode"}},"vi":{"stringUnit":{"state":"translated","value":"Chế độ thanh toán"}},"fr":{"stringUnit":{"state":"translated","value":"Mode de facturation"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"计费方式"}}}},
+    "Billing period ends %@": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Billing period ends %@"}},"vi":{"stringUnit":{"state":"translated","value":"Kỳ thanh toán kết thúc %@"}},"fr":{"stringUnit":{"state":"translated","value":"Fin de la période de facturation : %@"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"计费周期于 %@ 结束"}}}},
     "Camera access is off. Paste the code, or allow Camera access in Settings.": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Camera access is off. Paste the code, or allow Camera access in Settings."}},"vi":{"stringUnit":{"state":"translated","value":"Quyền truy cập Camera đang tắt. Hãy dán mã hoặc cho phép Camera trong Cài đặt."}},"fr":{"stringUnit":{"state":"translated","value":"L’accès à la caméra est désactivé. Collez le code ou autorisez la caméra dans Réglages."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"相机访问权限已关闭。请粘贴配对码，或在“设置”中允许相机访问。"}}}},
+    "Can't reach your Mac": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Can't reach your Mac"}},"vi":{"stringUnit":{"state":"translated","value":"Không kết nối được Mac"}},"fr":{"stringUnit":{"state":"translated","value":"Mac injoignable"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"无法连接 Mac"}}}},
+    "Canceled": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Canceled"}},"vi":{"stringUnit":{"state":"translated","value":"Đã hủy"}},"fr":{"stringUnit":{"state":"translated","value":"Annulé"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"已取消"}}}},
+    "Certificate not trusted": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Certificate not trusted"}},"vi":{"stringUnit":{"state":"translated","value":"Chứng chỉ không đáng tin cậy"}},"fr":{"stringUnit":{"state":"translated","value":"Certificat non approuvé"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"证书不受信任"}}}},
+    "Chat": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Chat"}},"vi":{"stringUnit":{"state":"translated","value":"Trò chuyện"}},"fr":{"stringUnit":{"state":"translated","value":"Chat"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"聊天"}}}},
+    "Check that iPhone sharing is on in Quotio on your Mac.": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Check that iPhone sharing is on in Quotio on your Mac."}},"vi":{"stringUnit":{"state":"translated","value":"Kiểm tra chia sẻ với iPhone đã bật trong Quotio trên Mac."}},"fr":{"stringUnit":{"state":"translated","value":"Vérifiez que le partage iPhone est activé dans Quotio sur votre Mac."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"确认 Mac 上的 Quotio 已开启 iPhone 共享。"}}}},
+    "Close": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Close"}},"vi":{"stringUnit":{"state":"translated","value":"Đóng"}},"fr":{"stringUnit":{"state":"translated","value":"Fermer"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"关闭"}}}},
+    "Comfortable": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Comfortable"}},"vi":{"stringUnit":{"state":"translated","value":"Thoải mái"}},"fr":{"stringUnit":{"state":"translated","value":"Confortable"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"宽松"}}}},
+    "Compact": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Compact"}},"vi":{"stringUnit":{"state":"translated","value":"Gọn"}},"fr":{"stringUnit":{"state":"translated","value":"Compact"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"紧凑"}}}},
+    "Completions": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Completions"}},"vi":{"stringUnit":{"state":"translated","value":"Gợi ý mã"}},"fr":{"stringUnit":{"state":"translated","value":"Complétions"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"代码补全"}}}},
     "Computer name": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Computer name"}},"vi":{"stringUnit":{"state":"translated","value":"Tên máy tính"}},"fr":{"stringUnit":{"state":"translated","value":"Nom de l’ordinateur"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"电脑名称"}}}},
-    "Computers": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Computers"}},"vi":{"stringUnit":{"state":"translated","value":"Máy tính"}},"fr":{"stringUnit":{"state":"translated","value":"Ordinateurs"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"电脑"}}}},
+    "Connect both devices to the same network or Tailscale.": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Connect both devices to the same network or Tailscale."}},"vi":{"stringUnit":{"state":"translated","value":"Kết nối cả hai thiết bị vào cùng mạng hoặc Tailscale."}},"fr":{"stringUnit":{"state":"translated","value":"Connectez les deux appareils au même réseau ou à Tailscale."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"将两台设备连接到同一网络或 Tailscale。"}}}},
+    "Connect to Quotio on your Mac to see usage and add widgets.": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Connect to Quotio on your Mac to see usage and add widgets."}},"vi":{"stringUnit":{"state":"translated","value":"Kết nối với Quotio trên Mac để xem mức dùng và thêm tiện ích."}},"fr":{"stringUnit":{"state":"translated","value":"Connectez-vous à Quotio sur votre Mac pour voir l’utilisation et ajouter des widgets."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"连接 Mac 上的 Quotio 以查看用量并添加小组件。"}}}},
     "Connected": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Connected"}},"vi":{"stringUnit":{"state":"translated","value":"Đã kết nối"}},"fr":{"stringUnit":{"state":"translated","value":"Connecté"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"已连接"}}}},
+    "Connecting": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Connecting"}},"vi":{"stringUnit":{"state":"translated","value":"Đang kết nối"}},"fr":{"stringUnit":{"state":"translated","value":"Connexion"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"正在连接"}}}},
     "Connecting to %@…": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Connecting to %@…"}},"vi":{"stringUnit":{"state":"translated","value":"Đang kết nối với %@…"}},"fr":{"stringUnit":{"state":"translated","value":"Connexion à %@…"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"正在连接到 %@…"}}}},
+    "Connection problem": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Connection problem"}},"vi":{"stringUnit":{"state":"translated","value":"Lỗi kết nối"}},"fr":{"stringUnit":{"state":"translated","value":"Problème de connexion"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"连接问题"}}}},
+    "Current streak": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Current streak"}},"vi":{"stringUnit":{"state":"translated","value":"Chuỗi hiện tại"}},"fr":{"stringUnit":{"state":"translated","value":"Série actuelle"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"当前连续天数"}}}},
+    "Daily": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Daily"}},"vi":{"stringUnit":{"state":"translated","value":"Hằng ngày"}},"fr":{"stringUnit":{"state":"translated","value":"Quotidien"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"每日"}}}},
+    "Data": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Data"}},"vi":{"stringUnit":{"state":"translated","value":"Dữ liệu"}},"fr":{"stringUnit":{"state":"translated","value":"Données"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"数据"}}}},
+    "Density": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Density"}},"vi":{"stringUnit":{"state":"translated","value":"Mật độ"}},"fr":{"stringUnit":{"state":"translated","value":"Densité"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"密度"}}}},
+    "Disabled": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Disabled"}},"vi":{"stringUnit":{"state":"translated","value":"Đã tắt"}},"fr":{"stringUnit":{"state":"translated","value":"Désactivé"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"已停用"}}}},
+    "Disabled on your Mac": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Disabled on your Mac"}},"vi":{"stringUnit":{"state":"translated","value":"Đã tắt trên Mac"}},"fr":{"stringUnit":{"state":"translated","value":"Désactivé sur votre Mac"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"已在 Mac 上停用"}}}},
     "Done": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Done"}},"vi":{"stringUnit":{"state":"translated","value":"Xong"}},"fr":{"stringUnit":{"state":"translated","value":"Terminé"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"完成"}}}},
+    "Extra usage": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Extra usage"}},"vi":{"stringUnit":{"state":"translated","value":"Dùng thêm"}},"fr":{"stringUnit":{"state":"translated","value":"Utilisation supplémentaire"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"额外用量"}}}},
+    "Extra usage credits": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Extra usage credits"}},"vi":{"stringUnit":{"state":"translated","value":"Tín dụng dùng thêm"}},"fr":{"stringUnit":{"state":"translated","value":"Crédits supplémentaires"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"额外用量积分"}}}},
     "For custom HTTPS proxies only. Check the address before connecting.": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"For custom HTTPS proxies only. Check the address before connecting."}},"vi":{"stringUnit":{"state":"translated","value":"Chỉ dành cho HTTPS proxy tùy chỉnh. Kiểm tra địa chỉ trước khi kết nối."}},"fr":{"stringUnit":{"state":"translated","value":"Pour les proxys HTTPS personnalisés uniquement. Vérifiez l’adresse avant la connexion."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"仅用于自定义 HTTPS 代理。连接前请检查地址。"}}}},
+    "Free": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Free"}},"vi":{"stringUnit":{"state":"translated","value":"Miễn phí"}},"fr":{"stringUnit":{"state":"translated","value":"Gratuit"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"免费"}}}},
+    "Individual credits": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Individual credits"}},"vi":{"stringUnit":{"state":"translated","value":"Tín dụng cá nhân"}},"fr":{"stringUnit":{"state":"translated","value":"Crédits individuels"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"个人积分"}}}},
+    "Keychain access needed on your Mac": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Keychain access needed on your Mac"}},"vi":{"stringUnit":{"state":"translated","value":"Cần quyền Chuỗi khóa trên Mac"}},"fr":{"stringUnit":{"state":"translated","value":"Accès au trousseau requis sur votre Mac"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"需要在 Mac 上授予钥匙串权限"}}}},
+    "Last error": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Last error"}},"vi":{"stringUnit":{"state":"translated","value":"Lỗi gần nhất"}},"fr":{"stringUnit":{"state":"translated","value":"Dernière erreur"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"最近错误"}}}},
+    "Last synced": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Last synced"}},"vi":{"stringUnit":{"state":"translated","value":"Đồng bộ lần cuối"}},"fr":{"stringUnit":{"state":"translated","value":"Dernière synchro"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"上次同步"}}}},
+    "Longest streak": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Longest streak"}},"vi":{"stringUnit":{"state":"translated","value":"Chuỗi dài nhất"}},"fr":{"stringUnit":{"state":"translated","value":"Plus longue série"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"最长连续天数"}}}},
+    "Longest turn": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Longest turn"}},"vi":{"stringUnit":{"state":"translated","value":"Lượt dài nhất"}},"fr":{"stringUnit":{"state":"translated","value":"Tour le plus long"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"最长单轮"}}}},
+    "Lowest quota first": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Lowest quota first"}},"vi":{"stringUnit":{"state":"translated","value":"Hạn mức thấp lên đầu"}},"fr":{"stringUnit":{"state":"translated","value":"Quota le plus bas en premier"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"低配额优先"}}}},
+    "Mac identity changed": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Mac identity changed"}},"vi":{"stringUnit":{"state":"translated","value":"Danh tính Mac đã thay đổi"}},"fr":{"stringUnit":{"state":"translated","value":"L’identité du Mac a changé"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"Mac 身份已变更"}}}},
+    "Make sure your Mac is awake and Quotio is running.": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Make sure your Mac is awake and Quotio is running."}},"vi":{"stringUnit":{"state":"translated","value":"Đảm bảo Mac đang thức và Quotio đang chạy."}},"fr":{"stringUnit":{"state":"translated","value":"Vérifiez que votre Mac est allumé et que Quotio est ouvert."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"确认 Mac 处于唤醒状态且 Quotio 正在运行。"}}}},
+    "Monthly": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Monthly"}},"vi":{"stringUnit":{"state":"translated","value":"Hằng tháng"}},"fr":{"stringUnit":{"state":"translated","value":"Mensuel"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"每月"}}}},
+    "Needs permission on your Mac": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Needs permission on your Mac"}},"vi":{"stringUnit":{"state":"translated","value":"Cần cấp quyền trên Mac"}},"fr":{"stringUnit":{"state":"translated","value":"Autorisation requise sur votre Mac"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"需要在 Mac 上授权"}}}},
+    "No data": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"No data"}},"vi":{"stringUnit":{"state":"translated","value":"Không có dữ liệu"}},"fr":{"stringUnit":{"state":"translated","value":"Aucune donnée"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"无数据"}}}},
+    "No quota data": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"No quota data"}},"vi":{"stringUnit":{"state":"translated","value":"Không có dữ liệu hạn mức"}},"fr":{"stringUnit":{"state":"translated","value":"Aucune donnée de quota"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"无配额数据"}}}},
+    "Not checked yet": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Not checked yet"}},"vi":{"stringUnit":{"state":"translated","value":"Chưa kiểm tra"}},"fr":{"stringUnit":{"state":"translated","value":"Pas encore vérifié"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"尚未检查"}}}},
+    "Not loaded yet": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Not loaded yet"}},"vi":{"stringUnit":{"state":"translated","value":"Chưa tải"}},"fr":{"stringUnit":{"state":"translated","value":"Pas encore chargé"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"尚未加载"}}}},
+    "Offline": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Offline"}},"vi":{"stringUnit":{"state":"translated","value":"Ngoại tuyến"}},"fr":{"stringUnit":{"state":"translated","value":"Hors ligne"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"离线"}}}},
+    "On your Mac, open Quotio and choose Pair iPhone.": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"On your Mac, open Quotio and choose Pair iPhone."}},"vi":{"stringUnit":{"state":"translated","value":"Trên Mac, mở Quotio và chọn Ghép nối iPhone."}},"fr":{"stringUnit":{"state":"translated","value":"Sur votre Mac, ouvrez Quotio et choisissez Jumeler l’iPhone."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"在 Mac 上打开 Quotio 并选择“配对 iPhone”。"}}}},
+    "Open the provider app to refresh": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Open the provider app to refresh"}},"vi":{"stringUnit":{"state":"translated","value":"Mở ứng dụng của nhà cung cấp để làm mới"}},"fr":{"stringUnit":{"state":"translated","value":"Ouvrez l’app du fournisseur pour actualiser"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"打开服务商应用以刷新"}}}},
+    "Orb usage": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Orb usage"}},"vi":{"stringUnit":{"state":"translated","value":"Dùng Orb"}},"fr":{"stringUnit":{"state":"translated","value":"Utilisation Orb"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"Orb 用量"}}}},
+    "Outdated": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Outdated"}},"vi":{"stringUnit":{"state":"translated","value":"Đã cũ"}},"fr":{"stringUnit":{"state":"translated","value":"Obsolète"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"已过时"}}}},
+    "Outdated, updated %@": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Outdated, updated %@"}},"vi":{"stringUnit":{"state":"translated","value":"Đã cũ, cập nhật %@"}},"fr":{"stringUnit":{"state":"translated","value":"Obsolète, mis à jour %@"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"已过时，更新于%@"}}}},
+    "Pair this Mac again": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Pair this Mac again"}},"vi":{"stringUnit":{"state":"translated","value":"Ghép nối lại Mac này"}},"fr":{"stringUnit":{"state":"translated","value":"Jumelez à nouveau ce Mac"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"重新配对此 Mac"}}}},
+    "Paired certificate trusted": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Paired certificate trusted"}},"vi":{"stringUnit":{"state":"translated","value":"Tin cậy chứng chỉ đã ghép nối"}},"fr":{"stringUnit":{"state":"translated","value":"Certificat jumelé approuvé"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"已信任配对证书"}}}},
+    "Payment due": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Payment due"}},"vi":{"stringUnit":{"state":"translated","value":"Cần thanh toán"}},"fr":{"stringUnit":{"state":"translated","value":"Paiement dû"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"待付款"}}}},
+    "Plan %@": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Plan %@"}},"vi":{"stringUnit":{"state":"translated","value":"Gói %@"}},"fr":{"stringUnit":{"state":"translated","value":"Forfait %@"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"方案 %@"}}}},
     "Point the camera at the code on your Mac.": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Point the camera at the code on your Mac."}},"vi":{"stringUnit":{"state":"translated","value":"Hướng camera vào mã trên màn hình Mac."}},"fr":{"stringUnit":{"state":"translated","value":"Dirigez la caméra vers le code affiché sur votre Mac."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"将相机对准 Mac 上的配对码。"}}}},
     "Pair again": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Pair again"}},"vi":{"stringUnit":{"state":"translated","value":"Ghép nối lại"}},"fr":{"stringUnit":{"state":"translated","value":"Associer à nouveau"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"重新配对"}}}},
-    "Pair this computer again": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Pair this computer again"}},"vi":{"stringUnit":{"state":"translated","value":"Ghép nối lại máy tính này"}},"fr":{"stringUnit":{"state":"translated","value":"Associer à nouveau cet ordinateur"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"重新配对此电脑"}}}},
+    "Premium requests": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Premium requests"}},"vi":{"stringUnit":{"state":"translated","value":"Yêu cầu cao cấp"}},"fr":{"stringUnit":{"state":"translated","value":"Requêtes premium"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"高级请求"}}}},
+    "Provider credentials stay on your Mac. This iPhone reads quota over HTTPS with read-only access.": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Provider credentials stay on your Mac. This iPhone reads quota over HTTPS with read-only access."}},"vi":{"stringUnit":{"state":"translated","value":"Thông tin đăng nhập nhà cung cấp nằm trên Mac. iPhone này chỉ đọc hạn mức qua HTTPS."}},"fr":{"stringUnit":{"state":"translated","value":"Les identifiants des fournisseurs restent sur votre Mac. Cet iPhone lit les quotas en HTTPS, en lecture seule."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"服务商凭据保留在 Mac 上。此 iPhone 仅通过 HTTPS 只读获取配额。"}}}},
+    "Provider order": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Provider order"}},"vi":{"stringUnit":{"state":"translated","value":"Thứ tự nhà cung cấp"}},"fr":{"stringUnit":{"state":"translated","value":"Ordre des fournisseurs"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"服务商顺序"}}}},
+    "Provider returned no quota": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Provider returned no quota"}},"vi":{"stringUnit":{"state":"translated","value":"Nhà cung cấp không trả về hạn mức"}},"fr":{"stringUnit":{"state":"translated","value":"Le fournisseur n’a renvoyé aucun quota"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"服务商未返回配额"}}}},
+    "Provider tool unavailable": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Provider tool unavailable"}},"vi":{"stringUnit":{"state":"translated","value":"Công cụ nhà cung cấp không khả dụng"}},"fr":{"stringUnit":{"state":"translated","value":"Outil du fournisseur indisponible"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"服务商工具不可用"}}}},
     "QR scanning is unavailable. Paste the pairing code instead.": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"QR scanning is unavailable. Paste the pairing code instead."}},"vi":{"stringUnit":{"state":"translated","value":"Không thể quét mã QR. Hãy dán mã ghép nối."}},"fr":{"stringUnit":{"state":"translated","value":"Le scan QR est indisponible. Collez plutôt le code de jumelage."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"无法扫描二维码。请改为粘贴配对码。"}}}},
+    "Quotio on your Mac is busy or its credential storage is locked.": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Quotio on your Mac is busy or its credential storage is locked."}},"vi":{"stringUnit":{"state":"translated","value":"Quotio trên Mac đang bận hoặc kho thông tin đăng nhập đang khóa."}},"fr":{"stringUnit":{"state":"translated","value":"Quotio sur votre Mac est occupé ou son stockage d’identifiants est verrouillé."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"Mac 上的 Quotio 正忙或凭据存储已锁定。"}}}},
+    "Rate limit resets": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Rate limit resets"}},"vi":{"stringUnit":{"state":"translated","value":"Lượt đặt lại giới hạn"}},"fr":{"stringUnit":{"state":"translated","value":"Réinitialisations de limite"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"速率限制重置"}}}},
+    "Rate limited by provider": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Rate limited by provider"}},"vi":{"stringUnit":{"state":"translated","value":"Bị nhà cung cấp giới hạn tốc độ"}},"fr":{"stringUnit":{"state":"translated","value":"Limité par le fournisseur"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"被服务商限流"}}}},
+    "Refresh failed": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Refresh failed"}},"vi":{"stringUnit":{"state":"translated","value":"Làm mới thất bại"}},"fr":{"stringUnit":{"state":"translated","value":"Échec de l’actualisation"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"刷新失败"}}}},
     "Remove computer": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Remove computer"}},"vi":{"stringUnit":{"state":"translated","value":"Xóa máy tính"}},"fr":{"stringUnit":{"state":"translated","value":"Supprimer l’ordinateur"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"移除电脑"}}}},
     "Remove this computer?": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Remove this computer?"}},"vi":{"stringUnit":{"state":"translated","value":"Xóa máy tính này?"}},"fr":{"stringUnit":{"state":"translated","value":"Supprimer cet ordinateur ?"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"移除此电脑？"}}}},
     "Removing a computer deletes its saved credential on this iPhone. Revoke the device on the computer to end its access everywhere.": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Removing a computer deletes its saved credential on this iPhone. Revoke the device on the computer to end its access everywhere."}},"vi":{"stringUnit":{"state":"translated","value":"Xóa máy tính sẽ xóa thông tin truy cập đã lưu trên iPhone này. Hãy thu hồi thiết bị trên máy tính để chấm dứt quyền truy cập ở mọi nơi."}},"fr":{"stringUnit":{"state":"translated","value":"Supprimer un ordinateur efface son identifiant enregistré sur cet iPhone. Révoquez l’appareil sur l’ordinateur pour mettre fin à son accès partout."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"移除电脑会删除此 iPhone 上保存的凭据。请在电脑上撤销此设备，以彻底终止其访问权限。"}}}},
+    "Replenishes %@ per hour": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Replenishes %@ per hour"}},"vi":{"stringUnit":{"state":"translated","value":"Hồi %@ mỗi giờ"}},"fr":{"stringUnit":{"state":"translated","value":"Se recharge de %@ par heure"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"每小时恢复 %@"}}}},
+    "Reset %@": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Reset %@"}},"vi":{"stringUnit":{"state":"translated","value":"Đặt lại %@"}},"fr":{"stringUnit":{"state":"translated","value":"Réinitialisé %@"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"已于 %@ 重置"}}}},
+    "Resets daily": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Resets daily"}},"vi":{"stringUnit":{"state":"translated","value":"Đặt lại hằng ngày"}},"fr":{"stringUnit":{"state":"translated","value":"Réinitialisé chaque jour"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"每日重置"}}}},
+    "resets in %@": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"resets in %@"}},"vi":{"stringUnit":{"state":"translated","value":"đặt lại sau %@"}},"fr":{"stringUnit":{"state":"translated","value":"réinitialisation dans %@"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"%@后重置"}}}},
+    "Resets in %@ · %@": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Resets in %@ · %@"}},"vi":{"stringUnit":{"state":"translated","value":"Đặt lại sau %@ · %@"}},"fr":{"stringUnit":{"state":"translated","value":"Réinitialisation dans %@ · %@"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"%@后重置 · %@"}}}},
+    "Resets on renewal in %@": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Resets on renewal in %@"}},"vi":{"stringUnit":{"state":"translated","value":"Đặt lại khi gia hạn sau %@"}},"fr":{"stringUnit":{"state":"translated","value":"Réinitialisé au renouvellement dans %@"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"%@后续订时重置"}}}},
+    "Retry": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Retry"}},"vi":{"stringUnit":{"state":"translated","value":"Thử lại"}},"fr":{"stringUnit":{"state":"translated","value":"Réessayer"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"重试"}}}},
     "Scan pairing code": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Scan pairing code"}},"vi":{"stringUnit":{"state":"translated","value":"Quét mã ghép nối"}},"fr":{"stringUnit":{"state":"translated","value":"Scanner le code de jumelage"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"扫描配对码"}}}},
+    "Scan the new pairing code on this iPhone.": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Scan the new pairing code on this iPhone."}},"vi":{"stringUnit":{"state":"translated","value":"Quét mã ghép nối mới trên iPhone này."}},"fr":{"stringUnit":{"state":"translated","value":"Scannez le nouveau code de jumelage sur cet iPhone."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"在此 iPhone 上扫描新的配对码。"}}}},
+    "Secure storage is locked": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Secure storage is locked"}},"vi":{"stringUnit":{"state":"translated","value":"Bộ nhớ bảo mật đang khóa"}},"fr":{"stringUnit":{"state":"translated","value":"Le stockage sécurisé est verrouillé"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"安全存储已锁定"}}}},
+    "Session": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Session"}},"vi":{"stringUnit":{"state":"translated","value":"Phiên"}},"fr":{"stringUnit":{"state":"translated","value":"Session"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"会话"}}}},
+    "Shows account details": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Shows account details"}},"vi":{"stringUnit":{"state":"translated","value":"Hiện chi tiết tài khoản"}},"fr":{"stringUnit":{"state":"translated","value":"Affiche les détails du compte"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"显示账户详情"}}}},
+    "Shows details": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Shows details"}},"vi":{"stringUnit":{"state":"translated","value":"Hiện chi tiết"}},"fr":{"stringUnit":{"state":"translated","value":"Affiche les détails"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"显示详情"}}}},
+    "Sign in again on your Mac": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Sign in again on your Mac"}},"vi":{"stringUnit":{"state":"translated","value":"Đăng nhập lại trên Mac"}},"fr":{"stringUnit":{"state":"translated","value":"Reconnectez-vous sur votre Mac"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"请在 Mac 上重新登录"}}}},
+    "Signed out": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Signed out"}},"vi":{"stringUnit":{"state":"translated","value":"Đã đăng xuất"}},"fr":{"stringUnit":{"state":"translated","value":"Déconnecté"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"已退出登录"}}}},
+    "Source disabled": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Source disabled"}},"vi":{"stringUnit":{"state":"translated","value":"Nguồn đã tắt"}},"fr":{"stringUnit":{"state":"translated","value":"Source désactivée"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"来源已停用"}}}},
+    "Subscription": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Subscription"}},"vi":{"stringUnit":{"state":"translated","value":"Gói đăng ký"}},"fr":{"stringUnit":{"state":"translated","value":"Abonnement"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"订阅"}}}},
+    "Switch computer": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Switch computer"}},"vi":{"stringUnit":{"state":"translated","value":"Chuyển máy tính"}},"fr":{"stringUnit":{"state":"translated","value":"Changer d’ordinateur"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"切换电脑"}}}},
+    "System certificate trust": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"System certificate trust"}},"vi":{"stringUnit":{"state":"translated","value":"Tin cậy chứng chỉ hệ thống"}},"fr":{"stringUnit":{"state":"translated","value":"Confiance du système"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"系统证书信任"}}}},
     "The code grants read-only access. Keep it private.": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"The code grants read-only access. Keep it private."}},"vi":{"stringUnit":{"state":"translated","value":"Mã chỉ cấp quyền xem. Hãy giữ kín mã này."}},"fr":{"stringUnit":{"state":"translated","value":"Le code accorde un accès en lecture seule. Gardez-le privé."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"此配对码仅授予只读访问权限。请勿分享。"}}}},
+    "The HTTPS certificate does not match the one saved when you paired.": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"The HTTPS certificate does not match the one saved when you paired."}},"vi":{"stringUnit":{"state":"translated","value":"Chứng chỉ HTTPS không khớp với chứng chỉ đã lưu khi ghép nối."}},"fr":{"stringUnit":{"state":"translated","value":"Le certificat HTTPS ne correspond pas à celui enregistré lors du jumelage."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"HTTPS 证书与配对时保存的证书不一致。"}}}},
+    "The last request to your Mac did not get a response.": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"The last request to your Mac did not get a response."}},"vi":{"stringUnit":{"state":"translated","value":"Yêu cầu gần nhất tới Mac không có phản hồi."}},"fr":{"stringUnit":{"state":"translated","value":"La dernière requête vers votre Mac est restée sans réponse."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"最近一次对 Mac 的请求没有响应。"}}}},
+    "This address now belongs to a different Mac.": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"This address now belongs to a different Mac."}},"vi":{"stringUnit":{"state":"translated","value":"Địa chỉ này hiện thuộc về một Mac khác."}},"fr":{"stringUnit":{"state":"translated","value":"Cette adresse appartient désormais à un autre Mac."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"此地址现在属于另一台 Mac。"}}}},
+    "This iPhone's access was revoked or has expired.": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"This iPhone's access was revoked or has expired."}},"vi":{"stringUnit":{"state":"translated","value":"Quyền truy cập của iPhone này đã bị thu hồi hoặc hết hạn."}},"fr":{"stringUnit":{"state":"translated","value":"L’accès de cet iPhone a été révoqué ou a expiré."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"此 iPhone 的访问权限已被撤销或已过期。"}}}},
     "This pairing code is invalid or has expired.": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"This pairing code is invalid or has expired."}},"vi":{"stringUnit":{"state":"translated","value":"Mã ghép nối không hợp lệ hoặc đã hết hạn."}},"fr":{"stringUnit":{"state":"translated","value":"Ce code de jumelage est invalide ou a expiré."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"此配对码无效或已过期。"}}}},
+    "Timed out": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Timed out"}},"vi":{"stringUnit":{"state":"translated","value":"Hết thời gian chờ"}},"fr":{"stringUnit":{"state":"translated","value":"Délai dépassé"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"超时"}}}},
+    "Tokens, 30 reported days": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Tokens, 30 reported days"}},"vi":{"stringUnit":{"state":"translated","value":"Token, 30 ngày được ghi nhận"}},"fr":{"stringUnit":{"state":"translated","value":"Jetons, 30 jours rapportés"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"Token（30 个记录日）"}}}},
+    "Trial": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Trial"}},"vi":{"stringUnit":{"state":"translated","value":"Dùng thử"}},"fr":{"stringUnit":{"state":"translated","value":"Essai"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"试用"}}}},
     "Try again": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Try again"}},"vi":{"stringUnit":{"state":"translated","value":"Thử lại"}},"fr":{"stringUnit":{"state":"translated","value":"Réessayer"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"重试"}}}},
+    "Try this": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Try this"}},"vi":{"stringUnit":{"state":"translated","value":"Hãy thử"}},"fr":{"stringUnit":{"state":"translated","value":"Essayez ceci"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"可尝试"}}}},
+    "Unavailable": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Unavailable"}},"vi":{"stringUnit":{"state":"translated","value":"Không khả dụng"}},"fr":{"stringUnit":{"state":"translated","value":"Indisponible"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"不可用"}}}},
+    "Unlock your iPhone and try again.": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Unlock your iPhone and try again."}},"vi":{"stringUnit":{"state":"translated","value":"Mở khóa iPhone và thử lại."}},"fr":{"stringUnit":{"state":"translated","value":"Déverrouillez votre iPhone et réessayez."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"解锁 iPhone 后重试。"}}}},
+    "Unlock your Mac, then retry.": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Unlock your Mac, then retry."}},"vi":{"stringUnit":{"state":"translated","value":"Mở khóa Mac rồi thử lại."}},"fr":{"stringUnit":{"state":"translated","value":"Déverrouillez votre Mac, puis réessayez."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"解锁 Mac 后重试。"}}}},
+    "Unreadable provider data": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Unreadable provider data"}},"vi":{"stringUnit":{"state":"translated","value":"Dữ liệu nhà cung cấp không đọc được"}},"fr":{"stringUnit":{"state":"translated","value":"Données du fournisseur illisibles"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"服务商数据无法读取"}}}},
+    "Unsupported": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Unsupported"}},"vi":{"stringUnit":{"state":"translated","value":"Không hỗ trợ"}},"fr":{"stringUnit":{"state":"translated","value":"Non pris en charge"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"不支持"}}}},
+    "Up to date": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Up to date"}},"vi":{"stringUnit":{"state":"translated","value":"Mới nhất"}},"fr":{"stringUnit":{"state":"translated","value":"À jour"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"最新"}}}},
+    "Update Quotio on your Mac": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Update Quotio on your Mac"}},"vi":{"stringUnit":{"state":"translated","value":"Cập nhật Quotio trên Mac"}},"fr":{"stringUnit":{"state":"translated","value":"Mettez à jour Quotio sur votre Mac"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"请更新 Mac 上的 Quotio"}}}},
+    "Update Quotio on your Mac, then retry.": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Update Quotio on your Mac, then retry."}},"vi":{"stringUnit":{"state":"translated","value":"Cập nhật Quotio trên Mac rồi thử lại."}},"fr":{"stringUnit":{"state":"translated","value":"Mettez à jour Quotio sur votre Mac, puis réessayez."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"更新 Mac 上的 Quotio 后重试。"}}}},
+    "Updated": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Updated"}},"vi":{"stringUnit":{"state":"translated","value":"Cập nhật"}},"fr":{"stringUnit":{"state":"translated","value":"Mis à jour"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"更新时间"}}}},
+    "Updated %@": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Updated %@"}},"vi":{"stringUnit":{"state":"translated","value":"Cập nhật %@"}},"fr":{"stringUnit":{"state":"translated","value":"Mis à jour %@"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"更新于%@"}}}},
+    "Version": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Version"}},"vi":{"stringUnit":{"state":"translated","value":"Phiên bản"}},"fr":{"stringUnit":{"state":"translated","value":"Version"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"版本"}}}},
+    "Weekly": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Weekly"}},"vi":{"stringUnit":{"state":"translated","value":"Hằng tuần"}},"fr":{"stringUnit":{"state":"translated","value":"Hebdomadaire"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"每周"}}}},
+    "Workspace %@ credits": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Workspace %@ credits"}},"vi":{"stringUnit":{"state":"translated","value":"Tín dụng workspace %@"}},"fr":{"stringUnit":{"state":"translated","value":"Crédits de l’espace %@"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"工作区 %@ 积分"}}}},
     "You can now view this computer's quota and add widgets.": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"You can now view this computer's quota and add widgets."}},"vi":{"stringUnit":{"state":"translated","value":"Giờ đây bạn có thể xem hạn mức của máy tính này và thêm widget."}},"fr":{"stringUnit":{"state":"translated","value":"Vous pouvez maintenant consulter les quotas de cet ordinateur et ajouter des widgets."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"现在你可以查看此电脑的配额并添加小组件。"}}}},
     "%@": {
       "localizations": {
@@ -80,34 +195,6 @@
         }
       }
     },
-    "%@ available resets": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ available resets"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ lượt đặt lại khả dụng"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ réinitialisations disponibles"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ 次可用重置"
-          }
-        }
-      }
-    },
     "%@ · %@ %@": {
       "localizations": {
         "en": {
@@ -132,62 +219,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ · %@ %@"
-          }
-        }
-      }
-    },
-    "%lld percent %@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld percent %@"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld phần trăm %@"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld pour cent %@"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld%% %@"
-          }
-        }
-      }
-    },
-    "%llu available resets": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%llu available resets"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%llu lượt đặt lại khả dụng"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%llu réinitialisations disponibles"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%llu 次可用重置"
           }
         }
       }
@@ -244,34 +275,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "30 个有数据的日期"
-          }
-        }
-      }
-    },
-    "Account activity": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Account activity"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hoạt động tài khoản"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Activité du compte"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "账户活动"
           }
         }
       }
@@ -384,34 +387,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "添加小组件"
-          }
-        }
-      }
-    },
-    "Add an account in Quotio on your computer.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Add an account in Quotio on your computer."
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Thêm tài khoản trong Quotio trên máy tính."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajoutez un compte dans Quotio sur votre ordinateur."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在电脑上的 Quotio 中添加账户。"
           }
         }
       }
@@ -668,34 +643,6 @@
         }
       }
     },
-    "Connect to Quotio on your computer to see usage and add widgets.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connect to Quotio on your computer to see usage and add widgets."
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kết nối Quotio trên máy tính để xem mức sử dụng và thêm widget."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connectez Quotio sur votre ordinateur pour consulter l’utilisation et ajouter des widgets."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "连接电脑上的 Quotio 以查看用量和添加小组件。"
-          }
-        }
-      }
-    },
     "Connection": {
       "localizations": {
         "en": {
@@ -780,34 +727,6 @@
         }
       }
     },
-    "Current streak (days)": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Current streak (days)"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chuỗi hiện tại (ngày)"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Série actuelle (jours)"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "当前连续天数"
-          }
-        }
-      }
-    },
     "Demo Mac": {
       "localizations": {
         "en": {
@@ -832,62 +751,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "演示 Mac"
-          }
-        }
-      }
-    },
-    "Demo data": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Demo data"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dữ liệu mẫu"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Données de démonstration"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "演示数据"
-          }
-        }
-      }
-    },
-    "Disabled on host": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Disabled on host"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Đã tắt trên máy host"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Désactivé sur l’hôte"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已在主机上停用"
           }
         }
       }
@@ -972,34 +835,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "编辑小组件以选择配额"
-          }
-        }
-      }
-    },
-    "Expires %@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Expires %@"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hết hạn %@"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Expire le %@"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "到期时间 %@"
           }
         }
       }
@@ -1312,62 +1147,6 @@
         }
       }
     },
-    "Longest streak (days)": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Longest streak (days)"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chuỗi dài nhất (ngày)"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Plus longue série (jours)"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "最长连续天数"
-          }
-        }
-      }
-    },
-    "Longest turn (seconds)": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Longest turn (seconds)"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lượt dài nhất (giây)"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tour le plus long (secondes)"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "最长轮次（秒）"
-          }
-        }
-      }
-    },
     "No accounts": {
       "localizations": {
         "en": {
@@ -1392,62 +1171,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "暂无账户"
-          }
-        }
-      }
-    },
-    "Not available": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Not available"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Không khả dụng"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Indisponible"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "不可用"
-          }
-        }
-      }
-    },
-    "Observed": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Observed"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Thời điểm ghi nhận"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Observation"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "观测时间"
           }
         }
       }
@@ -1504,34 +1227,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "旧数据"
-          }
-        }
-      }
-    },
-    "Older or unavailable data": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Older or unavailable data"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dữ liệu cũ hoặc không khả dụng"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Données anciennes ou indisponibles"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "数据过旧或不可用"
           }
         }
       }
@@ -1760,34 +1455,6 @@
         }
       }
     },
-    "Provider-reported days. Missing days are unavailable, not zero. Dates keep the provider's calendar.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Provider-reported days. Missing days are unavailable, not zero. Dates keep the provider's calendar."
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ngày do nhà cung cấp báo cáo. Ngày thiếu dữ liệu không được tính là 0. Giữ nguyên ngày theo lịch của nhà cung cấp."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Jours fournis par le service. Une journée manquante n’est pas un zéro. Les dates suivent le calendrier du service."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "日期由服务商报告。缺失数据不代表零用量。日期保留服务商的日历定义。"
-          }
-        }
-      }
-    },
     "QR scanning is unavailable. Enter the connection below.": {
       "localizations": {
         "en": {
@@ -1868,34 +1535,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "配额一览"
-          }
-        }
-      }
-    },
-    "Quota not loaded": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Quota not loaded"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chưa tải hạn mức"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Quota non chargé"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "尚未加载配额"
           }
         }
       }
@@ -2036,34 +1675,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ 前收到"
-          }
-        }
-      }
-    },
-    "Reloading reads the host's latest snapshot. Quota refresh is controlled on the computer.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reloading reads the host's latest snapshot. Quota refresh is controlled on the computer."
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tải lại lấy dữ liệu mới nhất đã có trên máy host. Việc làm mới hạn mức được điều khiển trên máy tính."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le rechargement lit les dernières données de l’hôte. L’actualisation du quota se règle sur l’ordinateur."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "重新加载会读取主机的最新快照。配额刷新由电脑控制。"
           }
         }
       }
@@ -2456,34 +2067,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "主机正忙或凭据存储已锁定。检查主机后请重试。"
-          }
-        }
-      }
-    },
-    "The host must be awake and running. Widgets update when iOS allows, and may show older data.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The host must be awake and running. Widgets update when iOS allows, and may show older data."
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Máy host phải thức và đang chạy. Widget cập nhật khi iOS cho phép và có thể hiển thị dữ liệu cũ."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "L’hôte doit être éveillé et actif. Les widgets se mettent à jour selon iOS et peuvent afficher des données anciennes."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "主机必须保持唤醒并运行。小组件由 iOS 安排更新，可能显示旧数据。"
           }
         }
       }
@@ -2992,34 +2575,8 @@
         }
       }
     },
-    "Your provider credentials stay on your computer. Quotio connects through your local network or private VPN using HTTPS.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Your provider credentials stay on your computer. Quotio connects through your local network or private VPN using HTTPS."
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Thông tin đăng nhập nhà cung cấp vẫn ở trên máy tính. Quotio kết nối qua mạng nội bộ hoặc VPN riêng bằng HTTPS."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les identifiants des services restent sur votre ordinateur. Quotio utilise HTTPS sur votre réseau local ou VPN privé."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "服务商凭据保留在电脑上。Quotio 通过局域网或私有 VPN 使用 HTTPS 连接。"
-          }
-        }
-      }
-    },
+    "Your Mac is busy": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Your Mac is busy"}},"vi":{"stringUnit":{"state":"translated","value":"Mac đang bận"}},"fr":{"stringUnit":{"state":"translated","value":"Votre Mac est occupé"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"Mac 正忙"}}}},
+    "Your Mac runs a Quotio version this app does not support.": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Your Mac runs a Quotio version this app does not support."}},"vi":{"stringUnit":{"state":"translated","value":"Mac đang chạy phiên bản Quotio mà ứng dụng này không hỗ trợ."}},"fr":{"stringUnit":{"state":"translated","value":"Votre Mac exécute une version de Quotio non prise en charge par cette app."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"Mac 上的 Quotio 版本不受此应用支持。"}}}},
     "Your quota, in your pocket": {
       "localizations": {
         "en": {
@@ -3104,34 +2661,6 @@
         }
       }
     },
-    "tokens": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "tokens"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "token"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "tokens"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "令牌"
-          }
-        }
-      }
-    },
     "used": {
       "localizations": {
         "en": {
@@ -3156,34 +2685,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "已用"
-          }
-        }
-      }
-    },
-    "••••": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "••••"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "••••"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "••••"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "••••"
           }
         }
       }

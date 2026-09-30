@@ -8,27 +8,44 @@
 
 /* Begin PBXBuildFile section */
 		01FF5AD1F861CA9092A19F25 /* QuotioHostClient in Frameworks */ = {isa = PBXBuildFile; productRef = F8A249ECB9790D2DF01BFDEA /* QuotioHostClient */; };
+		04F437DF67ED315EEA907334 /* SettingsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3368321E5D1598B7182D9E63 /* SettingsScreen.swift */; };
 		0C196B2B24BEDBA2B99AE69B /* QuotioMobile in Frameworks */ = {isa = PBXBuildFile; productRef = 9070A80F6885013CEDD8985A /* QuotioMobile */; };
+		158B8BAE2D0A9EF0400ADABD /* EmptyAccountRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87AE3E9623D20E919E7FBA23 /* EmptyAccountRow.swift */; };
+		1C855E8F2C8E933196DCCD26 /* AccountCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD40DC335397FEF3ED6968D4 /* AccountCard.swift */; };
+		20FF21EA8C8533AE71DFC72C /* UsageScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65F4AAEC1B31B91EA22DBF0F /* UsageScreen.swift */; };
 		21396D3639C9DBD31E6D9ED2 /* QuotioHostClient in Frameworks */ = {isa = PBXBuildFile; productRef = 022EF42E7312FA4F2E558668 /* QuotioHostClient */; };
 		2403DAC1FA3FE1EEE0FD3062 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 622FE2AF32275B5CCDF499A2 /* PrivacyInfo.xcprivacy */; };
+		25A6089B847A5DCAB1CD4F4D /* FreshnessLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 827028C955E65B303BFD9742 /* FreshnessLabel.swift */; };
 		2751BE3407DAA22E42CD016E /* HostStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD8F82C7D3420A827E3F7A52 /* HostStoreTests.swift */; };
+		2888EE94DCBB893D654C10A0 /* ConnectionBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26860B68163C4A0E8F58BD41 /* ConnectionBanner.swift */; };
 		2CF68E0E9A34A3858E5C3F7C /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 971780B33F9C5828BBE4A51D /* Localizable.xcstrings */; };
 		30C715E83FD18711402EB82B /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B33B46A0E170219219CEC63 /* RootView.swift */; };
 		3E6E5AA66F012F9D3D1F3386 /* QuotioIOSUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D70D21B697A885BAC780633A /* QuotioIOSUITests.swift */; };
+		3F77A2A58BAF220D20F1BC5D /* AccountDetailScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A02793110C8D14082D91AD7 /* AccountDetailScreen.swift */; };
+		3FFFE1DE3534BF962233929F /* QuotaTile.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7B6142673E82B524C5AAE3F /* QuotaTile.swift */; };
 		41B0C45A9954C06B84177EDD /* SharedContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24F637D6914F69AF539E064F /* SharedContainer.swift */; };
 		4AD3AA436325441EE586DD64 /* SharedContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24F637D6914F69AF539E064F /* SharedContainer.swift */; };
+		4CB84162AE3D83154D477108 /* Tokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52966DEC1CFAE90A182958A2 /* Tokens.swift */; };
+		5A0F5690566456CA65E447E0 /* QuotaBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33CE58429CD89BB5C041F3F /* QuotaBar.swift */; };
 		5B3D829A36D953617CB8C0D9 /* QuotioIOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA09E3EDBA14E559A00B96E2 /* QuotioIOSApp.swift */; };
 		6260711C776CD6FBC7492290 /* QuotioWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6159445CCD2734B02A049FAE /* QuotioWidgets.swift */; };
-		6F357F4245EC328EB683CA4B /* UsageViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AB5D75701332D9DFF0C4E20 /* UsageViews.swift */; };
+		673DDE26936E8AA1CC3F64D5 /* PreviewFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32378B1581EA456FEF3CB238 /* PreviewFixtures.swift */; };
+		785A63A73C9663528BB93BE6 /* ValueRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F8CAABE989D0BA0AC2060E6 /* ValueRow.swift */; };
 		7FDECF4D2F073E5C9A0DA41D /* PairHostView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 252EF900272DA8EAEC4793B6 /* PairHostView.swift */; };
 		80CDA913FED435577B14912A /* demo-snapshot.json in Resources */ = {isa = PBXBuildFile; fileRef = 2D7491D8145F7A95D2C65A13 /* demo-snapshot.json */; };
 		8297DCBDDBF12AE81CC76F84 /* QuotioMobile in Frameworks */ = {isa = PBXBuildFile; productRef = 37CF7D282836FB1AFC884E8F /* QuotioMobile */; };
+		8F723D13AD331805792B4795 /* ProviderSectionHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CBFD63691A953A834440ED2 /* ProviderSectionHeader.swift */; };
 		9B03B7E2CDF7CA853646F223 /* QuotioHostClient in Frameworks */ = {isa = PBXBuildFile; productRef = 34A04FEE7E7842E0F07CA4FC /* QuotioHostClient */; };
+		A6E234E8CA0A42D9C43A8F58 /* ProviderIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 352D28463E91E4F270815D60 /* ProviderIcon.swift */; };
+		A9E4F8E8C09C46D2F282DF5A /* PlanBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64C11F59314C6934BE56B78D /* PlanBadge.swift */; };
+		B4779AFBCAFB65CF900FE88E /* ConnectionChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FAC72608DA0F4791716AC62 /* ConnectionChip.swift */; };
 		BAE77C00A7B2543EEDC78DA5 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DF9E2304FA48CD5B585C0F68 /* Assets.xcassets */; };
+		C4A50D0254358BCF4830FD18 /* ConnectionIssueSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8D73F44BD8B68CCF82CA677 /* ConnectionIssueSheet.swift */; };
 		D3D956BD23B2D8D59757A7B7 /* QuotioWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3D463B05841CDD484AB2B1A8 /* QuotioWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D6DCFE488213D93671FF5E95 /* HostStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB1991FB26C2CB1C0C01609D /* HostStore.swift */; };
 		D916D52804AA9AFDFD9F7E1D /* QuotioMobile in Frameworks */ = {isa = PBXBuildFile; productRef = 109345073159B11AC45DEA9A /* QuotioMobile */; };
 		E10531269448015DA51C3F0B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 622FE2AF32275B5CCDF499A2 /* PrivacyInfo.xcprivacy */; };
+		E86DF8297060A6576C015CA7 /* ProviderFilterBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CED8FCE956684ABB4FFD150 /* ProviderFilterBar.swift */; };
 		FBB8329E399447EAB693D1A9 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 971780B33F9C5828BBE4A51D /* Localizable.xcstrings */; };
 /* End PBXBuildFile section */
 
@@ -75,20 +92,37 @@
 		21A6DE20B189ACE746CCEDAD /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		24F637D6914F69AF539E064F /* SharedContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedContainer.swift; sourceTree = "<group>"; };
 		252EF900272DA8EAEC4793B6 /* PairHostView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairHostView.swift; sourceTree = "<group>"; };
+		26860B68163C4A0E8F58BD41 /* ConnectionBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionBanner.swift; sourceTree = "<group>"; };
 		2D7491D8145F7A95D2C65A13 /* demo-snapshot.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "demo-snapshot.json"; sourceTree = "<group>"; };
+		32378B1581EA456FEF3CB238 /* PreviewFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewFixtures.swift; sourceTree = "<group>"; };
+		3368321E5D1598B7182D9E63 /* SettingsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsScreen.swift; sourceTree = "<group>"; };
+		352D28463E91E4F270815D60 /* ProviderIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderIcon.swift; sourceTree = "<group>"; };
 		3B98A85280D8666C7668499A /* QuotioIOSUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = QuotioIOSUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3D463B05841CDD484AB2B1A8 /* QuotioWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = QuotioWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		3E618B46B04690D304725FA8 /* QuotioHostClient */ = {isa = PBXFileReference; lastKnownFileType = folder; name = QuotioHostClient; path = ../../Packages/QuotioHostClient; sourceTree = SOURCE_ROOT; };
+		4CBFD63691A953A834440ED2 /* ProviderSectionHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderSectionHeader.swift; sourceTree = "<group>"; };
+		52966DEC1CFAE90A182958A2 /* Tokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tokens.swift; sourceTree = "<group>"; };
 		57ACF802EC7DA60A793C8FBF /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+		5CED8FCE956684ABB4FFD150 /* ProviderFilterBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderFilterBar.swift; sourceTree = "<group>"; };
 		6159445CCD2734B02A049FAE /* QuotioWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotioWidgets.swift; sourceTree = "<group>"; };
 		622FE2AF32275B5CCDF499A2 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		7AB5D75701332D9DFF0C4E20 /* UsageViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageViews.swift; sourceTree = "<group>"; };
+		64C11F59314C6934BE56B78D /* PlanBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanBadge.swift; sourceTree = "<group>"; };
+		65F4AAEC1B31B91EA22DBF0F /* UsageScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageScreen.swift; sourceTree = "<group>"; };
+		7F8CAABE989D0BA0AC2060E6 /* ValueRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ValueRow.swift; sourceTree = "<group>"; };
+		7FAC72608DA0F4791716AC62 /* ConnectionChip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionChip.swift; sourceTree = "<group>"; };
+		827028C955E65B303BFD9742 /* FreshnessLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FreshnessLabel.swift; sourceTree = "<group>"; };
+		87AE3E9623D20E919E7FBA23 /* EmptyAccountRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyAccountRow.swift; sourceTree = "<group>"; };
 		894904E3DAD73AC6C00239C0 /* ios */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ios; path = .; sourceTree = SOURCE_ROOT; };
 		8B81C8CD1A8E753EDEFB3863 /* QuotioIOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = QuotioIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		971780B33F9C5828BBE4A51D /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		9A02793110C8D14082D91AD7 /* AccountDetailScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountDetailScreen.swift; sourceTree = "<group>"; };
 		9B33B46A0E170219219CEC63 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		B8D73F44BD8B68CCF82CA677 /* ConnectionIssueSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionIssueSheet.swift; sourceTree = "<group>"; };
 		BA09E3EDBA14E559A00B96E2 /* QuotioIOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotioIOSApp.swift; sourceTree = "<group>"; };
+		C7B6142673E82B524C5AAE3F /* QuotaTile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotaTile.swift; sourceTree = "<group>"; };
+		CD40DC335397FEF3ED6968D4 /* AccountCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountCard.swift; sourceTree = "<group>"; };
 		CD8F82C7D3420A827E3F7A52 /* HostStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostStoreTests.swift; sourceTree = "<group>"; };
+		D33CE58429CD89BB5C041F3F /* QuotaBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotaBar.swift; sourceTree = "<group>"; };
 		D70D21B697A885BAC780633A /* QuotioIOSUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotioIOSUITests.swift; sourceTree = "<group>"; };
 		DF9E2304FA48CD5B585C0F68 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		FB1991FB26C2CB1C0C01609D /* HostStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostStore.swift; sourceTree = "<group>"; };
@@ -143,6 +177,27 @@
 			path = QuotioIOSUnitTests;
 			sourceTree = "<group>";
 		};
+		568F3663C18A3F3A61113664 /* DesignSystem */ = {
+			isa = PBXGroup;
+			children = (
+				CD40DC335397FEF3ED6968D4 /* AccountCard.swift */,
+				26860B68163C4A0E8F58BD41 /* ConnectionBanner.swift */,
+				7FAC72608DA0F4791716AC62 /* ConnectionChip.swift */,
+				87AE3E9623D20E919E7FBA23 /* EmptyAccountRow.swift */,
+				827028C955E65B303BFD9742 /* FreshnessLabel.swift */,
+				64C11F59314C6934BE56B78D /* PlanBadge.swift */,
+				32378B1581EA456FEF3CB238 /* PreviewFixtures.swift */,
+				5CED8FCE956684ABB4FFD150 /* ProviderFilterBar.swift */,
+				352D28463E91E4F270815D60 /* ProviderIcon.swift */,
+				4CBFD63691A953A834440ED2 /* ProviderSectionHeader.swift */,
+				D33CE58429CD89BB5C041F3F /* QuotaBar.swift */,
+				C7B6142673E82B524C5AAE3F /* QuotaTile.swift */,
+				52966DEC1CFAE90A182958A2 /* Tokens.swift */,
+				7F8CAABE989D0BA0AC2060E6 /* ValueRow.swift */,
+			);
+			path = DesignSystem;
+			sourceTree = "<group>";
+		};
 		572704FF9AFC19A9B1A737FB /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -166,13 +221,17 @@
 		965F1B0AEC2C0E16636B96E1 /* QuotioIOS */ = {
 			isa = PBXGroup;
 			children = (
+				9A02793110C8D14082D91AD7 /* AccountDetailScreen.swift */,
 				DF9E2304FA48CD5B585C0F68 /* Assets.xcassets */,
+				B8D73F44BD8B68CCF82CA677 /* ConnectionIssueSheet.swift */,
 				2D7491D8145F7A95D2C65A13 /* demo-snapshot.json */,
 				FB1991FB26C2CB1C0C01609D /* HostStore.swift */,
 				252EF900272DA8EAEC4793B6 /* PairHostView.swift */,
 				BA09E3EDBA14E559A00B96E2 /* QuotioIOSApp.swift */,
 				9B33B46A0E170219219CEC63 /* RootView.swift */,
-				7AB5D75701332D9DFF0C4E20 /* UsageViews.swift */,
+				3368321E5D1598B7182D9E63 /* SettingsScreen.swift */,
+				65F4AAEC1B31B91EA22DBF0F /* UsageScreen.swift */,
+				568F3663C18A3F3A61113664 /* DesignSystem */,
 			);
 			path = QuotioIOS;
 			sourceTree = "<group>";
@@ -400,12 +459,29 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1C855E8F2C8E933196DCCD26 /* AccountCard.swift in Sources */,
+				3F77A2A58BAF220D20F1BC5D /* AccountDetailScreen.swift in Sources */,
+				2888EE94DCBB893D654C10A0 /* ConnectionBanner.swift in Sources */,
+				B4779AFBCAFB65CF900FE88E /* ConnectionChip.swift in Sources */,
+				C4A50D0254358BCF4830FD18 /* ConnectionIssueSheet.swift in Sources */,
+				158B8BAE2D0A9EF0400ADABD /* EmptyAccountRow.swift in Sources */,
+				25A6089B847A5DCAB1CD4F4D /* FreshnessLabel.swift in Sources */,
 				D6DCFE488213D93671FF5E95 /* HostStore.swift in Sources */,
 				7FDECF4D2F073E5C9A0DA41D /* PairHostView.swift in Sources */,
+				A9E4F8E8C09C46D2F282DF5A /* PlanBadge.swift in Sources */,
+				673DDE26936E8AA1CC3F64D5 /* PreviewFixtures.swift in Sources */,
+				E86DF8297060A6576C015CA7 /* ProviderFilterBar.swift in Sources */,
+				A6E234E8CA0A42D9C43A8F58 /* ProviderIcon.swift in Sources */,
+				8F723D13AD331805792B4795 /* ProviderSectionHeader.swift in Sources */,
+				5A0F5690566456CA65E447E0 /* QuotaBar.swift in Sources */,
+				3FFFE1DE3534BF962233929F /* QuotaTile.swift in Sources */,
 				5B3D829A36D953617CB8C0D9 /* QuotioIOSApp.swift in Sources */,
 				30C715E83FD18711402EB82B /* RootView.swift in Sources */,
+				04F437DF67ED315EEA907334 /* SettingsScreen.swift in Sources */,
 				4AD3AA436325441EE586DD64 /* SharedContainer.swift in Sources */,
-				6F357F4245EC328EB683CA4B /* UsageViews.swift in Sources */,
+				4CB84162AE3D83154D477108 /* Tokens.swift in Sources */,
+				20FF21EA8C8533AE71DFC72C /* UsageScreen.swift in Sources */,
+				785A63A73C9663528BB93BE6 /* ValueRow.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

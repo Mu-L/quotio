@@ -7,7 +7,8 @@ import WidgetKit
 @MainActor @Observable
 final class HostStore {
     var state = MobileState()
-    var error: String?
+    /// The one problem shown in the connection banner; nil when the last read succeeded.
+    var issue: ConnectionIssue?
     var refreshing = false
     var demo = false
     private let storage: MobileStorage?
@@ -24,13 +25,23 @@ final class HostStore {
         do {
             guard let storage else { throw MobileError.invalidCache }
             state = try storage.load()
-        } catch { canSave = false; self.error = String(localized: "Saved connections could not be loaded.") }
+        } catch { canSave = false; issue = .local(String(localized: "Saved connections could not be loaded.")) }
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--demo") { showDemo() }
+        if ProcessInfo.processInfo.arguments.contains("--offline") { issue = .unreachable }
         #endif
     }
 
     var selected: HostProfile? { state.hosts.first { $0.id == state.selectedHostID } }
+
+    /// The issue to show for the selected Mac, including a pairing loss persisted from an earlier launch.
+    var currentIssue: ConnectionIssue? { issue ?? (selected?.needsPairing == true ? .needsPairing : nil) }
+
+    func togglePin(_ accountID: String) {
+        guard let index = state.hosts.firstIndex(where: { $0.id == state.selectedHostID }) else { return }
+        if !state.hosts[index].pinnedAccountIDs.insert(accountID).inserted { state.hosts[index].pinnedAccountIDs.remove(accountID) }
+        persist()
+    }
 
     func persist() {
         guard !demo, canSave else { return }
@@ -38,14 +49,14 @@ final class HostStore {
             guard let storage else { throw MobileError.invalidCache }
             try storage.save(state)
             WidgetCenter.shared.reloadAllTimelines()
-        } catch { self.error = String(localized: "Changes could not be saved. Try again.") }
+        } catch { issue = .local(String(localized: "Changes could not be saved. Try again.")) }
     }
 
     func select(_ id: String) {
         generation = UUID()
         refreshing = false
         state.selectedHostID = id
-        error = nil
+        issue = nil
         persist()
     }
 
@@ -89,7 +100,7 @@ final class HostStore {
         demo = false
         generation = UUID()
         state = next
-        error = nil
+        issue = nil
         WidgetCenter.shared.reloadAllTimelines()
     }
 
@@ -108,7 +119,7 @@ final class HostStore {
                   let index = state.hosts.firstIndex(where: { $0.id == host.id }) else { return }
             let names = (host.snapshot?.accounts ?? []).reduce(into: [String: String]()) { $0[$1.providerID] = $1.providerName }
             try state.hosts[index].accept(MobileSnapshot(snapshot, providerNames: names))
-            error = nil
+            issue = nil
             persist()
         } catch is CancellationError { }
         catch {
@@ -122,7 +133,7 @@ final class HostStore {
                 state.hosts[index].snapshot = nil
                 persist()
             }
-            self.error = Self.message(error)
+            issue = ConnectionIssue(error)
         }
     }
 
@@ -134,7 +145,7 @@ final class HostStore {
             if state.selectedHostID == id { state.selectedHostID = state.hosts.first?.id }
             if demo { demo = false; state = (try storage?.load()) ?? MobileState() }
             else { persist() }
-        } catch { self.error = String(localized: "The saved credential could not be removed. Try again.") }
+        } catch { issue = .local(String(localized: "The saved credential could not be removed. Try again.")) }
     }
 
     func renameSelected(to name: String) {
@@ -149,7 +160,7 @@ final class HostStore {
     func showDemo() {
         do {
             guard let url = Bundle.main.url(forResource: "demo-snapshot", withExtension: "json") else { return }
-            let snapshot = try QuotioHostSnapshot.decode(Data(contentsOf: url))
+            let snapshot = try QuotioHostSnapshot.decode(Self.rebased(Data(contentsOf: url), to: .now))
             demo = true
             generation = UUID()
             state = MobileState()
@@ -157,8 +168,28 @@ final class HostStore {
                                       origin: URL(string: "https://demo.example.invalid")!, clientID: "demo", expiresAt: nil,
                                       snapshot: MobileSnapshot(snapshot))]
             state.selectedHostID = snapshot.host.id
-            error = nil
-        } catch { self.error = String(localized: "The demo could not be loaded.") }
+            issue = nil
+        } catch { issue = .local(String(localized: "The demo could not be loaded.")) }
+    }
+
+    /// Shifts every timestamp in the demo snapshot so it was generated `now`,
+    /// keeping freshness and reset countdowns meaningful whenever the demo opens.
+    static func rebased(_ data: Data, to now: Date) throws -> Data {
+        guard var json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let generated = (json["generated_at"] as? String).flatMap({ try? Date($0, strategy: .iso8601) }) else { return data }
+        let offset = now.timeIntervalSince(generated)
+        func shift(_ value: Any) -> Any {
+            switch value {
+            case let text as String:
+                guard text.count == 20, let date = try? Date(text, strategy: .iso8601) else { return text }
+                return date.addingTimeInterval(offset).formatted(.iso8601)
+            case let array as [Any]: return array.map(shift)
+            case let object as [String: Any]: return object.mapValues(shift)
+            default: return value
+            }
+        }
+        json = json.mapValues(shift)
+        return try JSONSerialization.data(withJSONObject: json)
     }
 
     static func message(_ error: Error) -> String {
