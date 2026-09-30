@@ -2,6 +2,16 @@ import Foundation
 import QuotioHostClient
 
 public struct MobileSnapshot: Codable, Sendable {
+    public struct Amounts: Codable, Sendable, Equatable {
+        public let remaining: Double
+        public let limit: Double?
+        public let unit: String
+
+        public init(remaining: Double, limit: Double?, unit: String) {
+            self.remaining = remaining; self.limit = limit; self.unit = unit
+        }
+    }
+    /// New fields are optional so snapshots cached by older builds still decode.
     public struct Metric: Codable, Sendable, Identifiable {
         public let id: String
         public let name: String
@@ -13,6 +23,20 @@ public struct MobileSnapshot: Codable, Sendable {
         public let resetsAt: Date?
         public let resetDescription: String?
         public let fetchedAt: Date
+        public let group: String?
+        public let note: String?
+        public let amounts: Amounts?
+        public let usedUnit: String?
+
+        public init(id: String, name: String, state: String, remainingPercent: Double? = nil,
+                    amount: Double? = nil, unit: String? = nil, used: Double? = nil, usedUnit: String? = nil,
+                    resetsAt: Date? = nil, resetDescription: String? = nil, fetchedAt: Date,
+                    group: String? = nil, note: String? = nil, amounts: Amounts? = nil) {
+            self.id = id; self.name = name; self.state = state; self.remainingPercent = remainingPercent
+            self.amount = amount; self.unit = unit; self.used = used; self.usedUnit = usedUnit
+            self.resetsAt = resetsAt; self.resetDescription = resetDescription; self.fetchedAt = fetchedAt
+            self.group = group; self.note = note; self.amounts = amounts
+        }
     }
     public struct Day: Codable, Sendable, Identifiable {
         public let date: String
@@ -46,13 +70,33 @@ public struct MobileSnapshot: Codable, Sendable {
         public let resetExpirations: [Date]
         public let issue: String?
         public let sourceStates: [String]
+        /// Verified or local email/username; nil when the host has no identity for the account.
+        public let identity: String?
+        /// Subscription tier name for providers that report it separately from `plan`.
+        public let tier: String?
+        public let subscriptionStatus: String?
+
+        public init(id: String, providerName: String, providerID: String, name: String, enabled: Bool = true,
+                    state: String = "ready", freshness: String, fetchedAt: Date?, expiresAt: Date? = nil,
+                    plan: String? = nil, metrics: [Metric], analytics: Analytics? = nil, resetCount: UInt64? = nil,
+                    resetExpirations: [Date] = [], issue: String? = nil, sourceStates: [String] = [],
+                    identity: String? = nil, tier: String? = nil, subscriptionStatus: String? = nil) {
+            self.id = id; self.providerName = providerName; self.providerID = providerID; self.name = name
+            self.enabled = enabled; self.state = state; self.freshness = freshness; self.fetchedAt = fetchedAt
+            self.expiresAt = expiresAt; self.plan = plan; self.metrics = metrics; self.analytics = analytics
+            self.resetCount = resetCount; self.resetExpirations = resetExpirations; self.issue = issue
+            self.sourceStates = sourceStates; self.identity = identity; self.tier = tier
+            self.subscriptionStatus = subscriptionStatus
+        }
 
         public func availableResets(at now: Date) -> UInt64? {
             resetCount.map { count in count - min(count, UInt64(resetExpirations.filter { $0 <= now }.count)) }
         }
 
+        /// Data the host marked stale, or fresh data whose host TTL has since passed.
+        /// Accounts that never loaded are "no data", not stale.
         public func isStale(at now: Date) -> Bool {
-            freshness != "fresh" || expiresAt.map { $0 <= now } == true
+            freshness == "stale" || (freshness == "fresh" && expiresAt.map { $0 <= now } == true)
         }
     }
     public let hostID: String
@@ -71,7 +115,7 @@ public struct MobileSnapshot: Codable, Sendable {
         accounts = snapshot.accounts.map { account in
             let usage = snapshot.usage.first { $0.accountId == account.id }
             return Account(
-                id: account.id, providerName: providerNames[account.providerId] ?? account.providerId.capitalized, providerID: account.providerId, name: account.displayName,
+                id: account.id, providerName: providerNames[account.providerId] ?? DisplayNames.prettified(account.providerId), providerID: account.providerId, name: account.displayName,
                 enabled: account.enabled, state: account.state,
                 freshness: usage?.freshness ?? "not_loaded", fetchedAt: usage?.fetchedAt,
                 expiresAt: usage?.expiresAt, plan: usage?.plan,
@@ -79,8 +123,10 @@ public struct MobileSnapshot: Codable, Sendable {
                     Metric(id: $0.id, name: $0.displayName, state: $0.quota.state,
                            remainingPercent: $0.quota.remainingPercent,
                            amount: $0.quota.amount, unit: $0.quota.unit,
-                           used: $0.consumption?.used, resetsAt: $0.resetsAt,
-                           resetDescription: $0.resetDescription, fetchedAt: $0.fetchedAt)
+                           used: $0.consumption?.used, usedUnit: $0.consumption?.unit, resetsAt: $0.resetsAt,
+                           resetDescription: $0.resetDescription, fetchedAt: $0.fetchedAt,
+                           group: $0.group, note: $0.note,
+                           amounts: $0.amounts.map { Amounts(remaining: $0.remaining, limit: $0.limit, unit: $0.unit) })
                 },
                 analytics: usage?.codexProfile.map {
                     Analytics(days: $0.dailyUsage.map { Day(date: $0.date, tokens: $0.tokens) },
@@ -93,7 +139,10 @@ public struct MobileSnapshot: Codable, Sendable {
                 resetCount: usage?.codexResetCredits?.availableCount ?? usage?.resetCredits?.availableCount,
                 resetExpirations: usage?.codexResetCredits?.credits.compactMap(\.expiresAt) ?? [],
                 issue: usage?.issue?.code,
-                sourceStates: account.sources.map(\.state))
+                sourceStates: account.sources.map(\.state),
+                identity: account.identity.email ?? account.identity.username,
+                tier: usage?.antigravitySubscription.flatMap { ($0.paidTier ?? $0.currentTier)?.name },
+                subscriptionStatus: usage?.subscriptionStatus)
         }
     }
 

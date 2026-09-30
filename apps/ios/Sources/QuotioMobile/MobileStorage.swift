@@ -1,13 +1,38 @@
 import Foundation
 import Security
 
+public enum Density: String, Codable, Sendable, CaseIterable {
+    case compact, comfortable
+}
+
 public struct MobileState: Codable, Sendable {
     public var version = 1
     public var hosts: [HostProfile] = []
     public var selectedHostID: String?
     public var hideValues = false
     public var showUsed = false
+    /// Provider IDs in the user's order; providers not listed follow in host order.
+    public var providerOrder: [String] = []
+    public var lowFirst = false
+    public var density = Density.comfortable
     public init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case version, hosts, selectedHostID, hideValues, showUsed, providerOrder, lowFirst, density
+    }
+
+    /// Display preferences added after version 1 fall back to defaults when absent.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        version = try container.decode(Int.self, forKey: .version)
+        hosts = try container.decode([HostProfile].self, forKey: .hosts)
+        selectedHostID = try container.decodeIfPresent(String.self, forKey: .selectedHostID)
+        hideValues = try container.decode(Bool.self, forKey: .hideValues)
+        showUsed = try container.decode(Bool.self, forKey: .showUsed)
+        providerOrder = try container.decodeIfPresent([String].self, forKey: .providerOrder) ?? []
+        lowFirst = try container.decodeIfPresent(Bool.self, forKey: .lowFirst) ?? false
+        density = try container.decodeIfPresent(Density.self, forKey: .density) ?? .comfortable
+    }
 }
 
 public struct MobileStorage: Sendable {

@@ -135,6 +135,186 @@
         }
       ],
       "active": true
+    },
+    {
+      "id": "codex-work",
+      "provider_id": "codex",
+      "display_name": "techlead@example.test",
+      "user_label": null,
+      "identity": {
+        "evidence": "verified",
+        "username": null,
+        "email": "techlead@example.test"
+      },
+      "enabled": true,
+      "state": "ready",
+      "sources": [
+        {
+          "id": "codex-work-source",
+          "origin": "borrowed_native",
+          "kind": "codex_native",
+          "location": null,
+          "enabled": true,
+          "selected": true,
+          "state": "ready",
+          "refresh_owner": "provider_tool",
+          "issue": null,
+          "actions": []
+        }
+      ],
+      "actions": [
+        {
+          "kind": "refresh",
+          "available": false,
+          "reason": null,
+          "interaction": "host"
+        }
+      ],
+      "active": true
+    },
+    {
+      "id": "amp-account",
+      "provider_id": "amp",
+      "display_name": "person@example.test",
+      "user_label": null,
+      "identity": {
+        "evidence": "verified",
+        "username": null,
+        "email": "person@example.test"
+      },
+      "enabled": true,
+      "state": "ready",
+      "sources": [
+        {
+          "id": "amp-account-source",
+          "origin": "borrowed_native",
+          "kind": "amp_native",
+          "location": null,
+          "enabled": true,
+          "selected": true,
+          "state": "ready",
+          "refresh_owner": "provider_tool",
+          "issue": null,
+          "actions": []
+        }
+      ],
+      "actions": [
+        {
+          "kind": "refresh",
+          "available": false,
+          "reason": null,
+          "interaction": "host"
+        }
+      ],
+      "active": true
+    },
+    {
+      "id": "antigravity-account",
+      "provider_id": "antigravity",
+      "display_name": "person@example.test",
+      "user_label": null,
+      "identity": {
+        "evidence": "verified",
+        "username": null,
+        "email": "person@example.test"
+      },
+      "enabled": true,
+      "state": "ready",
+      "sources": [
+        {
+          "id": "antigravity-account-source",
+          "origin": "borrowed_native",
+          "kind": "antigravity_native",
+          "location": null,
+          "enabled": true,
+          "selected": true,
+          "state": "ready",
+          "refresh_owner": "provider_tool",
+          "issue": null,
+          "actions": []
+        }
+      ],
+      "actions": [
+        {
+          "kind": "refresh",
+          "available": false,
+          "reason": null,
+          "interaction": "host"
+        }
+      ],
+      "active": true
+    },
+    {
+      "id": "factory-account",
+      "provider_id": "factory",
+      "display_name": "person@example.test",
+      "user_label": null,
+      "identity": {
+        "evidence": "verified",
+        "username": null,
+        "email": "person@example.test"
+      },
+      "enabled": true,
+      "state": "ready",
+      "sources": [
+        {
+          "id": "factory-account-source",
+          "origin": "borrowed_native",
+          "kind": "factory_native",
+          "location": null,
+          "enabled": true,
+          "selected": true,
+          "state": "ready",
+          "refresh_owner": "provider_tool",
+          "issue": null,
+          "actions": []
+        }
+      ],
+      "actions": [
+        {
+          "kind": "refresh",
+          "available": false,
+          "reason": null,
+          "interaction": "host"
+        }
+      ],
+      "active": true
+    },
+    {
+      "id": "kiro-account",
+      "provider_id": "kiro",
+      "display_name": "Kiro native account",
+      "user_label": null,
+      "identity": {
+        "evidence": "unknown",
+        "username": null,
+        "email": null
+      },
+      "enabled": true,
+      "state": "ready",
+      "sources": [
+        {
+          "id": "kiro-account-source",
+          "origin": "borrowed_native",
+          "kind": "kiro_native",
+          "location": null,
+          "enabled": true,
+          "selected": true,
+          "state": "ready",
+          "refresh_owner": "provider_tool",
+          "issue": null,
+          "actions": []
+        }
+      ],
+      "actions": [
+        {
+          "kind": "refresh",
+          "available": false,
+          "reason": null,
+          "interaction": "host"
+        }
+      ],
+      "active": true
     }
   ],
   "usage": [
@@ -306,8 +486,27 @@
       "freshness": "fresh",
       "fetched_at": "2026-09-24T00:00:00Z",
       "expires_at": "2026-09-24T00:05:00Z",
-      "plan": "Business",
-      "metrics": [],
+      "plan": "individual",
+      "metrics": [
+        {
+          "id": "premium-interactions",
+          "display_name": "Premium interactions",
+          "quota": {
+            "state": "available",
+            "used_percent": 0.0,
+            "remaining_percent": 100.0
+          },
+          "amounts": null,
+          "consumption": null,
+          "resets_at": "2026-10-01T00:00:00Z",
+          "reset_description": null,
+          "fetched_at": "2026-09-24T00:00:00Z",
+          "provenance": {
+            "source": "fixture",
+            "confidence": "exact"
+          }
+        }
+      ],
       "issue": null
     },
     {
@@ -318,14 +517,80 @@
       "plan": "Free",
       "metrics": [
         {
+          "id": "daily",
+          "display_name": "Daily",
+          "quota": {
+            "state": "available",
+            "used_percent": 0.0,
+            "remaining_percent": 100.0
+          },
+          "amounts": null,
+          "consumption": null,
+          "resets_at": "2026-10-01T08:00:00Z",
+          "reset_description": null,
+          "fetched_at": "2026-09-24T00:00:00Z",
+          "provenance": {
+            "source": "fixture",
+            "confidence": "exact"
+          }
+        },
+        {
           "id": "weekly",
           "display_name": "Weekly",
           "quota": {
             "state": "available",
-            "used_percent": 25.0,
-            "remaining_percent": 75.0
+            "used_percent": 0.0,
+            "remaining_percent": 100.0
           },
           "amounts": null,
+          "consumption": null,
+          "resets_at": "2026-10-04T12:00:00Z",
+          "reset_description": null,
+          "fetched_at": "2026-09-24T00:00:00Z",
+          "provenance": {
+            "source": "fixture",
+            "confidence": "exact"
+          }
+        }
+      ],
+      "issue": null
+    },
+    {
+      "account_id": "codex-work",
+      "freshness": "fresh",
+      "fetched_at": "2026-09-24T00:00:00Z",
+      "expires_at": "2026-09-24T00:05:00Z",
+      "plan": "Pro 20x",
+      "metrics": [
+        {
+          "id": "weekly",
+          "display_name": "Weekly",
+          "quota": {
+            "state": "available",
+            "used_percent": 55.0,
+            "remaining_percent": 45.0
+          },
+          "amounts": null,
+          "consumption": null,
+          "resets_at": "2026-10-03T03:00:00Z",
+          "reset_description": null,
+          "fetched_at": "2026-09-24T00:00:00Z",
+          "provenance": {
+            "source": "fixture",
+            "confidence": "exact"
+          }
+        },
+        {
+          "id": "extra-usage",
+          "display_name": "Extra Usage",
+          "quota": {
+            "state": "unknown"
+          },
+          "amounts": {
+            "remaining": 62500,
+            "limit": null,
+            "unit": "credits"
+          },
           "consumption": null,
           "resets_at": null,
           "reset_description": null,
@@ -336,6 +601,335 @@
           }
         }
       ],
+      "issue": null
+    },
+    {
+      "account_id": "amp-account",
+      "freshness": "fresh",
+      "fetched_at": "2026-09-24T00:00:00Z",
+      "expires_at": "2026-09-24T00:05:00Z",
+      "plan": "Megawatt",
+      "metrics": [
+        {
+          "id": "agent-usage",
+          "display_name": "Agent Usage",
+          "quota": {
+            "state": "available",
+            "used_percent": 0.0,
+            "remaining_percent": 100.0
+          },
+          "amounts": null,
+          "consumption": null,
+          "resets_at": null,
+          "reset_description": "upon renewal in 18 days",
+          "fetched_at": "2026-09-24T00:00:00Z",
+          "provenance": {
+            "source": "fixture",
+            "confidence": "exact"
+          }
+        },
+        {
+          "id": "orb-usage",
+          "display_name": "Orb Usage",
+          "quota": {
+            "state": "available",
+            "used_percent": 52.4,
+            "remaining_percent": 47.6
+          },
+          "amounts": null,
+          "consumption": null,
+          "resets_at": null,
+          "reset_description": "upon renewal in 18 days",
+          "fetched_at": "2026-09-24T00:00:00Z",
+          "provenance": {
+            "source": "fixture",
+            "confidence": "exact"
+          }
+        },
+        {
+          "id": "individual-credits",
+          "display_name": "Individual credits",
+          "quota": {
+            "state": "unknown"
+          },
+          "amounts": {
+            "remaining": 136.57,
+            "limit": null,
+            "unit": "USD"
+          },
+          "consumption": null,
+          "resets_at": null,
+          "reset_description": null,
+          "fetched_at": "2026-09-24T00:00:00Z",
+          "provenance": {
+            "source": "fixture",
+            "confidence": "exact"
+          }
+        },
+        {
+          "id": "workspace-credits",
+          "display_name": "Workspace bytrong credits",
+          "quota": {
+            "state": "unknown"
+          },
+          "amounts": {
+            "remaining": 0,
+            "limit": null,
+            "unit": "USD"
+          },
+          "consumption": null,
+          "resets_at": null,
+          "reset_description": null,
+          "fetched_at": "2026-09-24T00:00:00Z",
+          "provenance": {
+            "source": "fixture",
+            "confidence": "exact"
+          }
+        }
+      ],
+      "issue": null
+    },
+    {
+      "account_id": "antigravity-account",
+      "freshness": "fresh",
+      "fetched_at": "2026-09-24T00:00:00Z",
+      "expires_at": "2026-09-24T00:05:00Z",
+      "plan": null,
+      "metrics": [
+        {
+          "id": "gemini-weekly",
+          "display_name": "Gemini Models gemini-weekly",
+          "quota": {
+            "state": "available",
+            "used_percent": 5.0,
+            "remaining_percent": 95.0
+          },
+          "amounts": null,
+          "consumption": null,
+          "resets_at": "2026-10-01T01:00:00Z",
+          "reset_description": null,
+          "fetched_at": "2026-09-24T00:00:00Z",
+          "provenance": {
+            "source": "fixture",
+            "confidence": "exact"
+          }
+        },
+        {
+          "id": "gemini-session",
+          "display_name": "Gemini Models gemini-session",
+          "quota": {
+            "state": "available",
+            "used_percent": 20.0,
+            "remaining_percent": 80.0
+          },
+          "amounts": null,
+          "consumption": null,
+          "resets_at": "2026-09-30T04:22:00Z",
+          "reset_description": null,
+          "fetched_at": "2026-09-24T00:00:00Z",
+          "provenance": {
+            "source": "fixture",
+            "confidence": "exact"
+          }
+        },
+        {
+          "id": "claude-weekly",
+          "display_name": "Claude and GPT Models claude-weekly",
+          "quota": {
+            "state": "available",
+            "used_percent": 0.0,
+            "remaining_percent": 100.0
+          },
+          "amounts": null,
+          "consumption": null,
+          "resets_at": "2026-10-06T23:00:00Z",
+          "reset_description": null,
+          "fetched_at": "2026-09-24T00:00:00Z",
+          "provenance": {
+            "source": "fixture",
+            "confidence": "exact"
+          }
+        },
+        {
+          "id": "claude-session",
+          "display_name": "Claude and GPT Models claude-session",
+          "quota": {
+            "state": "available",
+            "used_percent": 0.0,
+            "remaining_percent": 100.0
+          },
+          "amounts": null,
+          "consumption": null,
+          "resets_at": "2026-09-30T04:55:00Z",
+          "reset_description": null,
+          "fetched_at": "2026-09-24T00:00:00Z",
+          "provenance": {
+            "source": "fixture",
+            "confidence": "exact"
+          }
+        }
+      ],
+      "issue": null,
+      "antigravity_subscription": {
+        "current_tier": {
+          "id": "standard-tier",
+          "name": "Standard",
+          "description": null
+        },
+        "paid_tier": null
+      }
+    },
+    {
+      "account_id": "factory-account",
+      "freshness": "fresh",
+      "fetched_at": "2026-09-24T00:00:00Z",
+      "expires_at": "2026-09-24T00:05:00Z",
+      "plan": null,
+      "metrics": [
+        {
+          "id": "factory-standard-five-hour",
+          "display_name": "5 hours",
+          "quota": {
+            "state": "available",
+            "used_percent": 0.0,
+            "remaining_percent": 100.0
+          },
+          "amounts": null,
+          "consumption": null,
+          "resets_at": null,
+          "reset_description": null,
+          "fetched_at": "2026-09-24T00:00:00Z",
+          "provenance": {
+            "source": "fixture",
+            "confidence": "exact"
+          },
+          "group": "Standard"
+        },
+        {
+          "id": "factory-standard-weekly",
+          "display_name": "Weekly",
+          "quota": {
+            "state": "available",
+            "used_percent": 0.0,
+            "remaining_percent": 100.0
+          },
+          "amounts": null,
+          "consumption": null,
+          "resets_at": null,
+          "reset_description": null,
+          "fetched_at": "2026-09-24T00:00:00Z",
+          "provenance": {
+            "source": "fixture",
+            "confidence": "exact"
+          },
+          "group": "Standard"
+        },
+        {
+          "id": "factory-standard-monthly",
+          "display_name": "Monthly",
+          "quota": {
+            "state": "available",
+            "used_percent": 26.0,
+            "remaining_percent": 74.0
+          },
+          "amounts": null,
+          "consumption": null,
+          "resets_at": "2026-10-22T23:00:00Z",
+          "reset_description": null,
+          "fetched_at": "2026-09-24T00:00:00Z",
+          "provenance": {
+            "source": "fixture",
+            "confidence": "exact"
+          },
+          "group": "Standard"
+        },
+        {
+          "id": "factory-core-five-hour",
+          "display_name": "5 hours",
+          "quota": {
+            "state": "available",
+            "used_percent": 0.0,
+            "remaining_percent": 100.0
+          },
+          "amounts": null,
+          "consumption": null,
+          "resets_at": null,
+          "reset_description": null,
+          "fetched_at": "2026-09-24T00:00:00Z",
+          "provenance": {
+            "source": "fixture",
+            "confidence": "exact"
+          },
+          "group": "Core"
+        },
+        {
+          "id": "factory-core-weekly",
+          "display_name": "Weekly",
+          "quota": {
+            "state": "exhausted",
+            "used_percent": 100.0,
+            "remaining_percent": 0.0
+          },
+          "amounts": null,
+          "consumption": null,
+          "resets_at": "2026-10-01T03:00:00Z",
+          "reset_description": null,
+          "fetched_at": "2026-09-24T00:00:00Z",
+          "provenance": {
+            "source": "fixture",
+            "confidence": "exact"
+          },
+          "group": "Core"
+        },
+        {
+          "id": "factory-core-monthly",
+          "display_name": "Monthly",
+          "quota": {
+            "state": "available",
+            "used_percent": 31.0,
+            "remaining_percent": 69.0
+          },
+          "amounts": null,
+          "consumption": null,
+          "resets_at": "2026-10-26T22:00:00Z",
+          "reset_description": null,
+          "fetched_at": "2026-09-24T00:00:00Z",
+          "provenance": {
+            "source": "fixture",
+            "confidence": "exact"
+          },
+          "group": "Core"
+        },
+        {
+          "id": "factory-extra-balance",
+          "display_name": "Extra usage credits",
+          "quota": {
+            "state": "unknown"
+          },
+          "amounts": {
+            "remaining": 0,
+            "limit": null,
+            "unit": "USD"
+          },
+          "consumption": null,
+          "resets_at": null,
+          "reset_description": null,
+          "fetched_at": "2026-09-24T00:00:00Z",
+          "provenance": {
+            "source": "fixture",
+            "confidence": "exact"
+          }
+        }
+      ],
+      "issue": null
+    },
+    {
+      "account_id": "kiro-account",
+      "freshness": "not_loaded",
+      "fetched_at": null,
+      "expires_at": null,
+      "plan": null,
+      "metrics": [],
       "issue": null
     }
   ]
