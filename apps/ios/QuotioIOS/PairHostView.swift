@@ -24,7 +24,7 @@ struct PairHostView: View {
                 if connected {
                     Section {
                         Label("Connected", systemImage: "checkmark.circle.fill")
-                            .font(.title2.weight(.semibold)).foregroundStyle(.green)
+                            .font(DS.Typography.emphasis).foregroundStyle(DS.Palette.accent)
                         TextField("Computer name", text: $name).textContentType(.nickname)
                         if let payload { Text("Access expires \(payload.expiresAt.formatted(date: .abbreviated, time: .shortened))") }
                     } footer: {
@@ -49,7 +49,7 @@ struct PairHostView: View {
                             if let text = values.first { acceptCode(text) }
                         }
                         Text("The code grants read-only access. Keep it private.")
-                            .font(.caption).foregroundStyle(.secondary)
+                            .font(DS.Typography.tileLabel).foregroundStyle(.secondary)
                     }
                     Section {
                         DisclosureGroup("Advanced: HTTPS proxy", isExpanded: $advanced) {
@@ -68,7 +68,7 @@ struct PairHostView: View {
                     }
                     if let error {
                         Section {
-                            Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red)
+                            Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(DS.Palette.critical)
                             if payload != nil { Button("Try again") { connect() } }
                         }
                     }
@@ -83,11 +83,11 @@ struct PairHostView: View {
                     }
                     .ignoresSafeArea()
                     .overlay(alignment: .bottom) {
-                        VStack(spacing: 16) {
+                        VStack(spacing: DS.Space.l) {
                             Text("Point the camera at the code on your Mac.")
-                                .padding(10).background(.regularMaterial, in: Capsule())
+                                .padding(DS.Space.s + DS.Space.xxs).background(.regularMaterial, in: Capsule())
                             Button("Cancel") { scanner = false }.buttonStyle(.borderedProminent)
-                        }.padding(30)
+                        }.padding(DS.Space.xxl + DS.Space.s - DS.Space.xxs)
                     }
                 }
         }.onDisappear { task?.cancel(); token = ""; payload = nil }
