@@ -8,6 +8,7 @@ struct UsageScreen: View {
     @Binding var accountID: String?
     @Binding var addHost: Bool
     @State private var filter: String?
+    @State private var scrollPosition = ScrollPosition(edge: .top)
     @State private var showIssue = false
 
     var body: some View {
@@ -109,6 +110,8 @@ struct UsageScreen: View {
                 }
             }
         }
+        .scrollPosition($scrollPosition)
+        .onChange(of: filter) { scrollPosition.scrollTo(edge: .top) }
         .background(DS.Palette.background)
         .refreshable { await store.refresh() }
         .environment(\.density, store.state.density)

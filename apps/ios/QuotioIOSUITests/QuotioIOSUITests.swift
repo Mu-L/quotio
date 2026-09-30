@@ -36,6 +36,31 @@ final class QuotioIOSUITests: XCTestCase {
         add(attachment)
     }
 
+    @MainActor func testChangingProviderScrollsToTop() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo", "-AppleLanguages", "(en)", "-AppleLocale", "en_US",
+                               "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        app.launch()
+        XCTAssertTrue(app.buttons["Demo Mac"].waitForExistence(timeout: 10))
+        let first = card(app, containing: "39 percent remaining")
+        let top = first.frame.minY
+        app.swipeUp()
+        XCTAssertLessThan(first.frame.minY, top - 20)
+
+        app.buttons["Codex"].tap()
+        XCTAssertTrue(first.waitForExistence(timeout: 3))
+        XCTAssertEqual(first.frame.minY, top, accuracy: 2)
+
+        app.swipeUp()
+        XCTAssertLessThan(first.frame.minY, top - 20)
+        app.buttons["All"].tap()
+        XCTAssertEqual(first.frame.minY, top, accuracy: 2)
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Usage returned to top after changing provider"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
     @MainActor func testDemoShowsMenuBarParityAndLastCardClearsTabBar() {
         let app = XCUIApplication()
         app.launchArguments = ["--demo", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
