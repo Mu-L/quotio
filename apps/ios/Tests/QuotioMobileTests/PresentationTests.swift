@@ -120,3 +120,14 @@ private func demo() throws -> MobileSnapshot {
     let pinned = snapshot.sections(order: [], lowFirst: true, pinned: ["codex-work"]).first { $0.providerID == "codex" }
     #expect(pinned?.accounts.first?.id == "codex-work")
 }
+
+@Test func connectionErrorsMapToOneSpecificIssue() {
+    #expect(ConnectionIssue(QuotioHostClientError.response(401, "unauthorized")) == .needsPairing)
+    #expect(ConnectionIssue(MobileError.expiredCredential).needsPairing)
+    #expect(ConnectionIssue(URLError(.serverCertificateUntrusted)) == .untrusted)
+    #expect(ConnectionIssue(URLError(.cancelled)) == .untrusted)
+    #expect(ConnectionIssue(URLError(.timedOut)) == .unreachable)
+    #expect(ConnectionIssue(QuotioHostClientError.response(503, "server_busy")) == .busy)
+    #expect(ConnectionIssue(QuotioHostClientError.incompatible) == .incompatible)
+    #expect(!ConnectionIssue.unreachable.steps.isEmpty)
+}
