@@ -1,10 +1,10 @@
 //! Owner-side device management. Credentials are read from the environment, never argv.
-use crate::cli::{DeviceCommand, DevicesArgs};
+use crate::cli::{DeviceCommand, DevicesArgs, SharingArgs, SharingCommand};
 use serde_json::{Value, json};
 use std::time::Duration;
 
-pub async fn run(args: DevicesArgs) -> Result<Value, &'static str> {
-    let base = reqwest::Url::parse(&args.api).map_err(|_| "invalid_local_api")?;
+fn owner_client(api: &str) -> Result<(reqwest::Url, reqwest::Client, String), &'static str> {
+    let base = reqwest::Url::parse(api).map_err(|_| "invalid_local_api")?;
     if base.scheme() != "http"
         || !matches!(base.host_str(), Some("127.0.0.1" | "[::1]"))
         || !base.username().is_empty()
@@ -20,10 +20,49 @@ pub async fn run(args: DevicesArgs) -> Result<Value, &'static str> {
         return Err("invalid_server_token");
     }
     let client = reqwest::Client::builder()
+        .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
         .timeout(Duration::from_secs(20))
         .build()
         .map_err(|_| "client_unavailable")?;
+    Ok((base, client, token))
+}
+
+pub async fn run_sharing(args: SharingArgs) -> Result<Value, &'static str> {
+    let (base, client, token) = owner_client(&args.api)?;
+    let mut request = client.get(base.join("v2/sharing").map_err(|_| "invalid_local_api")?);
+    let body = match args.command {
+        SharingCommand::Status => None,
+        SharingCommand::Enable {
+            mode,
+            address,
+            port,
+            public_url,
+        } => Some(json!({
+            "enabled":true, "mode":mode,
+            "listen":std::net::SocketAddr::new(address.unwrap_or(std::net::Ipv4Addr::LOCALHOST.into()), port).to_string(),
+            "public_url":public_url,
+        })),
+        SharingCommand::Disable { mode } => Some(json!({"enabled":false,"mode":mode})),
+    };
+    if let Some(body) = body {
+        request = client
+            .put(base.join("v2/sharing").map_err(|_| "invalid_local_api")?)
+            .json(&body);
+    }
+    let response = request
+        .bearer_auth(token)
+        .send()
+        .await
+        .map_err(|_| "host_unavailable")?;
+    if !response.status().is_success() {
+        return Err("sharing_request_rejected");
+    }
+    response.json().await.map_err(|_| "invalid_host_response")
+}
+
+pub async fn run(args: DevicesArgs) -> Result<Value, &'static str> {
+    let (base, client, token) = owner_client(&args.api)?;
     let (method, path, body, origin) = match args.command {
         DeviceCommand::Add {
             label,
@@ -72,9 +111,18 @@ pub async fn run(args: DevicesArgs) -> Result<Value, &'static str> {
             .map_err(|_| "host_unavailable")?;
         if response.status().is_success() {
             let sharing: Value = response.json().await.map_err(|_| "invalid_host_response")?;
-            if sharing["enabled"] == true && sharing["public_url"].as_str() == Some(origin.as_str())
-            {
-                certificate = sharing["certificate"].as_str().map(str::to_owned);
+            let endpoint = if let Some(endpoints) = sharing["endpoints"].as_array() {
+                endpoints.iter().find(|endpoint| {
+                    endpoint["enabled"] == true
+                        && endpoint["public_url"].as_str() == Some(origin.as_str())
+                })
+            } else {
+                (sharing["enabled"] == true
+                    && sharing["public_url"].as_str() == Some(origin.as_str()))
+                .then_some(&sharing)
+            };
+            if let Some(endpoint) = endpoint {
+                certificate = endpoint["certificate"].as_str().map(str::to_owned);
             }
         } else if !matches!(response.status().as_u16(), 403 | 404) {
             return Err("device_request_rejected");
@@ -104,6 +152,7 @@ pub async fn run(args: DevicesArgs) -> Result<Value, &'static str> {
             return Err("invalid_host_response");
         }
         let mut pairing = json!({"pairing_version":if certificate.is_some() { 2 } else { 1 },
+            "host_name":reqwest::Url::parse(&origin).map_err(|_| "invalid_public_url")?.host_str(),
             "origin":origin,"host_id":value["host_id"],"client_id":value["client"]["id"],
             "expires_at":value["client"]["expires_at"],"token":value["token"]});
         if let Some(certificate) = certificate {

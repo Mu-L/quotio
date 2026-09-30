@@ -47,6 +47,41 @@ final class CompanionScreenModelTests: XCTestCase {
         XCTAssertFalse(controller.issued.contains { $0.id == id })
     }
 
+    func testSelectingAndDisablingTailscaleKeepsLANAndItsPairingCode() async throws {
+        let controller = CompanionStub()
+        controller.mode = .localNetwork
+        controller.origin = "https://192.168.1.10:6768"
+        controller.endpoints = [
+            .init(enabled: true, listen: "192.168.1.10:6768", publicUrl: controller.origin, mode: .localNetwork),
+            .init(enabled: false, listen: "100.64.0.2:6768", publicUrl: "https://100.64.0.2:6768", mode: .tailscale),
+        ]
+        controller.addresses = [.init(mode: .localNetwork, address: "192.168.1.10", interface: "en0"),
+                                .init(mode: .tailscale, address: "100.64.0.2", interface: "utun4")]
+        let model = CompanionScreenModel(controller: controller)
+        await model.reload()
+        await model.issue()
+        let lanPairing = try XCTUnwrap(model.pairing)
+        model.mode = .tailscale
+        XCTAssertFalse(model.enabled)
+        XCTAssertEqual(model.selectedAddress, "100.64.0.2")
+        XCTAssertEqual(model.pairing?.device.id, lanPairing.device.id)
+        await model.configure(enabled: true)
+        XCTAssertTrue(model.enabled)
+        XCTAssertEqual(model.connections.filter(\.enabled).count, 2)
+        await model.reload()
+        XCTAssertEqual(model.mode, .tailscale)
+        model.finishPairing()
+        await model.issue()
+        XCTAssertEqual(model.pairing?.origin, "https://100.64.0.2:6768")
+        await model.configure(enabled: false)
+        XCTAssertFalse(model.enabled)
+        XCTAssertNil(model.pairing)
+        model.mode = .localNetwork
+        XCTAssertTrue(model.enabled)
+        XCTAssertEqual(model.origin, "https://192.168.1.10:6768")
+        XCTAssertEqual(model.connections.filter(\.enabled).count, 1)
+    }
+
     func testRenderPairingLayouts() async throws {
         guard let output = ProcessInfo.processInfo.environment["QUOTIO_COMPANION_SNAPSHOT_DIR"] else {
             throw XCTSkip("Set QUOTIO_COMPANION_SNAPSHOT_DIR for visual verification")
@@ -62,7 +97,12 @@ final class CompanionScreenModelTests: XCTestCase {
         let controller = CompanionStub()
         controller.mode = .localNetwork
         controller.origin = "https://192.168.1.10:6768"
-        controller.addresses = [.init(mode: .localNetwork, address: "192.168.1.10", interface: "en0")]
+        controller.addresses = [.init(mode: .localNetwork, address: "192.168.1.10", interface: "en0"),
+                                .init(mode: .tailscale, address: "100.64.0.2", interface: "utun4")]
+        controller.endpoints = [
+            .init(enabled: true, listen: "192.168.1.10:6768", publicUrl: controller.origin, mode: .localNetwork),
+            .init(enabled: true, listen: "100.64.0.2:6768", publicUrl: "https://100.64.0.2:6768", mode: .tailscale),
+        ]
         let model = CompanionScreenModel(controller: controller)
         let pasteboard = PasteboardScreenModel(writer: NoCopyPasteboard())
         await model.reload()
@@ -202,19 +242,24 @@ private final class CompanionStub: CompanionControlling {
     var origin = "https://host.example.test"
     var mode: CompanionConnectionMode = .proxy
     var addresses: [CompanionNetworkAddress] = []
+    var endpoints: [CompanionEndpoint]?
     var issued: [CompanionDevice] = []
     var suspendIssuance = false
     var pending: CheckedContinuation<Void, Never>?
 
     func status() async throws -> CompanionStatus {
         if fail { throw CompanionFailure.hostUnavailable }
-        return CompanionStatus(enabled: enabled, listen: "127.0.0.1:6768", publicUrl: origin, mode: mode, addresses: addresses)
+        return CompanionStatus(enabled: enabled, listen: "127.0.0.1:6768", publicUrl: origin, mode: mode, addresses: addresses, endpoints: endpoints)
     }
     func configure(enabled: Bool, origin: String, port: Int, mode: CompanionConnectionMode, address: String) async throws -> CompanionStatus {
         if fail { throw CompanionFailure.hostUnavailable }
         self.enabled = enabled
         self.mode = mode
         self.origin = mode == .proxy ? origin : "https://\(address):\(port)"
+        if endpoints != nil {
+            endpoints?.removeAll { $0.mode == mode }
+            endpoints?.append(.init(enabled: enabled, listen: "\(address):\(port)", publicUrl: self.origin, mode: mode))
+        }
         return try await status()
     }
     func devices() async throws -> [CompanionDevice] { issued }

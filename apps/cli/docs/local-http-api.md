@@ -247,7 +247,7 @@ Keep stdin open: EOF, read failure or unexpected extra input ends the session.
 The local owner can `GET /v2/sharing` to discover active private IPv4 addresses.
 Each `addresses` entry contains `mode` (`local_network` or `tailscale`), `address`
 and `interface`. Direct listeners bind only a listed address, never a wildcard or
-public address. Tailscale candidates are interfaces assigned `100.64.0.0/10`;
+public address. LAN candidates must support broadcast, excluding point-to-point VPN interfaces. Tailscale candidates are interfaces assigned `100.64.0.0/10`;
 other VPNs using that range can also appear. This does not install or configure a VPN.
 
 Enable direct HTTPS with `PUT /v2/sharing`:
@@ -257,7 +257,11 @@ Enable direct HTTPS with `PUT /v2/sharing`:
 ```
 
 Use `"mode":"tailscale"` and the assigned tailnet IPv4 address for private VPN
-access. The response supplies `public_url` and `certificate` (base64 DER CA).
+access. LAN, Tailscale and proxy each have an independent listener. Enabling one
+keeps the others running. `GET /v2/sharing` returns all listeners in `endpoints`,
+with `enabled`, `mode`, `listen`, `public_url` and `certificate` for each.
+The top-level endpoint fields remain available for older clients.
+The response supplies `public_url` and `certificate` (base64 DER CA).
 The host creates its CA in the credential vault (format 19; older binaries reject
 this format), signs a leaf for the selected IP and renews the leaf while running.
 Pairing version 2 adds `certificate` to version 1's fields. The Apple client uses
@@ -267,23 +271,39 @@ For an existing reverse proxy, omit `mode` or use `"mode":"proxy"` with
 `"listen":"127.0.0.1:6768"` and `"public_url":"https://computer.example"`.
 Only proxy mode accepts loopback HTTP upstream; its pairing remains version 1.
 
-Both modes share the existing scheduler, vault and snapshot. The companion endpoint
+All endpoints share the existing scheduler, vault and snapshot. The companion endpoint
 accepts only delegated device reads, never the owner token. Set `{"enabled":false}`
-to stop sharing. Already-started reads may finish; subsequent keep-alive requests
+to stop all sharing, or `{"enabled":false,"mode":"tailscale"}` to stop only
+Tailscale. Already-started reads may finish; subsequent keep-alive requests
 cannot bypass disabling. The original listener keeps its local approval authority.
 
 The route requires a local owner, management mode and saved-account storage.
 A port conflict leaves the working endpoint unchanged. Disable sharing before
-changing the origin on the same socket. Settings are runtime state; the macOS app
+changing the origin on the same socket. Changing one mode never closes another mode. Settings are runtime state; the macOS app
 stores its preferences and restores sharing when it reconnects its helper.
 Listener readiness does not prove firewall, LAN or VPN reachability. Address changes
 require enabling the new address and pairing again; there is no roaming discovery.
+
+Manage listeners from the CLI using the same local owner token:
+
+```sh
+quotio sharing status
+quotio sharing enable --mode local-network --address 192.168.1.10
+quotio sharing enable --mode tailscale --address 100.64.0.2
+quotio sharing disable --mode tailscale
+quotio sharing disable
+```
+
+`--api` selects the loopback owner API; `--port` defaults to 6768. Proxy mode
+requires `--public-url` and defaults its upstream address to `127.0.0.1`.
+Settings remain runtime state for standalone CLI hosts. Enable each desired mode
+after restarting `quotio serve`.
 
 Use `quotio devices add --label iPhone --public-url https://computer.example` to
 issue a read credential from the local CLI host. It reads `QUOTIO_SERVER_TOKEN`
 from the environment; `--api` may select another loopback port. Output is sensitive
 pairing JSON with origin, host ID, client ID, expiration and token. If the origin
-matches the direct companion listener, the command includes its CA and emits version
+matches any active direct companion listener, the command includes its CA and emits version
 2; otherwise it emits version 1 for a system-trusted HTTPS endpoint.
 `quotio devices list` and `quotio devices revoke CLIENT_ID` manage grants locally.
 See [iOS setup](../../ios/README.md).

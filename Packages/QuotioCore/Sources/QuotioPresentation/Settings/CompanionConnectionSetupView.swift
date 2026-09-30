@@ -10,7 +10,7 @@ struct CompanionConnectionSetupView: View {
         VStack(alignment: .leading, spacing: 14) {
             option(.localNetwork, title: "companion.localNetwork", hint: "companion.localHint", symbol: "wifi")
             option(.tailscale, title: "companion.tailscale", hint: "companion.tailscaleHint", symbol: "network")
-            if model.mode != .proxy {
+            if !model.enabled && model.mode != .proxy {
                 if model.availableAddresses.isEmpty {
                     Label((model.mode == .tailscale ? "companion.noTailscale" : "companion.noLocalNetwork").localized(), systemImage: "info.circle")
                         .font(.callout).foregroundStyle(.secondary)
@@ -32,13 +32,15 @@ struct CompanionConnectionSetupView: View {
                         Toggle("companion.customHTTPS".localized(), isOn: Binding(
                             get: { model.mode == .proxy }, set: { model.mode = $0 ? .proxy : .localNetwork }
                         ))
-                        if model.mode == .proxy {
+                        if !model.enabled && model.mode == .proxy {
                             TextField("https://mac.example.com", text: $model.origin)
                                 .textFieldStyle(.roundedBorder).accessibilityLabel("companion.origin".localized())
                             Text("companion.setupHint".localized()).font(.caption).foregroundStyle(.secondary)
                         }
-                        TextField("companion.port".localized(), value: $model.port, format: .number.grouping(.never))
-                            .textFieldStyle(.roundedBorder)
+                        if !model.enabled {
+                            TextField("companion.port".localized(), value: $model.port, format: .number.grouping(.never))
+                                .textFieldStyle(.roundedBorder)
+                        }
                         Text("companion.explanation".localized()).font(.caption).foregroundStyle(.secondary)
                     }
                     .padding(.top, 8)
@@ -61,6 +63,10 @@ struct CompanionConnectionSetupView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
+                if model.connections.contains(where: { $0.mode == mode && $0.enabled }) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green).accessibilityLabel("companion.statusOn".localized())
+                }
             }.contentShape(Rectangle())
         }
         .buttonStyle(.plain)

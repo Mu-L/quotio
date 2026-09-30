@@ -47,11 +47,13 @@ Do not commit certificates, provisioning profiles, archives or signing secrets.
 ## Connect the macOS app
 
 Choose **Pair iPhone…** directly in the Quotio menu; the main window stays closed.
-Select **Local network** for the same Wi-Fi/Ethernet network, or **Tailscale IP**
+Choose **Local network** for the same Wi-Fi/Ethernet network, or **Tailscale IP**
 with Tailscale connected on both devices. Quotio discovers active IPv4 addresses;
 if several are available, select the one reachable by your iPhone. No domain or
 reverse proxy is needed. Name the iPhone and create its pairing code. Quotio enables
-sharing as part of that action when needed.
+sharing for the selected connection as part of that action when needed. LAN and
+Tailscale can stay enabled together. Choose LAN when pairing one iPhone and
+Tailscale when pairing another; each code contains that connection's address.
 
 Scan the QR inside the updated Quotio iPhone app, or choose **Copy pairing code**
 on Mac and **Paste** on iPhone. Confirm the address before connecting. Copy the whole
@@ -61,7 +63,7 @@ only the paired CA for this connection, with normal hostname/expiry/signature ch
 No certificate profile or device-wide trust installation is required.
 
 **Advanced** in Settings keeps the sharing port and optional custom HTTPS reverse
-proxy. Turn sharing off before changing these settings. If the host address changes,
+proxy. Turn the selected connection off before changing its settings; other connections stay on. If the host address changes,
 pair again from the new address; existing saved profiles do not discover address
 changes automatically.
 
@@ -86,8 +88,15 @@ quotio serve --manage --listen 127.0.0.1:6767
 ```
 
 Use the local-owner [sharing API](../cli/docs/local-http-api.md#iphone-companion) to
-list network addresses and enable `local_network` or `tailscale` with the desired
-address and port. Then issue a device code using the returned `public_url`:
+list network addresses, or use the CLI to enable both connections:
+
+```sh
+quotio sharing enable --mode local-network --address 192.168.1.10
+quotio sharing enable --mode tailscale --address 100.64.0.2
+quotio sharing status
+```
+
+Issue a device code using the chosen endpoint’s `public_url`:
 
 ```sh
 quotio devices add --label iPhone --public-url https://192.168.1.10:6768
@@ -105,7 +114,7 @@ VPN installation is included.
 
 The companion listener shares the host process, scheduler and vault, and accepts
 only delegated reads. The local owner endpoint retains OAuth and OS-approval authority.
-Disabling sharing blocks new requests, including old keep-alive connections; already
+Disabling a connection blocks its new requests, including old keep-alive connections; already
 started reads may finish. Creating the direct TLS identity upgrades the vault to
 format 19, which older Quotio CLI binaries cannot read.
 

@@ -228,6 +228,13 @@ async fn run() -> ExitCode {
                 .collect(),
             0,
         ),
+        Command::Sharing(args) => match quotio::devices::run_sharing(args).await {
+            Ok(value) => (value.to_string(), 0),
+            Err(code) => {
+                eprintln!("Sharing request failed: {code}");
+                return ExitCode::from(3);
+            }
+        },
         Command::Devices(args) => match quotio::devices::run(args).await {
             Ok(value) => (value.to_string(), 0),
             Err(code) => {

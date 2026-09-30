@@ -22,7 +22,7 @@ final class QuotioCompanionServiceTests: XCTestCase {
         XCTAssertEqual(request.httpMethod, "PUT")
         XCTAssertEqual(body["listen"] as? String, "192.168.1.10:6768")
         XCTAssertEqual(body["mode"] as? String, "local_network")
-        XCTAssertEqual(defaults.string(forKey: "companion.mode"), "local_network")
+        XCTAssertEqual(defaults.string(forKey: "companion.local_network.address"), "192.168.1.10")
         CompanionHTTPStub.state.reset(status: 201, body: #"{"schema_version":2,"host_id":"fixture","client":{"id":"phone","label":"iPhone","scope":"read","expires_at":"2030-01-01T00:00:00Z"},"token":"synthetic-device-token"}"#)
         let pairing = try await service.issue(label: "iPhone", origin: result.publicUrl!)
         let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(pairing.payload.utf8)) as? [String: Any])
@@ -35,6 +35,62 @@ final class QuotioCompanionServiceTests: XCTestCase {
             XCTFail("No interface must not enable sharing")
         } catch let failure as CompanionFailure { XCTAssertEqual(failure, .networkUnavailable) }
         XCTAssertTrue(CompanionHTTPStub.state.requests().allSatisfy { $0.httpMethod == "GET" })
+    }
+
+    func testIndependentEndpointsRestoreLegacyAddressAndIssueTrustForSelectedOrigin() async throws {
+        let suite = "quotio-multiple-endpoints-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(true, forKey: "companion.enabled")
+        defaults.set("local_network", forKey: "companion.mode")
+        defaults.set("192.168.1.10", forKey: "companion.address")
+        defaults.set(6768, forKey: "companion.port")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [CompanionHTTPStub.self]
+        let session = URLSession(configuration: configuration)
+        let service = QuotioCompanionService(defaults: defaults, session: session)
+        let connection = QuotioHostConnection(baseURL: URL(string: "http://127.0.0.1:6767")!, token: "synthetic-owner-token")
+        let both = #"{"enabled":true,"mode":"local_network","listen":"192.168.1.10:6768","public_url":"https://192.168.1.10:6768","endpoints":[{"enabled":true,"mode":"local_network","listen":"192.168.1.10:6768","public_url":"https://192.168.1.10:6768","certificate":"AQID"},{"enabled":true,"mode":"tailscale","listen":"100.64.0.2:6768","public_url":"https://100.64.0.2:6768","certificate":"BAUG"}],"addresses":[{"mode":"local_network","address":"172.16.0.2","interface":"utun11"},{"mode":"local_network","address":"192.168.1.10","interface":"en0"},{"mode":"tailscale","address":"100.64.0.2","interface":"utun4"}]}"#
+        CompanionHTTPStub.state.reset(status: 200, body: both)
+        try await service.connect(connection)
+        let restored = try XCTUnwrap(CompanionHTTPStub.state.requests().last?.httpBody)
+        let input = try XCTUnwrap(JSONSerialization.jsonObject(with: restored) as? [String: Any])
+        XCTAssertEqual(input["listen"] as? String, "192.168.1.10:6768")
+        _ = try await service.configure(enabled: true, origin: "", port: 6768, mode: .tailscale, address: "100.64.0.2")
+        XCTAssertTrue(defaults.bool(forKey: "companion.local_network.enabled"))
+        XCTAssertTrue(defaults.bool(forKey: "companion.tailscale.enabled"))
+        CompanionHTTPStub.state.reset(status: 201, body: #"{"schema_version":2,"host_id":"fixture","client":{"id":"phone","label":"iPhone","scope":"read","expires_at":"2030-01-01T00:00:00Z"},"token":"synthetic-device-token"}"#)
+        let pairing = try await service.issue(label: "Tailscale phone", origin: "https://100.64.0.2:6768")
+        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(pairing.payload.utf8)) as? [String: Any])
+        XCTAssertEqual(payload["certificate"] as? String, "BAUG")
+        XCTAssertEqual(payload["origin"] as? String, "https://100.64.0.2:6768")
+        CompanionHTTPStub.state.reset(status: 200, body: both)
+        try await QuotioCompanionService(defaults: defaults, session: session).connect(connection)
+        let bodies = try CompanionHTTPStub.state.requests().filter { $0.httpMethod == "PUT" }.map {
+            try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap($0.httpBody)) as? [String: Any])
+        }
+        XCTAssertEqual(bodies.compactMap { $0["mode"] as? String }, ["local_network", "tailscale"])
+        let lanOnly = #"{"enabled":true,"mode":"local_network","listen":"192.168.1.10:6768","public_url":"https://192.168.1.10:6768","endpoints":[{"enabled":true,"mode":"local_network","listen":"192.168.1.10:6768","public_url":"https://192.168.1.10:6768","certificate":"AQID"}],"addresses":[{"mode":"local_network","address":"192.168.1.10","interface":"en0"}]}"#
+        CompanionHTTPStub.state.reset(status: 200, body: lanOnly)
+        let result = try await service.configure(enabled: false, origin: "", port: 6768, mode: .tailscale)
+        XCTAssertTrue(result.connections.first(where: { $0.mode == .localNetwork })!.enabled)
+        XCTAssertFalse(result.connections.first(where: { $0.mode == .tailscale })!.enabled)
+        XCTAssertTrue(defaults.bool(forKey: "companion.local_network.enabled"))
+        XCTAssertFalse(defaults.bool(forKey: "companion.tailscale.enabled"))
+        defaults.set(true, forKey: "companion.tailscale.enabled")
+        CompanionHTTPStub.state.reset(status: 200, body: lanOnly)
+        do { try await QuotioCompanionService(defaults: defaults, session: session).connect(connection); XCTFail("Unavailable Tailscale must report a failure") }
+        catch let error as CompanionFailure { XCTAssertEqual(error, .networkUnavailable) }
+        XCTAssertEqual(CompanionHTTPStub.state.requests().filter { $0.httpMethod == "PUT" }.count, 1)
+        CompanionHTTPStub.state.reset(status: 200, body: lanOnly)
+        do { _ = try await service.configure(enabled: true, origin: "", port: 6768, mode: .localNetwork, address: "192.168.1.99"); XCTFail("A saved address must not silently change") }
+        catch let error as CompanionFailure { XCTAssertEqual(error, .networkUnavailable) }
+        XCTAssertTrue(CompanionHTTPStub.state.requests().allSatisfy { $0.httpMethod == "GET" })
+        CompanionHTTPStub.state.reset(status: 200, body: #"{"enabled":false,"listen":null,"public_url":null,"endpoints":[],"addresses":[]}"#)
+        let disabled = try await service.status()
+        XCTAssertEqual(disabled.listen, "192.168.1.10:6768")
+        XCTAssertFalse(disabled.connections.first(where: { $0.mode == .localNetwork })!.enabled)
+        XCTAssertEqual(disabled.connections.first(where: { $0.mode == .tailscale })!.listen, "100.64.0.2:6768")
     }
 
     func testDisabledSharingRestoresPreferencesAndFailedWritesDoNotReplaceThem() async throws {
@@ -56,7 +112,9 @@ final class QuotioCompanionServiceTests: XCTestCase {
         XCTAssertEqual(defaults.string(forKey: "companion.origin"), "https://saved.example.test")
         XCTAssertEqual(defaults.integer(forKey: "companion.port"), 7878)
         let body = try XCTUnwrap(CompanionHTTPStub.state.requests().last?.httpBody)
-        XCTAssertEqual(try JSONSerialization.jsonObject(with: body) as? [String: Bool], ["enabled": false])
+        let disabled = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertEqual(disabled["enabled"] as? Bool, false)
+        XCTAssertEqual(disabled["mode"] as? String, "proxy")
 
         for (code, expected) in [("share_port_unavailable", CompanionFailure.portInUse), ("credential_storage_unavailable", .storageUnavailable)] {
             CompanionHTTPStub.state.reset(status: 409, body: "{\"error\":\"\(code)\"}")

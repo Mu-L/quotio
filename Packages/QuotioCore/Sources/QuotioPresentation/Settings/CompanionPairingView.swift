@@ -23,12 +23,11 @@ struct CompanionPairingView: View {
                 }
             } else {
                 Text("companion.summary".localized()).foregroundStyle(.secondary)
+                CompanionConnectionSetupView(model: model, includesAdvanced: presentation == .settings)
+                    .disabled(model.busy)
                 if model.enabled {
                     Label("\(model.origin) · \("companion.statusOn".localized())", systemImage: "checkmark.circle.fill")
                         .font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
-                } else {
-                    CompanionConnectionSetupView(model: model, includesAdvanced: presentation == .settings)
-                        .disabled(model.busy)
                 }
                 HStack {
                     Text("companion.deviceName".localized())

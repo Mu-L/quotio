@@ -17,21 +17,26 @@ public final class QuotioCompanionService: CompanionControlling {
 
     public func connect(_ connection: QuotioHostConnection) async throws {
         client = QuotioHostHTTPClient(connection: connection, session: session)
-        if defaults.bool(forKey: "companion.enabled") {
-            _ = try await configure(enabled: true, origin: defaults.string(forKey: "companion.origin") ?? "",
-                                    port: defaults.integer(forKey: "companion.port"), mode: savedMode, address: defaults.string(forKey: "companion.address") ?? "")
+        activeStatus = nil
+        var failure: Error?
+        for mode in CompanionConnectionMode.allCases {
+            let settings = savedSettings(mode)
+            guard settings.enabled else { continue }
+            do {
+                _ = try await configure(enabled: true, origin: settings.publicUrl ?? "",
+                                        port: Int(settings.listen?.split(separator: ":").last ?? "") ?? 6768,
+                                        mode: mode, address: String(settings.listen?.split(separator: ":", omittingEmptySubsequences: false).first ?? ""))
+            } catch is CancellationError { throw CancellationError() }
+            catch { if failure == nil { failure = error } }
         }
+        if let failure { throw failure }
     }
 
     public func status() async throws -> CompanionStatus {
         let value: CompanionStatus = try await request("v2/sharing")
-        let savedPort = defaults.object(forKey: "companion.port") as? Int ?? 6768
-        activeStatus = value
-        return CompanionStatus(enabled: value.enabled,
-                               listen: value.listen ?? "127.0.0.1:\(savedPort)",
-                               publicUrl: value.publicUrl ?? defaults.string(forKey: "companion.origin"),
-                               mode: value.enabled ? value.mode : savedMode,
-                               addresses: value.addresses, certificate: value.certificate)
+        let status = withSavedSettings(value)
+        activeStatus = status
+        return status
     }
 
     private var savedMode: CompanionConnectionMode {
@@ -39,9 +44,36 @@ public final class QuotioCompanionService: CompanionControlling {
         return defaults.string(forKey: "companion.origin") == nil ? .localNetwork : .proxy
     }
 
+    private func savedSettings(_ mode: CompanionConnectionMode) -> CompanionEndpoint {
+        let prefix = "companion.\(mode.rawValue)."
+        let legacy = mode == savedMode
+        let port = defaults.object(forKey: prefix + "port") as? Int
+            ?? (legacy ? defaults.object(forKey: "companion.port") as? Int : nil) ?? 6768
+        let address = defaults.string(forKey: prefix + "address")
+            ?? (legacy ? defaults.string(forKey: "companion.address") : nil)
+            ?? (mode == .proxy ? "127.0.0.1" : "")
+        let origin = defaults.string(forKey: prefix + "origin")
+            ?? (legacy ? defaults.string(forKey: "companion.origin") : nil)
+        let enabled = defaults.object(forKey: prefix + "enabled") as? Bool
+            ?? (legacy && defaults.bool(forKey: "companion.enabled"))
+        return CompanionEndpoint(enabled: enabled, listen: "\(address):\(port)", publicUrl: origin, mode: mode)
+    }
+
+    private func withSavedSettings(_ value: CompanionStatus) -> CompanionStatus {
+        let connections = CompanionConnectionMode.allCases.map { mode in
+            if let endpoint = value.connections.first(where: { $0.mode == mode && $0.enabled }) { return endpoint }
+            let saved = savedSettings(mode)
+            return CompanionEndpoint(enabled: false, listen: saved.listen, publicUrl: saved.publicUrl, mode: mode)
+        }
+        let selected = connections.first(where: { $0.mode == (value.enabled ? value.mode ?? .proxy : savedMode) })!
+        return CompanionStatus(enabled: value.enabled, listen: selected.listen, publicUrl: selected.publicUrl,
+                               mode: selected.mode, addresses: value.addresses ?? activeStatus?.addresses,
+                               certificate: selected.certificate, endpoints: connections)
+    }
+
     public func configure(enabled: Bool, origin: String, port: Int,
                           mode: CompanionConnectionMode = .proxy, address: String = "") async throws -> CompanionStatus {
-        var input: [String: Any] = ["enabled": enabled]
+        var input: [String: Any] = ["enabled": enabled, "mode": mode.rawValue]
         if enabled {
             guard (1...65535).contains(port) else { throw CompanionFailure.invalidPort }
             input["mode"] = mode.rawValue
@@ -51,23 +83,25 @@ public final class QuotioCompanionService: CompanionControlling {
                 input["public_url"] = origin
             } else {
                 let available = try await status().addresses ?? []
-                guard let selected = available.first(where: { $0.mode == mode && $0.address == address })
-                    ?? available.first(where: { $0.mode == mode }) else { throw CompanionFailure.networkUnavailable }
+                guard let selected = available.first(where: { $0.mode == mode && (address.isEmpty || $0.address == address) }) else { throw CompanionFailure.networkUnavailable }
                 input["listen"] = "\(selected.address):\(port)"
                 input["public_url"] = NSNull()
             }
         }
         let body = try JSONSerialization.data(withJSONObject: input)
         let status: CompanionStatus = try await request("v2/sharing", method: "PUT", body: body)
-        activeStatus = status
-        defaults.set(enabled, forKey: "companion.enabled")
-        if enabled {
-            defaults.set(status.publicUrl, forKey: "companion.origin")
-            defaults.set(port, forKey: "companion.port")
-            defaults.set(mode.rawValue, forKey: "companion.mode")
-            defaults.set(status.listen?.split(separator: ":").first.map(String.init), forKey: "companion.address")
+        let endpoint = status.connections.first(where: { $0.mode == mode && $0.enabled })
+        guard !enabled || endpoint != nil else { throw CompanionFailure.requestFailed }
+        let prefix = "companion.\(mode.rawValue)."
+        defaults.set(enabled, forKey: prefix + "enabled")
+        if let endpoint, enabled {
+            defaults.set(endpoint.publicUrl, forKey: prefix + "origin")
+            defaults.set(port, forKey: prefix + "port")
+            defaults.set(endpoint.listen?.split(separator: ":").first.map(String.init), forKey: prefix + "address")
         }
-        return status
+        let merged = withSavedSettings(status)
+        activeStatus = merged
+        return merged
     }
 
     public func devices() async throws -> [CompanionDevice] {
@@ -84,8 +118,8 @@ public final class QuotioCompanionService: CompanionControlling {
             let token: String
         }
         try validate(origin: origin)
-        guard let current = activeStatus, current.enabled, current.publicUrl == origin else { throw CompanionFailure.hostUnavailable }
-        guard current.mode == nil || current.mode == .proxy || current.certificate != nil else { throw CompanionFailure.requestFailed }
+        guard let current = activeStatus?.connections.first(where: { $0.enabled && $0.publicUrl == origin }) else { throw CompanionFailure.hostUnavailable }
+        guard current.mode == .proxy || current.certificate != nil else { throw CompanionFailure.requestFailed }
         guard !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CompanionFailure.invalidLabel }
         let body = try JSONSerialization.data(withJSONObject: ["label": label, "scope": "read", "expires_in_seconds": 2592000] as [String: Any])
         let response: Response = try await request("v2/clients", method: "POST", body: body)

@@ -13,6 +13,19 @@ public struct CompanionNetworkAddress: Decodable, Sendable, Equatable {
     }
 }
 
+public struct CompanionEndpoint: Decodable, Sendable {
+    public let enabled: Bool
+    public let listen: String?
+    public let publicUrl: String?
+    public let mode: CompanionConnectionMode
+    public let certificate: String?
+
+    public init(enabled: Bool, listen: String?, publicUrl: String?, mode: CompanionConnectionMode, certificate: String? = nil) {
+        self.enabled = enabled; self.listen = listen; self.publicUrl = publicUrl
+        self.mode = mode; self.certificate = certificate
+    }
+}
+
 public struct CompanionStatus: Decodable, Sendable {
     public let enabled: Bool
     public let listen: String?
@@ -20,12 +33,17 @@ public struct CompanionStatus: Decodable, Sendable {
     public let mode: CompanionConnectionMode?
     public let addresses: [CompanionNetworkAddress]?
     public let certificate: String?
+    public let endpoints: [CompanionEndpoint]?
+    public var connections: [CompanionEndpoint] {
+        endpoints ?? [.init(enabled: enabled, listen: listen, publicUrl: publicUrl, mode: mode ?? .proxy, certificate: certificate)]
+    }
 
-    public init(enabled: Bool, listen: String?, publicUrl: String?, mode: CompanionConnectionMode? = nil, addresses: [CompanionNetworkAddress]? = nil, certificate: String? = nil) {
+    public init(enabled: Bool, listen: String?, publicUrl: String?, mode: CompanionConnectionMode? = nil, addresses: [CompanionNetworkAddress]? = nil, certificate: String? = nil, endpoints: [CompanionEndpoint]? = nil) {
         self.enabled = enabled
         self.listen = listen
         self.publicUrl = publicUrl
         self.mode = mode; self.addresses = addresses; self.certificate = certificate
+        self.endpoints = endpoints
     }
 }
 

@@ -67,6 +67,42 @@ fn argument_contract() {
     assert!(Cli::try_parse_from(["quotio", "usage", "--provider", "unknown"]).is_err());
 }
 #[test]
+fn sharing_requires_explicit_network_addresses_and_valid_ports() {
+    for mode in ["local-network", "tailscale"] {
+        assert!(Cli::try_parse_from(["quotio", "sharing", "enable", "--mode", mode]).is_err());
+        assert!(
+            Cli::try_parse_from([
+                "quotio",
+                "sharing",
+                "enable",
+                "--mode",
+                mode,
+                "--address",
+                "192.168.1.10"
+            ])
+            .is_ok()
+        );
+    }
+    assert!(Cli::try_parse_from(["quotio", "sharing", "enable", "--mode", "proxy"]).is_err());
+    for port in ["0", "65536", "bad"] {
+        assert!(
+            Cli::try_parse_from([
+                "quotio",
+                "sharing",
+                "enable",
+                "--mode",
+                "tailscale",
+                "--address",
+                "100.64.0.2",
+                "--port",
+                port
+            ])
+            .is_err()
+        );
+    }
+}
+
+#[test]
 fn provider_json_uses_the_http_contract() {
     let config = ConfigFile::new("enabled_providers = [\"mock\"]");
     let output = Command::new(env!("CARGO_BIN_EXE_quotio"))

@@ -6,7 +6,9 @@ import QuotioDomain
 @MainActor @Observable
 public final class CompanionScreenModel {
     public enum Presentation: Equatable { case settings, menuBar }
-    public var mode: CompanionConnectionMode = .localNetwork
+    public var mode: CompanionConnectionMode = .localNetwork {
+        didSet { if mode != oldValue { loadConnection(); clearExpiredPairing() } }
+    }
     public var address = ""
     public private(set) var addresses: [CompanionNetworkAddress] = []
     public var availableAddresses: [CompanionNetworkAddress] { addresses.filter { $0.mode == mode } }
@@ -15,7 +17,8 @@ public final class CompanionScreenModel {
     public var origin = ""
     public var port = 6768
     public var label = "iPhone"
-    public private(set) var enabled = false
+    public var enabled: Bool { connections.first(where: { $0.mode == mode })?.enabled ?? false }
+    public private(set) var connections: [CompanionEndpoint] = []
     public private(set) var hasLoaded = false
     public private(set) var devices: [CompanionDevice] = []
     public private(set) var busy = false
@@ -47,7 +50,7 @@ public final class CompanionScreenModel {
     }
 
     public func clearExpiredPairing(now: Date = .now) {
-        if let pairing, pairing.device.expiresAt <= now || pairing.origin != origin || !enabled {
+        if let pairing, pairing.device.expiresAt <= now || !connections.contains(where: { $0.enabled && $0.publicUrl == pairing.origin }) {
             self.pairing = nil
         }
     }
@@ -57,13 +60,9 @@ public final class CompanionScreenModel {
             let status = try await controller.status()
             let devices = try await controller.devices()
             addresses = status.addresses ?? []
-            if status.enabled || !hasLoaded {
-                mode = status.mode ?? .proxy
-                if let listen = status.listen { address = String(listen.split(separator: ":").first ?? "") }
-                if let value = status.publicUrl { origin = value }
-                if let value = status.listen?.split(separator: ":").last, let port = Int(value) { self.port = port }
-            }
-            enabled = status.enabled
+            connections = status.connections
+            if !hasLoaded { mode = status.mode ?? .proxy }
+            if enabled || !hasLoaded { loadConnection() }
             self.devices = devices
             hasLoaded = true
             clearExpiredPairing()
@@ -74,11 +73,18 @@ public final class CompanionScreenModel {
     public func configure(enabled: Bool) async {
         await perform {
             let status = try await controller.configure(enabled: enabled, origin: origin.trimmingCharacters(in: .whitespacesAndNewlines), port: port, mode: mode, address: selectedAddress)
-            self.enabled = status.enabled
-            if let value = status.publicUrl { origin = value }
+            connections = status.connections
+            loadConnection()
             hasLoaded = true
             clearExpiredPairing()
         }
+    }
+
+    private func loadConnection() {
+        let connection = connections.first(where: { $0.mode == mode })
+        address = String(connection?.listen?.split(separator: ":", omittingEmptySubsequences: false).first ?? "")
+        origin = connection?.publicUrl ?? ""
+        port = Int(connection?.listen?.split(separator: ":").last ?? "") ?? 6768
     }
 
     public func issue() async {

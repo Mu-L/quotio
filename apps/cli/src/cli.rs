@@ -51,6 +51,8 @@ pub enum Command {
     Accounts(AccountsArgs),
     /// Issue, list or revoke read-only companion-device credentials
     Devices(DevicesArgs),
+    /// Configure independent LAN, Tailscale and reverse-proxy sharing endpoints
+    Sharing(SharingArgs),
     /// Collect quota for detected or explicitly selected providers
     Usage(UsageArgs),
     /// Serve cached usage through a local read-only HTTP API
@@ -355,5 +357,45 @@ pub enum DeviceCommand {
     List,
     Revoke {
         id: String,
+    },
+}
+
+#[derive(
+    Debug, Clone, Copy, Default, ValueEnum, serde::Deserialize, serde::Serialize, PartialEq, Eq,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum SharingMode {
+    LocalNetwork,
+    Tailscale,
+    #[default]
+    Proxy,
+}
+
+#[derive(Debug, Args)]
+pub struct SharingArgs {
+    /// Local owner API; credentials are read from QUOTIO_SERVER_TOKEN
+    #[arg(long, default_value = "http://127.0.0.1:6767")]
+    pub api: String,
+    #[command(subcommand)]
+    pub command: SharingCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum SharingCommand {
+    Status,
+    Enable {
+        #[arg(long, value_enum)]
+        mode: SharingMode,
+        #[arg(long, required_if_eq_any = [("mode", "local-network"), ("mode", "tailscale")])]
+        address: Option<std::net::IpAddr>,
+        #[arg(long, default_value_t = 6768, value_parser = clap::value_parser!(u16).range(1..))]
+        port: u16,
+        #[arg(long, required_if_eq("mode", "proxy"))]
+        public_url: Option<String>,
+    },
+    /// Omit --mode to disable every sharing endpoint
+    Disable {
+        #[arg(long, value_enum)]
+        mode: Option<SharingMode>,
     },
 }

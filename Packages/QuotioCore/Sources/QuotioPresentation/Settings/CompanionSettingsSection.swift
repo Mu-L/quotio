@@ -13,11 +13,6 @@ struct CompanionSettingsSection: View {
                         .font(.headline)
                     Text("companion.summary".localized()).foregroundStyle(.secondary)
                     HStack {
-                        Toggle(statusTitle, isOn: Binding(
-                            get: { model.enabled },
-                            set: { enabled in Task { await model.configure(enabled: enabled) } }
-                        ))
-                        .disabled(model.busy || !model.hasLoaded || (!model.enabled && !model.canEnable))
                         Spacer()
                         if model.busy { ProgressView().controlSize(.small) }
                         Button("companion.pair".localized()) { model.presentPairing(in: .settings) }
@@ -55,14 +50,18 @@ struct CompanionSettingsSection: View {
             }
 
             Section("companion.connection".localized()) {
+                CompanionConnectionSetupView(model: model).disabled(model.busy)
+                Toggle(statusTitle, isOn: Binding(
+                    get: { model.enabled },
+                    set: { enabled in Task { await model.configure(enabled: enabled) } }
+                ))
+                .disabled(model.busy || !model.hasLoaded || (!model.enabled && !model.canEnable))
                 if model.enabled {
                     Label(connectionTitle, systemImage: model.mode == .tailscale ? "network" : model.mode == .localNetwork ? "wifi" : "lock.shield")
                     LabeledContent("companion.origin".localized()) {
                         Text(model.origin).font(.system(.body, design: .monospaced)).foregroundStyle(.primary).textSelection(.enabled)
                     }
                     Text("companion.disableHint".localized()).font(.caption).foregroundStyle(.secondary)
-                } else {
-                    CompanionConnectionSetupView(model: model).disabled(model.busy)
                 }
             }
 
