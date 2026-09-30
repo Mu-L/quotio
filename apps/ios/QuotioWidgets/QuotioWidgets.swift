@@ -25,7 +25,7 @@ struct QuotaQuery: EntityQuery {
             (host.snapshot?.accounts ?? []).flatMap { account in
                 account.metrics.map { metric in
                     QuotaChoice(id: QuotaChoice.identifier(host: host.id, account: account.id, metric: metric.id),
-                                title: "\(host.name) · \(account.providerID) · \(state.hideValues ? String(localized: "Account hidden") : account.name) · \(metric.name)")
+                                title: "\(host.name) · \(account.providerName) · \(state.hideValues ? String(localized: "Account hidden") : account.name) · \(metric.label)")
                 }
             }
         }
@@ -114,10 +114,10 @@ struct QuotaProvider: AppIntentTimelineProvider {
 struct QuotaWidgetView: View {
     let entry: QuotaEntry
     @Environment(\.widgetFamily) private var family
-    private var value: Double? { entry.metric?.remainingPercent.map { entry.showUsed ? 100 - $0 : $0 } }
+    private var value: Double? { entry.metric?.remainingPercent.map { Double(QuotaFormat.displayPercent(remaining: $0, showUsed: entry.showUsed)) } }
     private var label: String {
         if entry.hidden { return "••••" }
-        if let value { return (value / 100).formatted(.percent.precision(.fractionLength(0))) }
+        if let remaining = entry.metric?.remainingPercent { return QuotaFormat.percentText(remaining: remaining, showUsed: entry.showUsed) }
         return entry.metric?.state == "unlimited" ? String(localized: "Unlimited") : "—"
     }
     var body: some View {
@@ -143,7 +143,7 @@ struct QuotaWidgetView: View {
                 default:
                     VStack(alignment: .leading, spacing: family == .accessoryRectangular ? 2 : 10) {
                         Text(entry.account?.providerName ?? "Quotio").font(.headline)
-                        Text(entry.metric?.name ?? "").font(.caption).foregroundStyle(.secondary)
+                        Text(entry.metric?.label ?? "").font(.caption).foregroundStyle(.secondary)
                         HStack(alignment: .firstTextBaseline) {
                             Text(label).font(family == .accessoryRectangular ? .title2 : .largeTitle).monospacedDigit()
                             if !entry.hidden { Text(entry.showUsed ? "used" : "left").font(.caption) }
@@ -160,7 +160,7 @@ struct QuotaWidgetView: View {
                                 Text("30 reported days").font(.caption2).foregroundStyle(.secondary)
                             }
                             ForEach(account.metrics.filter { $0.id != entry.metric?.id }.prefix(2)) { metric in
-                                HStack { Text(metric.name); Spacer(); Text(entry.hidden ? "••••" : metric.remainingPercent.map { ((entry.showUsed ? 100 - $0 : $0) / 100).formatted(.percent.precision(.fractionLength(0))) } ?? "—") }.font(.caption)
+                                HStack { Text(metric.label); Spacer(); Text(entry.hidden ? "••••" : metric.remainingPercent.map { QuotaFormat.percentText(remaining: $0, showUsed: entry.showUsed) } ?? "—") }.font(.caption)
                             }
                             Spacer(minLength: 0)
                             if let date = account.fetchedAt { Text("Observed \(date.formatted(date: .abbreviated, time: .shortened))").font(.caption2) }
