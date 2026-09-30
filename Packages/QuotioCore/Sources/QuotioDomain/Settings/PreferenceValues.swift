@@ -58,10 +58,12 @@ public enum QuotaDisplayMode: String, Codable, CaseIterable, Identifiable, Senda
 
     public var id: String { rawValue }
 
+    /// Shared percent rule (also used by the iOS companion): remaining is truncated
+    /// toward zero so it is never overstated, and used is 100 minus displayed remaining.
     public func displayValue(from remainingPercent: Double) -> Double {
         guard remainingPercent >= 0 else { return -1 }
-        let clamped = min(100, max(0, remainingPercent))
-        return self == .used ? 100 - clamped : clamped
+        let remaining = min(100, max(0, remainingPercent)).rounded(.towardZero)
+        return self == .used ? 100 - remaining : remaining
     }
 }
 

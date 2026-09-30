@@ -38,5 +38,7 @@ final class PreferenceValuesTests: XCTestCase {
         XCTAssertEqual(QuotaDisplayMode.used.displayValue(from: 25), 75)
         XCTAssertEqual(QuotaDisplayMode.remaining.displayValue(from: 125), 100)
         XCTAssertEqual(QuotaDisplayMode.remaining.displayValue(from: -1), -1)
+        XCTAssertEqual(QuotaDisplayMode.remaining.displayValue(from: 47.6), 47)
+        XCTAssertEqual(QuotaDisplayMode.used.displayValue(from: 47.6), 53)
     }
 }
